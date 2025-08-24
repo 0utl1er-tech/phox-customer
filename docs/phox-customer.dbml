@@ -24,6 +24,10 @@ Table Category {
   book_id uuid [not null]
   name varchar [not null]
   created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (name, book_id) [unique]
+  }
 }
 
 //　顧客

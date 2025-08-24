@@ -1,6 +1,6 @@
 -- SQL dump generated using DBML (dbml.dbdiagram.io)
 -- Database: PostgreSQL
--- Generated at: 2025-08-24T00:25:58.091Z
+-- Generated at: 2025-08-24T04:27:21.201Z
 
 CREATE TYPE "role" AS ENUM (
   'viewer',
@@ -24,6 +24,7 @@ CREATE TABLE "Permit" (
 
 CREATE TABLE "Category" (
   "id" uuid PRIMARY KEY,
+  "book_id" uuid NOT NULL,
   "name" varchar NOT NULL,
   "created_at" timestamptz NOT NULL DEFAULT (now())
 );
@@ -41,6 +42,8 @@ CREATE TABLE "Customer" (
   "created_at" timestamptz NOT NULL DEFAULT (now())
 );
 
+CREATE UNIQUE INDEX ON "Category" ("name", "book_id");
+
 COMMENT ON COLUMN "Customer"."leader" IS '代表者';
 
 COMMENT ON COLUMN "Customer"."pic" IS '担当者';
@@ -50,3 +53,5 @@ ALTER TABLE "Customer" ADD FOREIGN KEY ("book_id") REFERENCES "Book" ("id") ON D
 ALTER TABLE "Customer" ADD FOREIGN KEY ("category_id") REFERENCES "Category" ("id");
 
 ALTER TABLE "Permit" ADD FOREIGN KEY ("book_id") REFERENCES "Book" ("id");
+
+ALTER TABLE "Category" ADD FOREIGN KEY ("book_id") REFERENCES "Book" ("id");
