@@ -24,18 +24,30 @@ func (s *CustomerService) CreateCustomer(
 	ctx context.Context,
 	req *connect.Request[customerv1.CreateCustomerRequest],
 ) (*connect.Response[customerv1.CreateCustomerResponse], error) {
+	// 認証済みユーザーのIDを取得
+	userID, err := RequireUserID(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, err)
+	}
+
 	// UUIDを生成
 	customerID := uuid.New()
+	bookID := uuid.MustParse(req.Msg.BookId)
 
 	// カテゴリIDを設定（オプショナル）
 	var categoryID pgtype.UUID
-	if req.Msg.CategoryId != "" {
-		parsedUUID, err := uuid.Parse(req.Msg.CategoryId)
+	if req.Msg.Category != "" {
+		// カテゴリのUpsert処理
+		category, err := s.queries.UpsertCategory(ctx, db.UpsertCategoryParams{
+			ID:     uuid.New(),
+			BookID: bookID,
+			Name:   req.Msg.Category,
+		})
 		if err != nil {
-			return nil, connect.NewError(connect.CodeInvalidArgument, err)
+			return nil, connect.NewError(connect.CodeInternal, err)
 		}
 		categoryID = pgtype.UUID{
-			Bytes: parsedUUID,
+			Bytes: category.ID,
 			Valid: true,
 		}
 	}
@@ -43,18 +55,20 @@ func (s *CustomerService) CreateCustomer(
 	// データベースに保存
 	customer, err := s.queries.CreateCustomer(ctx, db.CreateCustomerParams{
 		ID:          customerID,
-		BookID:      uuid.MustParse(req.Msg.BookId),
+		BookID:      bookID,
 		CategoryID:  categoryID,
 		Name:        req.Msg.Name,
 		Corporation: pgtype.Text{String: req.Msg.Corporation, Valid: req.Msg.Corporation != ""},
 		Address:     pgtype.Text{String: req.Msg.Address, Valid: req.Msg.Address != ""},
-		Leader:      pgtype.UUID{Bytes: [16]byte{}, Valid: false}, // 後で実装
-		Pic:         pgtype.UUID{Bytes: [16]byte{}, Valid: false}, // 後で実装
 		Memo:        pgtype.Text{String: req.Msg.Memo, Valid: req.Msg.Memo != ""},
 	})
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
+
+	// ログ出力例（user_idを含む）
+	// log.Printf("Customer created by user %s: %s", userID, customer.Name)
+	_ = userID // 認証済みユーザーIDを取得済み
 
 	return connect.NewResponse(&customerv1.CreateCustomerResponse{
 		Id:     customer.ID.String(),

@@ -4,4 +4,3 @@ modules:
     name: buf.build/0utl1er-tech/phox-customer
 deps:
   - buf.build/googleapis/googleapis
-  - buf.build/grpc-ecosystem/grpc-gateway

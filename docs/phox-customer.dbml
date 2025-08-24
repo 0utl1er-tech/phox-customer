@@ -38,8 +38,6 @@ Table Customer {
   name varchar [not null]
   corporation varchar
   address varchar
-  leader uuid [unique, note:"代表者"]
-  pic uuid [unique, note:"担当者"]
   memo text
   created_at timestamptz [not null, default: `now()`]
 }

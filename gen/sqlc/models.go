@@ -64,6 +64,7 @@ type Book struct {
 
 type Category struct {
 	ID        uuid.UUID `json:"id"`
+	BookID    uuid.UUID `json:"book_id"`
 	Name      string    `json:"name"`
 	CreatedAt time.Time `json:"created_at"`
 }
@@ -75,12 +76,8 @@ type Customer struct {
 	Name        string      `json:"name"`
 	Corporation pgtype.Text `json:"corporation"`
 	Address     pgtype.Text `json:"address"`
-	// 代表者
-	Leader pgtype.UUID `json:"leader"`
-	// 担当者
-	Pic       pgtype.UUID `json:"pic"`
-	Memo      pgtype.Text `json:"memo"`
-	CreatedAt time.Time   `json:"created_at"`
+	Memo        pgtype.Text `json:"memo"`
+	CreatedAt   time.Time   `json:"created_at"`
 }
 
 type Permit struct {

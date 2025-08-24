@@ -1,6 +1,6 @@
 -- SQL dump generated using DBML (dbml.dbdiagram.io)
 -- Database: PostgreSQL
--- Generated at: 2025-08-24T04:27:21.201Z
+-- Generated at: 2025-08-24T04:36:19.903Z
 
 CREATE TYPE "role" AS ENUM (
   'viewer',
@@ -36,17 +36,11 @@ CREATE TABLE "Customer" (
   "name" varchar NOT NULL,
   "corporation" varchar,
   "address" varchar,
-  "leader" uuid UNIQUE,
-  "pic" uuid UNIQUE,
   "memo" text,
   "created_at" timestamptz NOT NULL DEFAULT (now())
 );
 
 CREATE UNIQUE INDEX ON "Category" ("name", "book_id");
-
-COMMENT ON COLUMN "Customer"."leader" IS '代表者';
-
-COMMENT ON COLUMN "Customer"."pic" IS '担当者';
 
 ALTER TABLE "Customer" ADD FOREIGN KEY ("book_id") REFERENCES "Book" ("id") ON DELETE CASCADE ON UPDATE NO ACTION;
 

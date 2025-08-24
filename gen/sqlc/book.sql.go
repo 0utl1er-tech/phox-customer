@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -33,6 +34,77 @@ DELETE FROM "Book" WHERE id = $1
 func (q *Queries) DeleteBook(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, deleteBook, id)
 	return err
+}
+
+const getBookByIDAndUserID = `-- name: GetBookByIDAndUserID :one
+SELECT b.id, b.name, b.created_at, p.role
+FROM "Book" b
+JOIN "Permit" p ON b.id = p.book_id
+WHERE b.id = $1 AND p.user_id = $2
+`
+
+type GetBookByIDAndUserIDParams struct {
+	ID     uuid.UUID `json:"id"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
+type GetBookByIDAndUserIDRow struct {
+	ID        uuid.UUID `json:"id"`
+	Name      string    `json:"name"`
+	CreatedAt time.Time `json:"created_at"`
+	Role      Role      `json:"role"`
+}
+
+func (q *Queries) GetBookByIDAndUserID(ctx context.Context, arg GetBookByIDAndUserIDParams) (GetBookByIDAndUserIDRow, error) {
+	row := q.db.QueryRow(ctx, getBookByIDAndUserID, arg.ID, arg.UserID)
+	var i GetBookByIDAndUserIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.CreatedAt,
+		&i.Role,
+	)
+	return i, err
+}
+
+const getBooksByUserID = `-- name: GetBooksByUserID :many
+SELECT b.id, b.name, b.created_at, p.role
+FROM "Book" b
+JOIN "Permit" p ON b.id = p.book_id
+WHERE p.user_id = $1
+ORDER BY b.created_at DESC
+`
+
+type GetBooksByUserIDRow struct {
+	ID        uuid.UUID `json:"id"`
+	Name      string    `json:"name"`
+	CreatedAt time.Time `json:"created_at"`
+	Role      Role      `json:"role"`
+}
+
+func (q *Queries) GetBooksByUserID(ctx context.Context, userID uuid.UUID) ([]GetBooksByUserIDRow, error) {
+	rows, err := q.db.Query(ctx, getBooksByUserID, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetBooksByUserIDRow{}
+	for rows.Next() {
+		var i GetBooksByUserIDRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.CreatedAt,
+			&i.Role,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const updateBook = `-- name: UpdateBook :exec

@@ -35,6 +35,27 @@ func (q *Queries) DeleteCategory(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+const getCategoryByBookAndName = `-- name: GetCategoryByBookAndName :one
+SELECT id, book_id, name, created_at FROM "Category" WHERE book_id = $1 AND name = $2
+`
+
+type GetCategoryByBookAndNameParams struct {
+	BookID uuid.UUID `json:"book_id"`
+	Name   string    `json:"name"`
+}
+
+func (q *Queries) GetCategoryByBookAndName(ctx context.Context, arg GetCategoryByBookAndNameParams) (Category, error) {
+	row := q.db.QueryRow(ctx, getCategoryByBookAndName, arg.BookID, arg.Name)
+	var i Category
+	err := row.Scan(
+		&i.ID,
+		&i.BookID,
+		&i.Name,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const updateCategory = `-- name: UpdateCategory :exec
 UPDATE "Category" SET name = $2 WHERE id = $1
 `
@@ -47,4 +68,30 @@ type UpdateCategoryParams struct {
 func (q *Queries) UpdateCategory(ctx context.Context, arg UpdateCategoryParams) error {
 	_, err := q.db.Exec(ctx, updateCategory, arg.ID, arg.Name)
 	return err
+}
+
+const upsertCategory = `-- name: UpsertCategory :one
+INSERT INTO "Category" (id, book_id, name)
+VALUES ($1, $2, $3)
+ON CONFLICT (book_id, name) DO UPDATE SET
+    name = EXCLUDED.name
+RETURNING id, book_id, name, created_at
+`
+
+type UpsertCategoryParams struct {
+	ID     uuid.UUID `json:"id"`
+	BookID uuid.UUID `json:"book_id"`
+	Name   string    `json:"name"`
+}
+
+func (q *Queries) UpsertCategory(ctx context.Context, arg UpsertCategoryParams) (Category, error) {
+	row := q.db.QueryRow(ctx, upsertCategory, arg.ID, arg.BookID, arg.Name)
+	var i Category
+	err := row.Scan(
+		&i.ID,
+		&i.BookID,
+		&i.Name,
+		&i.CreatedAt,
+	)
+	return i, err
 }

@@ -6,13 +6,11 @@ option go_package = "github.com/0utl1er-tech/phox-customer/gen/pb/customer/v1;cu
 
 message CreateCustomerRequest {
   string book_id = 1;
-  string category_id = 2;
+  string category = 2;
   string name = 3;
   string corporation = 4;
   string address = 5;
   string memo = 6;
-  string pic = 7;
-  string leader = 8;
 }
 
 message CreateCustomerResponse {
@@ -23,13 +21,11 @@ message CreateCustomerResponse {
 
 message SearchCustomerRequest {
   string book_id = 1;
-  optional string name = 2;
-  optional string corporation = 3;
-  optional string address = 4;
-  optional string phone = 5;
+  string category = 2;
+  optional string name = 3;
+  optional string corporation = 4;
+  optional string address = 5;
   optional string memo = 6;
-  optional string pic = 7;
-  optional string leader = 8;
 }
 
 message SearchCustomerResponse {
@@ -38,13 +34,11 @@ message SearchCustomerResponse {
 
 message Customer {
   string book_id = 1;
-  string category_id = 2;
+  string category = 2;
   string name = 3;
   string corporation = 4;
   string address = 5;
   string memo = 6;
-  string pic = 7;
-  string leader = 8;
 }
 
 message UpdateCustomerRequest {
@@ -52,10 +46,7 @@ message UpdateCustomerRequest {
   optional string name = 2;
   optional string corporation = 3;
   optional string address = 4;
-  optional string phone = 5;
-  optional string memo = 6;
-  optional string pic = 7;
-  optional string leader = 8;
+  optional string memo = 5;
 }
 
 message UpdateCustomerResponse {

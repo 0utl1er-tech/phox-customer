@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package customer.v1;
+
+import "customer/v1/book.proto";
+
+option go_package = "github.com/0utl1er-tech/phox-customer/gen/pb/customer/v1;customerv1";
+
+// BookService Book関連の操作を提供するサービス
+service BookService {
+  // GetBooksByUserID ユーザーがアクセス可能なbook一覧を取得
+  rpc GetBooksByUserID(GetBooksByUserIDRequest) returns (GetBooksByUserIDResponse);
+
+  // GetBookByID 特定のbookを取得（ユーザーがアクセス可能な場合のみ）
+  rpc GetBookByID(GetBookByIDRequest) returns (GetBookByIDResponse);
+
+  // CreateBook 新しいbookを作成
+  rpc CreateBook(CreateBookRequest) returns (CreateBookResponse);
+}

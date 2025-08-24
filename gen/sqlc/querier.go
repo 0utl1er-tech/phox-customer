@@ -14,16 +14,27 @@ type Querier interface {
 	CreateBook(ctx context.Context, arg CreateBookParams) error
 	CreateCategory(ctx context.Context, arg CreateCategoryParams) error
 	CreateCustomer(ctx context.Context, arg CreateCustomerParams) (Customer, error)
+	CreatePermit(ctx context.Context, arg CreatePermitParams) error
 	DeleteBook(ctx context.Context, id uuid.UUID) error
 	DeleteCategory(ctx context.Context, id uuid.UUID) error
 	DeleteCustomer(ctx context.Context, id uuid.UUID) error
+	DeletePermit(ctx context.Context, id uuid.UUID) error
+	GetBookByIDAndUserID(ctx context.Context, arg GetBookByIDAndUserIDParams) (GetBookByIDAndUserIDRow, error)
+	GetBooksByUserID(ctx context.Context, userID uuid.UUID) ([]GetBooksByUserIDRow, error)
+	GetCategoryByBookAndName(ctx context.Context, arg GetCategoryByBookAndNameParams) (Category, error)
 	GetCustomer(ctx context.Context, id uuid.UUID) (Customer, error)
 	GetCustomersByCategory(ctx context.Context, arg GetCustomersByCategoryParams) ([]Customer, error)
+	GetPermit(ctx context.Context, id uuid.UUID) (Permit, error)
+	GetPermitByBookIDAndUserID(ctx context.Context, arg GetPermitByBookIDAndUserIDParams) (Permit, error)
+	GetPermitsByUserID(ctx context.Context, userID uuid.UUID) ([]Permit, error)
 	ListCustomers(ctx context.Context, bookID uuid.UUID) ([]Customer, error)
 	SearchCustomers(ctx context.Context, arg SearchCustomersParams) ([]Customer, error)
 	UpdateBook(ctx context.Context, arg UpdateBookParams) error
 	UpdateCategory(ctx context.Context, arg UpdateCategoryParams) error
 	UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) (Customer, error)
+	UpdateCustomerCategory(ctx context.Context, arg UpdateCustomerCategoryParams) (Customer, error)
+	UpdatePermit(ctx context.Context, arg UpdatePermitParams) (Permit, error)
+	UpsertCategory(ctx context.Context, arg UpsertCategoryParams) (Category, error)
 }
 
 var _ Querier = (*Queries)(nil)

@@ -14,10 +14,10 @@ import (
 
 const createCustomer = `-- name: CreateCustomer :one
 INSERT INTO "Customer" (
-    id, book_id, category_id, name, corporation, address, leader, pic, memo
+    id, book_id, category_id, name, corporation, address, memo
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9
-) RETURNING id, book_id, category_id, name, corporation, address, leader, pic, memo, created_at
+    $1, $2, $3, $4, $5, $6, $7
+) RETURNING id, book_id, category_id, name, corporation, address, memo, created_at
 `
 
 type CreateCustomerParams struct {
@@ -27,8 +27,6 @@ type CreateCustomerParams struct {
 	Name        string      `json:"name"`
 	Corporation pgtype.Text `json:"corporation"`
 	Address     pgtype.Text `json:"address"`
-	Leader      pgtype.UUID `json:"leader"`
-	Pic         pgtype.UUID `json:"pic"`
 	Memo        pgtype.Text `json:"memo"`
 }
 
@@ -40,8 +38,6 @@ func (q *Queries) CreateCustomer(ctx context.Context, arg CreateCustomerParams) 
 		arg.Name,
 		arg.Corporation,
 		arg.Address,
-		arg.Leader,
-		arg.Pic,
 		arg.Memo,
 	)
 	var i Customer
@@ -52,8 +48,6 @@ func (q *Queries) CreateCustomer(ctx context.Context, arg CreateCustomerParams) 
 		&i.Name,
 		&i.Corporation,
 		&i.Address,
-		&i.Leader,
-		&i.Pic,
 		&i.Memo,
 		&i.CreatedAt,
 	)
@@ -70,7 +64,7 @@ func (q *Queries) DeleteCustomer(ctx context.Context, id uuid.UUID) error {
 }
 
 const getCustomer = `-- name: GetCustomer :one
-SELECT id, book_id, category_id, name, corporation, address, leader, pic, memo, created_at FROM "Customer" WHERE id = $1
+SELECT id, book_id, category_id, name, corporation, address, memo, created_at FROM "Customer" WHERE id = $1
 `
 
 func (q *Queries) GetCustomer(ctx context.Context, id uuid.UUID) (Customer, error) {
@@ -83,8 +77,6 @@ func (q *Queries) GetCustomer(ctx context.Context, id uuid.UUID) (Customer, erro
 		&i.Name,
 		&i.Corporation,
 		&i.Address,
-		&i.Leader,
-		&i.Pic,
 		&i.Memo,
 		&i.CreatedAt,
 	)
@@ -92,7 +84,7 @@ func (q *Queries) GetCustomer(ctx context.Context, id uuid.UUID) (Customer, erro
 }
 
 const getCustomersByCategory = `-- name: GetCustomersByCategory :many
-SELECT id, book_id, category_id, name, corporation, address, leader, pic, memo, created_at FROM "Customer" 
+SELECT id, book_id, category_id, name, corporation, address, memo, created_at FROM "Customer" 
 WHERE book_id = $1 AND category_id = $2 
 ORDER BY created_at DESC
 `
@@ -118,8 +110,6 @@ func (q *Queries) GetCustomersByCategory(ctx context.Context, arg GetCustomersBy
 			&i.Name,
 			&i.Corporation,
 			&i.Address,
-			&i.Leader,
-			&i.Pic,
 			&i.Memo,
 			&i.CreatedAt,
 		); err != nil {
@@ -134,7 +124,7 @@ func (q *Queries) GetCustomersByCategory(ctx context.Context, arg GetCustomersBy
 }
 
 const listCustomers = `-- name: ListCustomers :many
-SELECT id, book_id, category_id, name, corporation, address, leader, pic, memo, created_at FROM "Customer" 
+SELECT id, book_id, category_id, name, corporation, address, memo, created_at FROM "Customer" 
 WHERE book_id = $1 
 ORDER BY created_at DESC
 `
@@ -155,8 +145,6 @@ func (q *Queries) ListCustomers(ctx context.Context, bookID uuid.UUID) ([]Custom
 			&i.Name,
 			&i.Corporation,
 			&i.Address,
-			&i.Leader,
-			&i.Pic,
 			&i.Memo,
 			&i.CreatedAt,
 		); err != nil {
@@ -171,7 +159,7 @@ func (q *Queries) ListCustomers(ctx context.Context, bookID uuid.UUID) ([]Custom
 }
 
 const searchCustomers = `-- name: SearchCustomers :many
-SELECT id, book_id, category_id, name, corporation, address, leader, pic, memo, created_at FROM "Customer" 
+SELECT id, book_id, category_id, name, corporation, address, memo, created_at FROM "Customer" 
 WHERE book_id = $1 
     AND (
         name ILIKE '%' || $2 || '%' 
@@ -202,8 +190,6 @@ func (q *Queries) SearchCustomers(ctx context.Context, arg SearchCustomersParams
 			&i.Name,
 			&i.Corporation,
 			&i.Address,
-			&i.Leader,
-			&i.Pic,
 			&i.Memo,
 			&i.CreatedAt,
 		); err != nil {
@@ -220,38 +206,29 @@ func (q *Queries) SearchCustomers(ctx context.Context, arg SearchCustomersParams
 const updateCustomer = `-- name: UpdateCustomer :one
 UPDATE "Customer" 
 SET 
-    name = COALESCE($2, name),
-    category_id = COALESCE($3, category_id),
-    corporation = COALESCE($4, corporation),
-    address = COALESCE($5, address),
-    leader = COALESCE($6, leader),
-    pic = COALESCE($7, pic),
-    memo = COALESCE($8, memo)
-WHERE id = $1 
-RETURNING id, book_id, category_id, name, corporation, address, leader, pic, memo, created_at
+  name = COALESCE($1, name),
+  corporation = COALESCE($2, corporation),
+  address = COALESCE($3, address),
+  memo = COALESCE($4, memo)
+WHERE id = $5
+RETURNING id, book_id, category_id, name, corporation, address, memo, created_at
 `
 
 type UpdateCustomerParams struct {
-	ID          uuid.UUID   `json:"id"`
-	Name        string      `json:"name"`
-	CategoryID  pgtype.UUID `json:"category_id"`
+	Name        pgtype.Text `json:"name"`
 	Corporation pgtype.Text `json:"corporation"`
 	Address     pgtype.Text `json:"address"`
-	Leader      pgtype.UUID `json:"leader"`
-	Pic         pgtype.UUID `json:"pic"`
 	Memo        pgtype.Text `json:"memo"`
+	ID          uuid.UUID   `json:"id"`
 }
 
 func (q *Queries) UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) (Customer, error) {
 	row := q.db.QueryRow(ctx, updateCustomer,
-		arg.ID,
 		arg.Name,
-		arg.CategoryID,
 		arg.Corporation,
 		arg.Address,
-		arg.Leader,
-		arg.Pic,
 		arg.Memo,
+		arg.ID,
 	)
 	var i Customer
 	err := row.Scan(
@@ -261,8 +238,34 @@ func (q *Queries) UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) 
 		&i.Name,
 		&i.Corporation,
 		&i.Address,
-		&i.Leader,
-		&i.Pic,
+		&i.Memo,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const updateCustomerCategory = `-- name: UpdateCustomerCategory :one
+UPDATE "Customer" 
+SET category_id = $1
+WHERE id = $2
+RETURNING id, book_id, category_id, name, corporation, address, memo, created_at
+`
+
+type UpdateCustomerCategoryParams struct {
+	CategoryID pgtype.UUID `json:"category_id"`
+	ID         uuid.UUID   `json:"id"`
+}
+
+func (q *Queries) UpdateCustomerCategory(ctx context.Context, arg UpdateCustomerCategoryParams) (Customer, error) {
+	row := q.db.QueryRow(ctx, updateCustomerCategory, arg.CategoryID, arg.ID)
+	var i Customer
+	err := row.Scan(
+		&i.ID,
+		&i.BookID,
+		&i.CategoryID,
+		&i.Name,
+		&i.Corporation,
+		&i.Address,
 		&i.Memo,
 		&i.CreatedAt,
 	)

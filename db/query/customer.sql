@@ -1,8 +1,8 @@
 -- name: CreateCustomer :one
 INSERT INTO "Customer" (
-    id, book_id, category_id, name, corporation, address, leader, pic, memo
+    id, book_id, category_id, name, corporation, address, memo
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9
+    $1, $2, $3, $4, $5, $6, $7
 ) RETURNING *;
 
 -- name: GetCustomer :one
@@ -26,14 +26,17 @@ ORDER BY created_at DESC;
 -- name: UpdateCustomer :one
 UPDATE "Customer" 
 SET 
-    name = COALESCE($2, name),
-    category_id = COALESCE($3, category_id),
-    corporation = COALESCE($4, corporation),
-    address = COALESCE($5, address),
-    leader = COALESCE($6, leader),
-    pic = COALESCE($7, pic),
-    memo = COALESCE($8, memo)
-WHERE id = $1 
+  name = COALESCE(sqlc.narg(name), name),
+  corporation = COALESCE(sqlc.narg(corporation), corporation),
+  address = COALESCE(sqlc.narg(address), address),
+  memo = COALESCE(sqlc.narg(memo), memo)
+WHERE id = sqlc.arg(id)
+RETURNING *;
+
+-- name: UpdateCustomerCategory :one
+UPDATE "Customer" 
+SET category_id = sqlc.arg(category_id)
+WHERE id = sqlc.arg(id)
 RETURNING *;
 
 -- name: DeleteCustomer :exec

@@ -41,10 +41,8 @@ server:
 	go run main.go
 
 proto:
-	rm -f docs/swagger/*.swagger.json
 	rm -rf gen/pb/*
 	buf generate
-	statik -src=./docs/swagger -dest=./docs
 
 evans:
 	evans --host localhost --port 9090 -r repl
