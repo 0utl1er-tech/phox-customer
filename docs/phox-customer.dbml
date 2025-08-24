@@ -1,0 +1,46 @@
+Enum role {
+  viewer
+  editor
+  owner
+}
+
+//　顧客リスト
+Table Book {
+  id uuid [pk]
+  name varchar [not null]
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table Permit {
+  id uuid [pk]
+  book_id uuid [not null]
+  user_id uuid [not null]
+  role role [not null]
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table Category {
+  id uuid [pk]
+  name varchar [not null]
+  created_at timestamptz [not null, default: `now()`]
+}
+
+//　顧客
+Table Customer {
+  id uuid [pk]
+  book_id uuid [not null]
+  category_id uuid
+  name varchar [not null]
+  corporation varchar
+  address varchar
+  leader uuid [unique, note:"代表者"]
+  pic uuid [unique, note:"担当者"]
+  memo text
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Ref: "Customer"."book_id" > "Book"."id" [delete: cascade, update: no action]
+
+Ref: "Category"."id" < "Customer"."category_id"
+
+Ref: "Book"."id" < "Permit"."book_id"

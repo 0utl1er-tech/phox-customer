@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+package customer.v1;
+
+option go_package = "github.com/0utl1er-tech/phox-customer/gen/pb/customer/v1;customerv1";
+
+message CreateCustomerRequest {
+  string book_id = 1;
+  string category_id = 2;
+  string name = 3;
+  string corporation = 4;
+  string address = 5;
+  string memo = 6;
+  string pic = 7;
+  string leader = 8;
+}
+
+message CreateCustomerResponse {
+  string id = 1;
+  string book_id = 2;
+  string name = 3;
+}
+
+message SearchCustomerRequest {
+  string book_id = 1;
+  optional string name = 2;
+  optional string corporation = 3;
+  optional string address = 4;
+  optional string phone = 5;
+  optional string memo = 6;
+  optional string pic = 7;
+  optional string leader = 8;
+}
+
+message SearchCustomerResponse {
+  repeated Customer customers = 1;
+}
+
+message Customer {
+  string book_id = 1;
+  string category_id = 2;
+  string name = 3;
+  string corporation = 4;
+  string address = 5;
+  string memo = 6;
+  string pic = 7;
+  string leader = 8;
+}
+
+message UpdateCustomerRequest {
+  string book_id = 1;
+  optional string name = 2;
+  optional string corporation = 3;
+  optional string address = 4;
+  optional string phone = 5;
+  optional string memo = 6;
+  optional string pic = 7;
+  optional string leader = 8;
+}
+
+message UpdateCustomerResponse {
+  string id = 1;
+  string book_id = 2;
+  string name = 3;
+}
+
+message DeleteCustomerRequest {
+  string customer_id = 1;
+}
+
+message DeleteCustomerResponse {
+  string customer_id = 1;
+}

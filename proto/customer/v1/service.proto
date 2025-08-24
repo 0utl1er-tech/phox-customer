@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package customer.v1;
+
+import "customer/v1/customer.proto";
+
+option go_package = "github.com/0utl1er-tech/phox-customer/gen/pb/customer/v1;customerv1";
+
+service CustomerService {
+  rpc CreateCustomer(CreateCustomerRequest) returns (CreateCustomerResponse);
+  rpc SearchCustomer(SearchCustomerRequest) returns (SearchCustomerResponse);
+  rpc UpdateCustomer(UpdateCustomerRequest) returns (UpdateCustomerResponse);
+  rpc DeleteCustomer(DeleteCustomerRequest) returns (DeleteCustomerResponse);
+}
