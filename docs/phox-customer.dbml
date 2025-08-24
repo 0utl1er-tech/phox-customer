@@ -21,6 +21,7 @@ Table Permit {
 
 Table Category {
   id uuid [pk]
+  book_id uuid [not null]
   name varchar [not null]
   created_at timestamptz [not null, default: `now()`]
 }
@@ -44,3 +45,5 @@ Ref: "Customer"."book_id" > "Book"."id" [delete: cascade, update: no action]
 Ref: "Category"."id" < "Customer"."category_id"
 
 Ref: "Book"."id" < "Permit"."book_id"
+
+Ref: "Book"."id" < "Category"."book_id"

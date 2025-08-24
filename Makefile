@@ -1,13 +1,13 @@
-DB_URL=postgresql://root:secret@localhost:5432/prism?sslmode=disable
+DB_URL=postgresql://root:secret@localhost:5432/phox-customer?sslmode=disable
 
 postgres:
 	docker run --name postgres -p 5432:5432 -e POSTGRES_USER=root -e POSTGRES_PASSWORD=secret -d postgres:17-alpine
 
 createdb:
-	docker exec -it postgres createdb --username=root --owner=root prism
+	docker exec -it postgres createdb --username=root --owner=root phox-customer
 
 dropdb:
-	docker exec -it postgres dropdb prism --username=root 
+	docker exec -it postgres dropdb phox-customer --username=root 
 
 migrateup:
 	migrate -path db/migration -database "$(DB_URL)" -verbose up
