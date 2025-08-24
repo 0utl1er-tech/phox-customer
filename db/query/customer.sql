@@ -15,12 +15,11 @@ ORDER BY created_at DESC;
 
 -- name: SearchCustomers :many
 SELECT * FROM "Customer" 
-WHERE book_id = $1 
-    AND (
-        name ILIKE '%' || $2 || '%' 
-        OR corporation ILIKE '%' || $2 || '%'
-        OR address ILIKE '%' || $2 || '%'
-    )
+WHERE book_id = sqlc.arg(book_id)
+AND name ILIKE '%' || COALESCE(sqlc.narg(name), name) || '%' 
+AND corporation ILIKE '%' || COALESCE(sqlc.narg(corporation), corporation) || '%'
+AND address ILIKE '%' || COALESCE(sqlc.narg(address), address) || '%'
+AND memo ILIKE '%' || COALESCE(sqlc.narg(memo), memo) || '%'
 ORDER BY created_at DESC;
 
 -- name: UpdateCustomer :one

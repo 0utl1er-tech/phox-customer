@@ -29,3 +29,13 @@ ORDER BY created_at DESC;
 -- name: GetPermitByBookIDAndUserID :one
 SELECT * FROM "Permit" 
 WHERE book_id = $1 AND user_id = $2;
+
+-- name: CheckUserAccessToBook :one
+SELECT EXISTS(
+    SELECT 1 FROM "Permit" 
+    WHERE book_id = $1 AND user_id = $2
+) as has_access;
+
+-- name: CheckUserRoleForBook :one
+SELECT role FROM "Permit" 
+WHERE book_id = $1 AND user_id = $2;

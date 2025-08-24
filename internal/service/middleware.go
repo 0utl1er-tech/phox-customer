@@ -8,6 +8,13 @@ import (
 	"github.com/bufbuild/connect-go"
 )
 
+// contextKey コンテキストのキーとして使用する独自の型
+type contextKey string
+
+const (
+	userIDKey contextKey = "user_id"
+)
+
 // UserInfo JWTペイロードの構造体
 type UserInfo struct {
 	UserID string `json:"user_id"`
@@ -24,7 +31,7 @@ func AuthInterceptor() connect.UnaryInterceptorFunc {
 			}
 
 			// コンテキストにuser_idを設定
-			ctx = context.WithValue(ctx, "user_id", userInfo.UserID)
+			ctx = context.WithValue(ctx, userIDKey, userInfo.UserID)
 
 			// 次の処理を実行
 			return next(ctx, req)
@@ -56,7 +63,7 @@ func extractUserInfo(req connect.AnyRequest) (*UserInfo, error) {
 
 // GetUserID コンテキストからuser_idを取得するヘルパー関数
 func GetUserID(ctx context.Context) (string, bool) {
-	userID, ok := ctx.Value("user_id").(string)
+	userID, ok := ctx.Value(userIDKey).(string)
 	return userID, ok
 }
 

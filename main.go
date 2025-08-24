@@ -9,6 +9,8 @@ import (
 	customerv1connect "github.com/0utl1er-tech/phox-customer/gen/pb/customer/v1/customerv1connect"
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
 	"github.com/0utl1er-tech/phox-customer/internal/service"
+	"github.com/0utl1er-tech/phox-customer/internal/service/book"
+	"github.com/0utl1er-tech/phox-customer/internal/service/customer"
 	"github.com/0utl1er-tech/phox-customer/internal/util"
 	"github.com/bufbuild/connect-go"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -36,8 +38,8 @@ func main() {
 	}
 
 	queries := db.New(connPool)
-	customerService := service.NewCustomerService(queries)
-	bookService := service.NewBookService(queries)
+	customerService := customer.NewService(queries)
+	bookService := book.NewService(queries)
 
 	waitGroup, ctx := errgroup.WithContext(context.Background())
 	runConnectServer(ctx, waitGroup, customerService, bookService, &cfg)
@@ -51,27 +53,19 @@ func main() {
 func runConnectServer(
 	ctx context.Context,
 	waitGroup *errgroup.Group,
-	customerService *service.CustomerService,
-	bookService *service.BookService,
+	customerService customer.Service,
+	bookService book.Service,
 	cfg *util.Config,
 ) {
 	mux := http.NewServeMux()
 
 	// Connect-Goハンドラーを登録（認証interceptor付き）
-
-	// CustomerServiceハンドラー
-	customerPath, customerHandler := customerv1connect.NewCustomerServiceHandler(
+	path, handler := customerv1connect.NewCustomerServiceHandler(
 		customerService,
 		connect.WithInterceptors(service.AuthInterceptor()),
 	)
-	mux.Handle(customerPath, customerHandler)
 
-	// BookServiceハンドラー
-	bookPath, bookHandler := customerv1connect.NewBookServiceHandler(
-		bookService,
-		connect.WithInterceptors(service.AuthInterceptor()),
-	)
-	mux.Handle(bookPath, bookHandler)
+	mux.Handle(path, handler)
 
 	// HTTP/2対応のサーバーを作成
 	server := &http.Server{

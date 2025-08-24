@@ -12,6 +12,42 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const checkUserAccessToBook = `-- name: CheckUserAccessToBook :one
+SELECT EXISTS(
+    SELECT 1 FROM "Permit" 
+    WHERE book_id = $1 AND user_id = $2
+) as has_access
+`
+
+type CheckUserAccessToBookParams struct {
+	BookID uuid.UUID `json:"book_id"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
+func (q *Queries) CheckUserAccessToBook(ctx context.Context, arg CheckUserAccessToBookParams) (bool, error) {
+	row := q.db.QueryRow(ctx, checkUserAccessToBook, arg.BookID, arg.UserID)
+	var has_access bool
+	err := row.Scan(&has_access)
+	return has_access, err
+}
+
+const checkUserRoleForBook = `-- name: CheckUserRoleForBook :one
+SELECT role FROM "Permit" 
+WHERE book_id = $1 AND user_id = $2
+`
+
+type CheckUserRoleForBookParams struct {
+	BookID uuid.UUID `json:"book_id"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
+func (q *Queries) CheckUserRoleForBook(ctx context.Context, arg CheckUserRoleForBookParams) (Role, error) {
+	row := q.db.QueryRow(ctx, checkUserRoleForBook, arg.BookID, arg.UserID)
+	var role Role
+	err := row.Scan(&role)
+	return role, err
+}
+
 const createPermit = `-- name: CreatePermit :exec
 INSERT INTO "Permit" (
     id, book_id, role, user_id

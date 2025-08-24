@@ -160,22 +160,30 @@ func (q *Queries) ListCustomers(ctx context.Context, bookID uuid.UUID) ([]Custom
 
 const searchCustomers = `-- name: SearchCustomers :many
 SELECT id, book_id, category_id, name, corporation, address, memo, created_at FROM "Customer" 
-WHERE book_id = $1 
-    AND (
-        name ILIKE '%' || $2 || '%' 
-        OR corporation ILIKE '%' || $2 || '%'
-        OR address ILIKE '%' || $2 || '%'
-    )
+WHERE book_id = $1
+AND name ILIKE '%' || COALESCE($2, name) || '%' 
+AND corporation ILIKE '%' || COALESCE($3, corporation) || '%'
+AND address ILIKE '%' || COALESCE($4, address) || '%'
+AND memo ILIKE '%' || COALESCE($5, memo) || '%'
 ORDER BY created_at DESC
 `
 
 type SearchCustomersParams struct {
-	BookID  uuid.UUID   `json:"book_id"`
-	Column2 pgtype.Text `json:"column_2"`
+	BookID      uuid.UUID   `json:"book_id"`
+	Name        pgtype.Text `json:"name"`
+	Corporation pgtype.Text `json:"corporation"`
+	Address     pgtype.Text `json:"address"`
+	Memo        pgtype.Text `json:"memo"`
 }
 
 func (q *Queries) SearchCustomers(ctx context.Context, arg SearchCustomersParams) ([]Customer, error) {
-	rows, err := q.db.Query(ctx, searchCustomers, arg.BookID, arg.Column2)
+	rows, err := q.db.Query(ctx, searchCustomers,
+		arg.BookID,
+		arg.Name,
+		arg.Corporation,
+		arg.Address,
+		arg.Memo,
+	)
 	if err != nil {
 		return nil, err
 	}

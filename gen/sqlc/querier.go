@@ -11,6 +11,8 @@ import (
 )
 
 type Querier interface {
+	CheckUserAccessToBook(ctx context.Context, arg CheckUserAccessToBookParams) (bool, error)
+	CheckUserRoleForBook(ctx context.Context, arg CheckUserRoleForBookParams) (Role, error)
 	CreateBook(ctx context.Context, arg CreateBookParams) error
 	CreateCategory(ctx context.Context, arg CreateCategoryParams) error
 	CreateCustomer(ctx context.Context, arg CreateCustomerParams) (Customer, error)
