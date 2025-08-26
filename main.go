@@ -41,22 +41,7 @@ func main() {
 	customerService := customer.NewService(queries)
 	bookService := book.NewService(queries)
 
-	waitGroup, ctx := errgroup.WithContext(context.Background())
-	runConnectServer(ctx, waitGroup, customerService, bookService, &cfg)
-
-	err = waitGroup.Wait()
-	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to wait")
-	}
-}
-
-func runConnectServer(
-	ctx context.Context,
-	waitGroup *errgroup.Group,
-	customerService customer.Service,
-	bookService book.Service,
-	cfg *util.Config,
-) {
+	// HTTPサーバーの設定
 	mux := http.NewServeMux()
 
 	// Connect-Goハンドラーを登録（認証interceptor付き）
@@ -64,14 +49,22 @@ func runConnectServer(
 		customerService,
 		connect.WithInterceptors(service.AuthInterceptor()),
 	)
+	bookPath, bookHandler := customerv1connect.NewBookServiceHandler(
+		bookService,
+		connect.WithInterceptors(service.AuthInterceptor()),
+	)
 
 	mux.Handle(path, handler)
+	mux.Handle(bookPath, bookHandler)
 
 	// HTTP/2対応のサーバーを作成
 	server := &http.Server{
 		Addr:    cfg.ConnectServerAddress,
 		Handler: h2c.NewHandler(mux, &http2.Server{}),
 	}
+
+	// サーバー起動とGraceful Shutdown
+	waitGroup, ctx := errgroup.WithContext(context.Background())
 
 	waitGroup.Go(func() error {
 		log.Info().Msgf("Start Connect-Go server at %s", server.Addr)
@@ -94,4 +87,9 @@ func runConnectServer(
 		log.Info().Msg("Connect-Go server is stopped")
 		return nil
 	})
+
+	err = waitGroup.Wait()
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to wait")
+	}
 }
