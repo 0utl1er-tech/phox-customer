@@ -1,6 +1,6 @@
 version: v2
 modules:
   - path: proto
-    name: buf.build/0utl1er-tech/phox-customer
+    name: buf.build/outlier/phox-customer
 deps:
-  - buf.build/googleapis/googleapis
+  - buf.build/bufbuild/protovalidate

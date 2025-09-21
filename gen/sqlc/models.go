@@ -59,31 +59,96 @@ func (ns NullRole) Value() (driver.Value, error) {
 type Book struct {
 	ID        uuid.UUID `json:"id"`
 	Name      string    `json:"name"`
+	UpdatedAt time.Time `json:"updated_at"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
-type Category struct {
+type Call struct {
+	ID         uuid.UUID `json:"id"`
+	CustomerID uuid.UUID `json:"customer_id"`
+	ContactID  uuid.UUID `json:"contact_id"`
+	UserID     string    `json:"user_id"`
+	StatusID   uuid.UUID `json:"status_id"`
+	UpdatedAt  time.Time `json:"updated_at"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
+type Company struct {
 	ID        uuid.UUID `json:"id"`
-	BookID    uuid.UUID `json:"book_id"`
 	Name      string    `json:"name"`
+	UpdatedAt time.Time `json:"updated_at"`
 	CreatedAt time.Time `json:"created_at"`
+}
+
+type Contact struct {
+	ID         uuid.UUID `json:"id"`
+	CustomerID uuid.UUID `json:"customer_id"`
+	StaffID    uuid.UUID `json:"staff_id"`
+	Phone      string    `json:"phone"`
+	Mail       string    `json:"mail"`
+	Fax        string    `json:"fax"`
+	UpdatedAt  time.Time `json:"updated_at"`
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 type Customer struct {
-	ID          uuid.UUID   `json:"id"`
-	BookID      uuid.UUID   `json:"book_id"`
-	CategoryID  pgtype.UUID `json:"category_id"`
-	Name        string      `json:"name"`
-	Corporation pgtype.Text `json:"corporation"`
-	Address     pgtype.Text `json:"address"`
-	Memo        pgtype.Text `json:"memo"`
-	CreatedAt   time.Time   `json:"created_at"`
+	ID          uuid.UUID `json:"id"`
+	BookID      uuid.UUID `json:"book_id"`
+	Category    string    `json:"category"`
+	Name        string    `json:"name"`
+	Corporation string    `json:"corporation"`
+	Address     string    `json:"address"`
+	Memo        string    `json:"memo"`
+	Pic         uuid.UUID `json:"pic"`
+	Leader      uuid.UUID `json:"leader"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 type Permit struct {
 	ID        uuid.UUID `json:"id"`
 	BookID    uuid.UUID `json:"book_id"`
-	UserID    uuid.UUID `json:"user_id"`
+	UserID    string    `json:"user_id"`
 	Role      Role      `json:"role"`
+	UpdatedAt time.Time `json:"updated_at"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type Redial struct {
+	ID         string      `json:"id"`
+	CustomerID uuid.UUID   `json:"customer_id"`
+	UserID     string      `json:"user_id"`
+	Date       pgtype.Date `json:"date"`
+	Time       pgtype.Time `json:"time"`
+	UpdatedAt  time.Time   `json:"updated_at"`
+	CreatedAt  time.Time   `json:"created_at"`
+}
+
+type Staff struct {
+	ID        uuid.UUID `json:"id"`
+	Name      string    `json:"name"`
+	Sex       string    `json:"sex"`
+	UpdatedAt time.Time `json:"updated_at"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type Status struct {
+	ID       uuid.UUID `json:"id"`
+	BookID   uuid.UUID `json:"book_id"`
+	Priority int32     `json:"priority"`
+	Name     string    `json:"name"`
+	// 有効数としてカウントするか
+	Effective bool `json:"effective"`
+	// NG
+	Ng        bool      `json:"ng"`
+	UpdatedAt time.Time `json:"updated_at"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type User struct {
+	ID        string    `json:"id"`
+	CompanyID uuid.UUID `json:"company_id"`
+	Name      string    `json:"name"`
+	UpdatedAt time.Time `json:"updated_at"`
 	CreatedAt time.Time `json:"created_at"`
 }

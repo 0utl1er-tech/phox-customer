@@ -21,7 +21,7 @@ SELECT EXISTS(
 
 type CheckUserAccessToBookParams struct {
 	BookID uuid.UUID `json:"book_id"`
-	UserID uuid.UUID `json:"user_id"`
+	UserID string    `json:"user_id"`
 }
 
 func (q *Queries) CheckUserAccessToBook(ctx context.Context, arg CheckUserAccessToBookParams) (bool, error) {
@@ -38,7 +38,7 @@ WHERE book_id = $1 AND user_id = $2
 
 type CheckUserRoleForBookParams struct {
 	BookID uuid.UUID `json:"book_id"`
-	UserID uuid.UUID `json:"user_id"`
+	UserID string    `json:"user_id"`
 }
 
 func (q *Queries) CheckUserRoleForBook(ctx context.Context, arg CheckUserRoleForBookParams) (Role, error) {
@@ -48,29 +48,39 @@ func (q *Queries) CheckUserRoleForBook(ctx context.Context, arg CheckUserRoleFor
 	return role, err
 }
 
-const createPermit = `-- name: CreatePermit :exec
+const createPermit = `-- name: CreatePermit :one
 INSERT INTO "Permit" (
     id, book_id, role, user_id
 ) VALUES (
     $1, $2, $3, $4
 )
+RETURNING id, book_id, user_id, role, updated_at, created_at
 `
 
 type CreatePermitParams struct {
 	ID     uuid.UUID `json:"id"`
 	BookID uuid.UUID `json:"book_id"`
 	Role   Role      `json:"role"`
-	UserID uuid.UUID `json:"user_id"`
+	UserID string    `json:"user_id"`
 }
 
-func (q *Queries) CreatePermit(ctx context.Context, arg CreatePermitParams) error {
-	_, err := q.db.Exec(ctx, createPermit,
+func (q *Queries) CreatePermit(ctx context.Context, arg CreatePermitParams) (Permit, error) {
+	row := q.db.QueryRow(ctx, createPermit,
 		arg.ID,
 		arg.BookID,
 		arg.Role,
 		arg.UserID,
 	)
-	return err
+	var i Permit
+	err := row.Scan(
+		&i.ID,
+		&i.BookID,
+		&i.UserID,
+		&i.Role,
+		&i.UpdatedAt,
+		&i.CreatedAt,
+	)
+	return i, err
 }
 
 const deletePermit = `-- name: DeletePermit :exec
@@ -83,9 +93,8 @@ func (q *Queries) DeletePermit(ctx context.Context, id uuid.UUID) error {
 }
 
 const getPermit = `-- name: GetPermit :one
-SELECT id, book_id, user_id, role, created_at FROM "Permit" 
+SELECT id, book_id, user_id, role, updated_at, created_at FROM "Permit" 
 WHERE id = $1
-ORDER BY created_at DESC
 `
 
 func (q *Queries) GetPermit(ctx context.Context, id uuid.UUID) (Permit, error) {
@@ -96,19 +105,20 @@ func (q *Queries) GetPermit(ctx context.Context, id uuid.UUID) (Permit, error) {
 		&i.BookID,
 		&i.UserID,
 		&i.Role,
+		&i.UpdatedAt,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const getPermitByBookIDAndUserID = `-- name: GetPermitByBookIDAndUserID :one
-SELECT id, book_id, user_id, role, created_at FROM "Permit" 
+SELECT id, book_id, user_id, role, updated_at, created_at FROM "Permit" 
 WHERE book_id = $1 AND user_id = $2
 `
 
 type GetPermitByBookIDAndUserIDParams struct {
 	BookID uuid.UUID `json:"book_id"`
-	UserID uuid.UUID `json:"user_id"`
+	UserID string    `json:"user_id"`
 }
 
 func (q *Queries) GetPermitByBookIDAndUserID(ctx context.Context, arg GetPermitByBookIDAndUserIDParams) (Permit, error) {
@@ -119,18 +129,19 @@ func (q *Queries) GetPermitByBookIDAndUserID(ctx context.Context, arg GetPermitB
 		&i.BookID,
 		&i.UserID,
 		&i.Role,
+		&i.UpdatedAt,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const getPermitsByUserID = `-- name: GetPermitsByUserID :many
-SELECT id, book_id, user_id, role, created_at FROM "Permit" 
+SELECT id, book_id, user_id, role, updated_at, created_at FROM "Permit" 
 WHERE user_id = $1
 ORDER BY created_at DESC
 `
 
-func (q *Queries) GetPermitsByUserID(ctx context.Context, userID uuid.UUID) ([]Permit, error) {
+func (q *Queries) GetPermitsByUserID(ctx context.Context, userID string) ([]Permit, error) {
 	rows, err := q.db.Query(ctx, getPermitsByUserID, userID)
 	if err != nil {
 		return nil, err
@@ -144,6 +155,40 @@ func (q *Queries) GetPermitsByUserID(ctx context.Context, userID uuid.UUID) ([]P
 			&i.BookID,
 			&i.UserID,
 			&i.Role,
+			&i.UpdatedAt,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPermits = `-- name: ListPermits :many
+SELECT id, book_id, user_id, role, updated_at, created_at FROM "Permit" 
+WHERE book_id = $1
+ORDER BY created_at DESC
+`
+
+func (q *Queries) ListPermits(ctx context.Context, bookID uuid.UUID) ([]Permit, error) {
+	rows, err := q.db.Query(ctx, listPermits, bookID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Permit{}
+	for rows.Next() {
+		var i Permit
+		if err := rows.Scan(
+			&i.ID,
+			&i.BookID,
+			&i.UserID,
+			&i.Role,
+			&i.UpdatedAt,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -162,12 +207,12 @@ SET
   role = COALESCE($1, role),
   user_id = COALESCE($2, user_id)
 WHERE id = $3
-RETURNING id, book_id, user_id, role, created_at
+RETURNING id, book_id, user_id, role, updated_at, created_at
 `
 
 type UpdatePermitParams struct {
 	Role   NullRole    `json:"role"`
-	UserID pgtype.UUID `json:"user_id"`
+	UserID pgtype.Text `json:"user_id"`
 	ID     uuid.UUID   `json:"id"`
 }
 
@@ -179,6 +224,7 @@ func (q *Queries) UpdatePermit(ctx context.Context, arg UpdatePermitParams) (Per
 		&i.BookID,
 		&i.UserID,
 		&i.Role,
+		&i.UpdatedAt,
 		&i.CreatedAt,
 	)
 	return i, err

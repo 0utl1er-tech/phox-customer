@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -14,27 +15,27 @@ import (
 
 const createCustomer = `-- name: CreateCustomer :one
 INSERT INTO "Customer" (
-    id, book_id, category_id, name, corporation, address, memo
+    id, book_id, category, name, corporation, address, memo
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7
-) RETURNING id, book_id, category_id, name, corporation, address, memo, created_at
+) RETURNING id, book_id, category, name, corporation, address, memo, pic, leader, updated_at, created_at
 `
 
 type CreateCustomerParams struct {
-	ID          uuid.UUID   `json:"id"`
-	BookID      uuid.UUID   `json:"book_id"`
-	CategoryID  pgtype.UUID `json:"category_id"`
-	Name        string      `json:"name"`
-	Corporation pgtype.Text `json:"corporation"`
-	Address     pgtype.Text `json:"address"`
-	Memo        pgtype.Text `json:"memo"`
+	ID          uuid.UUID `json:"id"`
+	BookID      uuid.UUID `json:"book_id"`
+	Category    string    `json:"category"`
+	Name        string    `json:"name"`
+	Corporation string    `json:"corporation"`
+	Address     string    `json:"address"`
+	Memo        string    `json:"memo"`
 }
 
 func (q *Queries) CreateCustomer(ctx context.Context, arg CreateCustomerParams) (Customer, error) {
 	row := q.db.QueryRow(ctx, createCustomer,
 		arg.ID,
 		arg.BookID,
-		arg.CategoryID,
+		arg.Category,
 		arg.Name,
 		arg.Corporation,
 		arg.Address,
@@ -44,11 +45,14 @@ func (q *Queries) CreateCustomer(ctx context.Context, arg CreateCustomerParams) 
 	err := row.Scan(
 		&i.ID,
 		&i.BookID,
-		&i.CategoryID,
+		&i.Category,
 		&i.Name,
 		&i.Corporation,
 		&i.Address,
 		&i.Memo,
+		&i.Pic,
+		&i.Leader,
+		&i.UpdatedAt,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -64,142 +68,156 @@ func (q *Queries) DeleteCustomer(ctx context.Context, id uuid.UUID) error {
 }
 
 const getCustomer = `-- name: GetCustomer :one
-SELECT id, book_id, category_id, name, corporation, address, memo, created_at FROM "Customer" WHERE id = $1
+SELECT 
+"Customer".id,
+"Customer".book_id,
+"Customer".category,
+"Customer".name,
+"Customer".corporation,
+"Customer".address,
+"Customer".memo,
+"Customer".pic,
+"Customer".leader,
+"Customer".updated_at,
+"Customer".created_at,
+pic."id" as pic_id,
+pic."name" as pic_name,
+pic."sex" as pic_sex,
+leader."id" as leader_id,
+leader."name" as leader_name,
+leader."sex" as leader_sex
+FROM "Customer"
+JOIN "Staff" AS pic ON "Customer".pic = "Staff".id
+JOIN "Staff" AS leader ON "Customer".leader = "Staff".id
+WHERE book_id = $1
 `
 
-func (q *Queries) GetCustomer(ctx context.Context, id uuid.UUID) (Customer, error) {
-	row := q.db.QueryRow(ctx, getCustomer, id)
-	var i Customer
+type GetCustomerRow struct {
+	ID          uuid.UUID `json:"id"`
+	BookID      uuid.UUID `json:"book_id"`
+	Category    string    `json:"category"`
+	Name        string    `json:"name"`
+	Corporation string    `json:"corporation"`
+	Address     string    `json:"address"`
+	Memo        string    `json:"memo"`
+	Pic         uuid.UUID `json:"pic"`
+	Leader      uuid.UUID `json:"leader"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	CreatedAt   time.Time `json:"created_at"`
+	PicID       uuid.UUID `json:"pic_id"`
+	PicName     string    `json:"pic_name"`
+	PicSex      string    `json:"pic_sex"`
+	LeaderID    uuid.UUID `json:"leader_id"`
+	LeaderName  string    `json:"leader_name"`
+	LeaderSex   string    `json:"leader_sex"`
+}
+
+func (q *Queries) GetCustomer(ctx context.Context, bookID uuid.UUID) (GetCustomerRow, error) {
+	row := q.db.QueryRow(ctx, getCustomer, bookID)
+	var i GetCustomerRow
 	err := row.Scan(
 		&i.ID,
 		&i.BookID,
-		&i.CategoryID,
+		&i.Category,
 		&i.Name,
 		&i.Corporation,
 		&i.Address,
 		&i.Memo,
+		&i.Pic,
+		&i.Leader,
+		&i.UpdatedAt,
 		&i.CreatedAt,
+		&i.PicID,
+		&i.PicName,
+		&i.PicSex,
+		&i.LeaderID,
+		&i.LeaderName,
+		&i.LeaderSex,
 	)
 	return i, err
 }
 
-const getCustomersByCategory = `-- name: GetCustomersByCategory :many
-SELECT id, book_id, category_id, name, corporation, address, memo, created_at FROM "Customer" 
-WHERE book_id = $1 AND category_id = $2 
-ORDER BY created_at DESC
-`
-
-type GetCustomersByCategoryParams struct {
-	BookID     uuid.UUID   `json:"book_id"`
-	CategoryID pgtype.UUID `json:"category_id"`
-}
-
-func (q *Queries) GetCustomersByCategory(ctx context.Context, arg GetCustomersByCategoryParams) ([]Customer, error) {
-	rows, err := q.db.Query(ctx, getCustomersByCategory, arg.BookID, arg.CategoryID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Customer{}
-	for rows.Next() {
-		var i Customer
-		if err := rows.Scan(
-			&i.ID,
-			&i.BookID,
-			&i.CategoryID,
-			&i.Name,
-			&i.Corporation,
-			&i.Address,
-			&i.Memo,
-			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listCustomers = `-- name: ListCustomers :many
-SELECT id, book_id, category_id, name, corporation, address, memo, created_at FROM "Customer" 
+SELECT 
+"Customer".id,
+"Customer".book_id,
+"Customer".category,
+"Customer".name,
+"Customer".corporation,
+"Customer".address,
+"Customer".memo,
+"Customer".pic,
+"Customer".leader,
+"Customer".updated_at,
+"Customer".created_at,
+pic."id" as pic_id,
+pic."name" as pic_name,
+pic."sex" as pic_sex,
+leader."id" as leader_id,
+leader."name" as leader_name,
+leader."sex" as leader_sex
+FROM "Customer" 
+JOIN "Staff" AS pic ON "Customer".pic = "Staff".id
+JOIN "Staff" AS leader ON "Customer".leader = "Staff".id
 WHERE book_id = $1 
-ORDER BY created_at DESC
+ORDER BY "Customer"."updated_at" DESC
+LIMIT $2
+OFFSET $3
 `
 
-func (q *Queries) ListCustomers(ctx context.Context, bookID uuid.UUID) ([]Customer, error) {
-	rows, err := q.db.Query(ctx, listCustomers, bookID)
+type ListCustomersParams struct {
+	BookID uuid.UUID `json:"book_id"`
+	Limit  int32     `json:"limit"`
+	Offset int32     `json:"offset"`
+}
+
+type ListCustomersRow struct {
+	ID          uuid.UUID `json:"id"`
+	BookID      uuid.UUID `json:"book_id"`
+	Category    string    `json:"category"`
+	Name        string    `json:"name"`
+	Corporation string    `json:"corporation"`
+	Address     string    `json:"address"`
+	Memo        string    `json:"memo"`
+	Pic         uuid.UUID `json:"pic"`
+	Leader      uuid.UUID `json:"leader"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	CreatedAt   time.Time `json:"created_at"`
+	PicID       uuid.UUID `json:"pic_id"`
+	PicName     string    `json:"pic_name"`
+	PicSex      string    `json:"pic_sex"`
+	LeaderID    uuid.UUID `json:"leader_id"`
+	LeaderName  string    `json:"leader_name"`
+	LeaderSex   string    `json:"leader_sex"`
+}
+
+func (q *Queries) ListCustomers(ctx context.Context, arg ListCustomersParams) ([]ListCustomersRow, error) {
+	rows, err := q.db.Query(ctx, listCustomers, arg.BookID, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Customer{}
+	items := []ListCustomersRow{}
 	for rows.Next() {
-		var i Customer
+		var i ListCustomersRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.BookID,
-			&i.CategoryID,
+			&i.Category,
 			&i.Name,
 			&i.Corporation,
 			&i.Address,
 			&i.Memo,
+			&i.Pic,
+			&i.Leader,
+			&i.UpdatedAt,
 			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const searchCustomers = `-- name: SearchCustomers :many
-SELECT id, book_id, category_id, name, corporation, address, memo, created_at FROM "Customer" 
-WHERE book_id = $1
-AND name ILIKE '%' || COALESCE($2, name) || '%' 
-AND corporation ILIKE '%' || COALESCE($3, corporation) || '%'
-AND address ILIKE '%' || COALESCE($4, address) || '%'
-AND memo ILIKE '%' || COALESCE($5, memo) || '%'
-ORDER BY created_at DESC
-`
-
-type SearchCustomersParams struct {
-	BookID      uuid.UUID   `json:"book_id"`
-	Name        pgtype.Text `json:"name"`
-	Corporation pgtype.Text `json:"corporation"`
-	Address     pgtype.Text `json:"address"`
-	Memo        pgtype.Text `json:"memo"`
-}
-
-func (q *Queries) SearchCustomers(ctx context.Context, arg SearchCustomersParams) ([]Customer, error) {
-	rows, err := q.db.Query(ctx, searchCustomers,
-		arg.BookID,
-		arg.Name,
-		arg.Corporation,
-		arg.Address,
-		arg.Memo,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Customer{}
-	for rows.Next() {
-		var i Customer
-		if err := rows.Scan(
-			&i.ID,
-			&i.BookID,
-			&i.CategoryID,
-			&i.Name,
-			&i.Corporation,
-			&i.Address,
-			&i.Memo,
-			&i.CreatedAt,
+			&i.PicID,
+			&i.PicName,
+			&i.PicSex,
+			&i.LeaderID,
+			&i.LeaderName,
+			&i.LeaderSex,
 		); err != nil {
 			return nil, err
 		}
@@ -214,15 +232,17 @@ func (q *Queries) SearchCustomers(ctx context.Context, arg SearchCustomersParams
 const updateCustomer = `-- name: UpdateCustomer :one
 UPDATE "Customer" 
 SET 
-  name = COALESCE($1, name),
-  corporation = COALESCE($2, corporation),
-  address = COALESCE($3, address),
-  memo = COALESCE($4, memo)
-WHERE id = $5
-RETURNING id, book_id, category_id, name, corporation, address, memo, created_at
+  category = COALESCE($1, category),
+  name = COALESCE($2, name),
+  corporation = COALESCE($3, corporation),
+  address = COALESCE($4, address),
+  memo = COALESCE($5, memo)
+WHERE id = $6
+RETURNING id, book_id, category, name, corporation, address, memo, pic, leader, updated_at, created_at
 `
 
 type UpdateCustomerParams struct {
+	Category    pgtype.Text `json:"category"`
 	Name        pgtype.Text `json:"name"`
 	Corporation pgtype.Text `json:"corporation"`
 	Address     pgtype.Text `json:"address"`
@@ -232,6 +252,7 @@ type UpdateCustomerParams struct {
 
 func (q *Queries) UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) (Customer, error) {
 	row := q.db.QueryRow(ctx, updateCustomer,
+		arg.Category,
 		arg.Name,
 		arg.Corporation,
 		arg.Address,
@@ -242,39 +263,14 @@ func (q *Queries) UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) 
 	err := row.Scan(
 		&i.ID,
 		&i.BookID,
-		&i.CategoryID,
+		&i.Category,
 		&i.Name,
 		&i.Corporation,
 		&i.Address,
 		&i.Memo,
-		&i.CreatedAt,
-	)
-	return i, err
-}
-
-const updateCustomerCategory = `-- name: UpdateCustomerCategory :one
-UPDATE "Customer" 
-SET category_id = $1
-WHERE id = $2
-RETURNING id, book_id, category_id, name, corporation, address, memo, created_at
-`
-
-type UpdateCustomerCategoryParams struct {
-	CategoryID pgtype.UUID `json:"category_id"`
-	ID         uuid.UUID   `json:"id"`
-}
-
-func (q *Queries) UpdateCustomerCategory(ctx context.Context, arg UpdateCustomerCategoryParams) (Customer, error) {
-	row := q.db.QueryRow(ctx, updateCustomerCategory, arg.CategoryID, arg.ID)
-	var i Customer
-	err := row.Scan(
-		&i.ID,
-		&i.BookID,
-		&i.CategoryID,
-		&i.Name,
-		&i.Corporation,
-		&i.Address,
-		&i.Memo,
+		&i.Pic,
+		&i.Leader,
+		&i.UpdatedAt,
 		&i.CreatedAt,
 	)
 	return i, err

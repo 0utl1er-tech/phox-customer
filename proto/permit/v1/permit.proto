@@ -1,0 +1,62 @@
+syntax = "proto3";
+
+package permit.v1;
+
+import "buf/validate/validate.proto";
+
+option go_package = "github.com/0utl1er-tech/phox-customer/gen/pb/permit/v1;permitv1";
+
+service PermitService {
+  rpc GetPermit(GetPermitRequest) returns (GetPermitResponse);
+  rpc CreatePermit(CreatePermitRequest) returns (CreatePermitResponse);
+  rpc UpdatePermit(UpdatePermitRequest) returns (UpdatePermitResponse);
+  rpc DeletePermit(DeletePermitRequest) returns (DeletePermitResponse);
+}
+
+enum Role {
+  ROLE_UNSPECIFIED = 0;
+  ROLE_VIEWER = 1;
+  ROLE_EDITOR = 2;
+  ROLE_OWNER = 3;
+}
+
+message CreatePermitRequest {
+  string book_id = 1 [(buf.validate.field).string.uuid = true];
+  Role role = 2 [(buf.validate.field).enum.defined_only = true];
+}
+
+message CreatePermitResponse {
+  Permit created_permit = 1;
+}
+
+message GetPermitRequest {
+  string book_id = 1;
+}
+
+message GetPermitResponse {
+  repeated Permit permits = 1;
+}
+
+message Permit {
+  string id = 1;
+  string book_id = 2;
+  string user_id = 3;
+  Role role = 4;
+}
+
+message DeletePermitRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message DeletePermitResponse {
+  string id = 1;
+}
+
+message UpdatePermitRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+  Role role = 2 [(buf.validate.field).enum.defined_only = true];
+}
+
+message UpdatePermitResponse {
+  Permit updated_permit = 1;
+}

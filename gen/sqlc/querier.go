@@ -13,30 +13,56 @@ import (
 type Querier interface {
 	CheckUserAccessToBook(ctx context.Context, arg CheckUserAccessToBookParams) (bool, error)
 	CheckUserRoleForBook(ctx context.Context, arg CheckUserRoleForBookParams) (Role, error)
-	CreateBook(ctx context.Context, arg CreateBookParams) error
-	CreateCategory(ctx context.Context, arg CreateCategoryParams) error
+	CreateBook(ctx context.Context, arg CreateBookParams) (Book, error)
+	CreateCall(ctx context.Context, arg CreateCallParams) (Call, error)
+	CreateCompany(ctx context.Context, arg CreateCompanyParams) (Company, error)
+	CreateContact(ctx context.Context, arg CreateContactParams) (Contact, error)
 	CreateCustomer(ctx context.Context, arg CreateCustomerParams) (Customer, error)
-	CreatePermit(ctx context.Context, arg CreatePermitParams) error
+	CreatePermit(ctx context.Context, arg CreatePermitParams) (Permit, error)
+	CreateRedial(ctx context.Context, arg CreateRedialParams) (Redial, error)
+	CreateStaff(ctx context.Context, arg CreateStaffParams) (Staff, error)
+	CreateStatus(ctx context.Context, arg CreateStatusParams) (Status, error)
+	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeleteBook(ctx context.Context, id uuid.UUID) error
-	DeleteCategory(ctx context.Context, id uuid.UUID) error
+	DeleteCall(ctx context.Context, id uuid.UUID) error
+	DeleteCompany(ctx context.Context, id uuid.UUID) error
+	DeleteContact(ctx context.Context, id uuid.UUID) error
 	DeleteCustomer(ctx context.Context, id uuid.UUID) error
 	DeletePermit(ctx context.Context, id uuid.UUID) error
+	DeleteRedial(ctx context.Context, id string) error
+	DeleteStaff(ctx context.Context, id uuid.UUID) error
+	DeleteStatus(ctx context.Context, id uuid.UUID) error
+	DeleteUser(ctx context.Context, id string) (User, error)
 	GetBookByIDAndUserID(ctx context.Context, arg GetBookByIDAndUserIDParams) (GetBookByIDAndUserIDRow, error)
-	GetBooksByUserID(ctx context.Context, userID uuid.UUID) ([]GetBooksByUserIDRow, error)
-	GetCategoryByBookAndName(ctx context.Context, arg GetCategoryByBookAndNameParams) (Category, error)
-	GetCustomer(ctx context.Context, id uuid.UUID) (Customer, error)
-	GetCustomersByCategory(ctx context.Context, arg GetCustomersByCategoryParams) ([]Customer, error)
+	GetBooksByUserID(ctx context.Context, userID string) ([]GetBooksByUserIDRow, error)
+	GetCall(ctx context.Context, id uuid.UUID) (Call, error)
+	GetCompany(ctx context.Context, id uuid.UUID) (Company, error)
+	GetContact(ctx context.Context, id uuid.UUID) (Contact, error)
+	GetCustomer(ctx context.Context, bookID uuid.UUID) (GetCustomerRow, error)
 	GetPermit(ctx context.Context, id uuid.UUID) (Permit, error)
 	GetPermitByBookIDAndUserID(ctx context.Context, arg GetPermitByBookIDAndUserIDParams) (Permit, error)
-	GetPermitsByUserID(ctx context.Context, userID uuid.UUID) ([]Permit, error)
-	ListCustomers(ctx context.Context, bookID uuid.UUID) ([]Customer, error)
-	SearchCustomers(ctx context.Context, arg SearchCustomersParams) ([]Customer, error)
-	UpdateBook(ctx context.Context, arg UpdateBookParams) error
-	UpdateCategory(ctx context.Context, arg UpdateCategoryParams) error
+	GetPermitsByUserID(ctx context.Context, userID string) ([]Permit, error)
+	GetRedial(ctx context.Context, id string) (Redial, error)
+	GetStaff(ctx context.Context, id uuid.UUID) (Staff, error)
+	GetStatus(ctx context.Context, id uuid.UUID) (Status, error)
+	GetUser(ctx context.Context, id string) (User, error)
+	ListCalls(ctx context.Context, customerID uuid.UUID) ([]ListCallsRow, error)
+	ListCompanies(ctx context.Context) ([]Company, error)
+	ListContacts(ctx context.Context, customerID uuid.UUID) ([]ListContactsRow, error)
+	ListCustomers(ctx context.Context, arg ListCustomersParams) ([]ListCustomersRow, error)
+	ListPermits(ctx context.Context, bookID uuid.UUID) ([]Permit, error)
+	ListStatuses(ctx context.Context) ([]Status, error)
+	ListUsers(ctx context.Context) ([]User, error)
+	UpdateBook(ctx context.Context, arg UpdateBookParams) (Book, error)
+	UpdateCall(ctx context.Context, arg UpdateCallParams) (Call, error)
+	UpdateCompany(ctx context.Context, arg UpdateCompanyParams) (Company, error)
+	UpdateContact(ctx context.Context, arg UpdateContactParams) (Contact, error)
 	UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) (Customer, error)
-	UpdateCustomerCategory(ctx context.Context, arg UpdateCustomerCategoryParams) (Customer, error)
 	UpdatePermit(ctx context.Context, arg UpdatePermitParams) (Permit, error)
-	UpsertCategory(ctx context.Context, arg UpsertCategoryParams) (Category, error)
+	UpdateRedial(ctx context.Context, arg UpdateRedialParams) (Redial, error)
+	UpdateStaff(ctx context.Context, arg UpdateStaffParams) (Staff, error)
+	UpdateStatus(ctx context.Context, arg UpdateStatusParams) (Status, error)
+	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)
 }
 
 var _ Querier = (*Queries)(nil)

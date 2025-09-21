@@ -8,7 +8,8 @@ option go_package = "github.com/0utl1er-tech/phox-customer/gen/pb/customer/v1;cu
 
 service CustomerService {
   rpc CreateCustomer(CreateCustomerRequest) returns (CreateCustomerResponse);
-  rpc SearchCustomer(SearchCustomerRequest) returns (SearchCustomerResponse);
+  rpc ListCustomer(ListCustomerRequest) returns (ListCustomerResponse);
+  rpc GetCustomer(GetCustomerRequest) returns (GetCustomerResponse);
   rpc UpdateCustomer(UpdateCustomerRequest) returns (UpdateCustomerResponse);
   rpc DeleteCustomer(DeleteCustomerRequest) returns (DeleteCustomerResponse);
 }

@@ -12,9 +12,10 @@ import (
 	"github.com/google/uuid"
 )
 
-const createBook = `-- name: CreateBook :exec
+const createBook = `-- name: CreateBook :one
 INSERT INTO "Book" (id, name)
 VALUES ($1, $2)
+RETURNING id, name, updated_at, created_at
 `
 
 type CreateBookParams struct {
@@ -22,9 +23,16 @@ type CreateBookParams struct {
 	Name string    `json:"name"`
 }
 
-func (q *Queries) CreateBook(ctx context.Context, arg CreateBookParams) error {
-	_, err := q.db.Exec(ctx, createBook, arg.ID, arg.Name)
-	return err
+func (q *Queries) CreateBook(ctx context.Context, arg CreateBookParams) (Book, error) {
+	row := q.db.QueryRow(ctx, createBook, arg.ID, arg.Name)
+	var i Book
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.UpdatedAt,
+		&i.CreatedAt,
+	)
+	return i, err
 }
 
 const deleteBook = `-- name: DeleteBook :exec
@@ -45,7 +53,7 @@ WHERE b.id = $1 AND p.user_id = $2
 
 type GetBookByIDAndUserIDParams struct {
 	ID     uuid.UUID `json:"id"`
-	UserID uuid.UUID `json:"user_id"`
+	UserID string    `json:"user_id"`
 }
 
 type GetBookByIDAndUserIDRow struct {
@@ -82,7 +90,7 @@ type GetBooksByUserIDRow struct {
 	Role      Role      `json:"role"`
 }
 
-func (q *Queries) GetBooksByUserID(ctx context.Context, userID uuid.UUID) ([]GetBooksByUserIDRow, error) {
+func (q *Queries) GetBooksByUserID(ctx context.Context, userID string) ([]GetBooksByUserIDRow, error) {
 	rows, err := q.db.Query(ctx, getBooksByUserID, userID)
 	if err != nil {
 		return nil, err
@@ -107,8 +115,10 @@ func (q *Queries) GetBooksByUserID(ctx context.Context, userID uuid.UUID) ([]Get
 	return items, nil
 }
 
-const updateBook = `-- name: UpdateBook :exec
-UPDATE "Book" SET name = $2 WHERE id = $1
+const updateBook = `-- name: UpdateBook :one
+UPDATE "Book" 
+SET name = $2 WHERE id = $1
+RETURNING id, name, updated_at, created_at
 `
 
 type UpdateBookParams struct {
@@ -116,7 +126,14 @@ type UpdateBookParams struct {
 	Name string    `json:"name"`
 }
 
-func (q *Queries) UpdateBook(ctx context.Context, arg UpdateBookParams) error {
-	_, err := q.db.Exec(ctx, updateBook, arg.ID, arg.Name)
-	return err
+func (q *Queries) UpdateBook(ctx context.Context, arg UpdateBookParams) (Book, error) {
+	row := q.db.QueryRow(ctx, updateBook, arg.ID, arg.Name)
+	var i Book
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.UpdatedAt,
+		&i.CreatedAt,
+	)
+	return i, err
 }

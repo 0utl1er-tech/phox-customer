@@ -6,13 +6,16 @@ import (
 	"os"
 	"syscall"
 
+	"github.com/0utl1er-tech/phox-customer/gen/pb/book/v1/bookv1connect"
+	contactv1connect "github.com/0utl1er-tech/phox-customer/gen/pb/contact/v1/contactv1connect"
 	customerv1connect "github.com/0utl1er-tech/phox-customer/gen/pb/customer/v1/customerv1connect"
+	permitv1connect "github.com/0utl1er-tech/phox-customer/gen/pb/permit/v1/permitv1connect"
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
-	"github.com/0utl1er-tech/phox-customer/internal/service"
 	"github.com/0utl1er-tech/phox-customer/internal/service/book"
+	"github.com/0utl1er-tech/phox-customer/internal/service/contact"
 	"github.com/0utl1er-tech/phox-customer/internal/service/customer"
+	"github.com/0utl1er-tech/phox-customer/internal/service/permit"
 	"github.com/0utl1er-tech/phox-customer/internal/util"
-	"github.com/bufbuild/connect-go"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/net/http2"
@@ -38,24 +41,23 @@ func main() {
 	}
 
 	queries := db.New(connPool)
-	customerService := customer.NewService(queries)
-	bookService := book.NewService(queries)
-
+	customerService := customer.NewCustomerService(queries)
+	bookService := book.NewBookService(queries)
+	permitService := permit.NewPermitService(queries)
+	contactService := contact.NewContactService(queries)
 	// HTTPサーバーの設定
 	mux := http.NewServeMux()
 
 	// Connect-Goハンドラーを登録（認証interceptor付き）
-	path, handler := customerv1connect.NewCustomerServiceHandler(
-		customerService,
-		connect.WithInterceptors(service.AuthInterceptor()),
-	)
-	bookPath, bookHandler := customerv1connect.NewBookServiceHandler(
-		bookService,
-		connect.WithInterceptors(service.AuthInterceptor()),
-	)
+	customerPath, customerHandler := customerv1connect.NewCustomerServiceHandler(customerService)
+	bookPath, bookHandler := bookv1connect.NewBookServiceHandler(bookService)
+	permitPath, permitHandler := permitv1connect.NewPermitServiceHandler(permitService)
+	contactPath, contactHandler := contactv1connect.NewContactServiceHandler(contactService)
 
-	mux.Handle(path, handler)
+	mux.Handle(customerPath, customerHandler)
 	mux.Handle(bookPath, bookHandler)
+	mux.Handle(permitPath, permitHandler)
+	mux.Handle(contactPath, contactHandler)
 
 	// HTTP/2対応のサーバーを作成
 	server := &http.Server{

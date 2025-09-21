@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package user.v1;
+
+import "buf/validate/validate.proto";
+import "company/v1/company.proto";
+
+option go_package = "github.com/0utl1er-tech/phox-customer/gen/pb/user/v1;userv1";
+
+message User {
+  string id = 1;
+  string name = 2 [(buf.validate.field).string.max_len = 128];
+  company.v1.Company company = 3;
+}
+
+message GetUserRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message GetUserResponse {
+  User user = 1;
+}

@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package redial.v1;
+
+import "buf/validate/validate.proto";
+
+option go_package = "github.com/0utl1er-tech/phox-customer/gen/pb/redial/v1;redialv1";
+
+service RedialService {
+  rpc CreateRedial(CreateRedialRequest) returns (CreateRedialResponse);
+}
+
+message CreateRedialRequest {
+  string customer_id = 1 [(buf.validate.field).string.uuid = true];
+  string date = 2;
+  string time = 3;
+}
+
+message CreateRedialResponse {
+  Redial redial = 1;
+}
+
+message Redial {
+  string id = 1;
+  string customer_id = 2 [(buf.validate.field).string.uuid = true];
+  string user_id = 3 [(buf.validate.field).string.min_len = 1];
+  string date = 4;
+  string time = 5;
+}

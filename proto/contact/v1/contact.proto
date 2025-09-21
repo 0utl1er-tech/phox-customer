@@ -1,0 +1,65 @@
+syntax = "proto3";
+
+package contact.v1;
+
+import "buf/validate/validate.proto";
+import "staff/v1/staff.proto";
+
+option go_package = "github.com/0utl1er-tech/phox-customer/gen/pb/contact/v1;contactv1";
+
+service ContactService {
+  rpc CreateContact(CreateContactRequest) returns (CreateContactResponse);
+  rpc UpdateContact(UpdateContactRequest) returns (UpdateContactResponse);
+  rpc DeleteContact(DeleteContactRequest) returns (DeleteContactResponse);
+}
+
+message ListContactRequest {
+  string customer_id = 1 [(buf.validate.field).string.uuid = true];
+  int32 limit = 2;
+  int32 offset = 3;
+}
+
+message ListContactResponse {
+  repeated Contact contacts = 1;
+}
+
+message Contact {
+  string id = 1;
+  string customer_id = 2 [(buf.validate.field).string.uuid = true];
+  staff.v1.Staff staff = 3;
+  string mail = 4 [(buf.validate.field).string.email = true];
+  string phone = 5 [(buf.validate.field).string.min_len = 1];
+  string fax = 6 [(buf.validate.field).string.min_len = 1];
+}
+
+message CreateContactRequest {
+  string customer_id = 1 [(buf.validate.field).string.uuid = true];
+  string staff_id = 2 [(buf.validate.field).string.uuid = true];
+  optional string mail = 3 [(buf.validate.field).string.email = true];
+  optional string phone = 4 [(buf.validate.field).string.min_len = 1];
+  optional string fax = 5 [(buf.validate.field).string.min_len = 1];
+}
+
+message CreateContactResponse {
+  Contact created_contact = 1;
+}
+
+message UpdateContactRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+  optional string staff_id = 2 [(buf.validate.field).string.uuid = true];
+  optional string mail = 3 [(buf.validate.field).string.email = true];
+  optional string phone = 4 [(buf.validate.field).string.min_len = 1];
+  optional string fax = 5 [(buf.validate.field).string.min_len = 1];
+}
+
+message UpdateContactResponse {
+  Contact updated_contact = 1;
+}
+
+message DeleteContactRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message DeleteContactResponse {
+  string id = 1;
+}

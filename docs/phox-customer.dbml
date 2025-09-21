@@ -8,25 +8,49 @@ Enum role {
 Table Book {
   id uuid [pk]
   name varchar [not null]
+
+  updated_at timestamptz [not null, default: `now()`]
   created_at timestamptz [not null, default: `now()`]
+}
+
+Table Company {
+  id uuid [pk]
+  name varchar [not null]
+
+  updated_at timestamptz [not null, default: `now()`]
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table User {
+  id varchar [pk]
+  company_id uuid [not null]
+  name varchar [not null]
+
+  updated_at timestamptz [not null, default: `now()`]
+  created_at timestamptz [not null, default: `now()`]  
+}
+
+Table Redial {
+  id varchar [pk]
+  customer_id uuid [not null, unique]
+  user_id varchar [not null]
+  date date [not null, default: `now()`]
+  time time [not null, default: `now()`]
+
+  updated_at timestamptz [not null, default: `now()`]
+  created_at timestamptz [not null, default: `now()`]  
 }
 
 Table Permit {
   id uuid [pk]
   book_id uuid [not null]
-  user_id uuid [not null]
+  user_id varchar [not null]
   role role [not null]
-  created_at timestamptz [not null, default: `now()`]
-}
 
-Table Category {
-  id uuid [pk]
-  book_id uuid [not null]
-  name varchar [not null]
+  updated_at timestamptz [not null, default: `now()`]
   created_at timestamptz [not null, default: `now()`]
-
   indexes {
-    (name, book_id) [unique]
+    (book_id, user_id) [unique]
   }
 }
 
@@ -34,18 +58,91 @@ Table Category {
 Table Customer {
   id uuid [pk]
   book_id uuid [not null]
-  category_id uuid
-  name varchar [not null]
-  corporation varchar
-  address varchar
-  memo text
+  category varchar [not null, default: ""]
+  name varchar [not null, default: ""]
+  corporation varchar [not null, default: ""]
+  address varchar [not null, default: ""]
+  memo text [not null, default: ""]
+  pic uuid [not null, unique]
+  leader uuid [not null, unique]
+
+  updated_at timestamptz [not null, default: `now()`]
   created_at timestamptz [not null, default: `now()`]
+}
+
+Table Staff {
+  id uuid [pk]
+  name varchar [not null, default: ""]
+  sex varchar [not null, default: ""]
+
+  updated_at timestamptz [not null, default: `now()`]
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table Contact {
+  id uuid [pk]
+  customer_id uuid [not null]
+  staff_id uuid [not null]
+  phone varchar [not null, default:""]
+  mail varchar [not null, default:""]
+  fax varchar [not null, default:""]
+
+  updated_at timestamptz [not null, default: `now()`]
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table Call {
+  id uuid [pk]
+  customer_id uuid [not null]
+  contact_id uuid [not null]
+  user_id varchar [not null]
+  status_id uuid [not null]
+
+  updated_at timestamptz [not null, default: `now()`]
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table Status {
+  id uuid [pk]
+  book_id uuid [not null]
+  priority int [not null]
+  name varchar [not null]
+  effective bool [not null, note: "有効数としてカウントするか"]
+  ng bool [not null, note: "NG"]
+
+  updated_at timestamptz [not null, default: `now()`]
+  created_at timestamptz [not null, default: `now()`]
+  indexes {
+    (book_id, name) [unique]
+  }
 }
 
 Ref: "Customer"."book_id" > "Book"."id" [delete: cascade, update: no action]
 
-Ref: "Category"."id" < "Customer"."category_id"
+Ref: "Book"."id" < "Permit"."book_id" [delete: cascade, update: no action]
 
-Ref: "Book"."id" < "Permit"."book_id"
+Ref: "Call"."status_id" > "Status"."id" [delete: no action, update: no action]
 
-Ref: "Book"."id" < "Category"."book_id"
+Ref: "Customer"."id" < "Contact"."customer_id" [delete: cascade, update: no action]
+
+Ref: "Customer"."pic" - "Staff"."id" [delete: cascade, update: no action]
+
+Ref: "Customer"."leader" - "Staff"."id" [delete: cascade, update: no action]
+
+Ref: "User"."id" < "Permit"."user_id" [delete: cascade, update: no action]
+
+Ref: "Company"."id" < "User"."company_id" [delete: cascade, update: no action]
+
+Ref: "User"."id" < "Call"."user_id" [delete: cascade, update: no action]
+
+Ref: "User"."id" < "Redial"."user_id" [delete: cascade, update: no action]
+
+Ref: "Customer"."id" - "Redial"."customer_id" [delete: cascade, update: no action]
+
+Ref: "Contact"."id" < "Call"."contact_id" [delete: cascade, update: no action]
+
+Ref: "Book"."id" < "Status"."book_id" [delete: cascade, update: no action]
+
+Ref: "Staff"."id" - "Contact"."staff_id" [delete: cascade, update: no action]
+
+Ref: "Customer"."id" < "Call"."customer_id" [delete: cascade, update: no action]

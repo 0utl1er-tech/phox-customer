@@ -2,61 +2,75 @@ syntax = "proto3";
 
 package customer.v1;
 
+import "buf/validate/validate.proto";
+import "call/v1/call.proto";
+import "contact/v1/contact.proto";
+import "staff/v1/staff.proto";
+
 option go_package = "github.com/0utl1er-tech/phox-customer/gen/pb/customer/v1;customerv1";
 
 message CreateCustomerRequest {
-  string book_id = 1;
-  string category = 2;
-  string name = 3;
-  string corporation = 4;
-  string address = 5;
-  string memo = 6;
+  string book_id = 1 [(buf.validate.field).string.uuid = true];
+  string category = 2 [(buf.validate.field).string.max_len = 128];
+  string name = 3 [(buf.validate.field).string.max_len = 128];
+  string corporation = 4 [(buf.validate.field).string.max_len = 128];
+  string address = 5 [(buf.validate.field).string.max_len = 128];
+  string memo = 6 [(buf.validate.field).string.max_len = 1024];
+  staff.v1.Staff pic = 7;
+  staff.v1.Staff leader = 8;
 }
 
 message CreateCustomerResponse {
-  string id = 1;
-  string book_id = 2;
-  string name = 3;
+  Customer customer = 1;
 }
 
-message SearchCustomerRequest {
-  string book_id = 1;
-  string category = 2;
-  optional string name = 3;
-  optional string corporation = 4;
-  optional string address = 5;
-  optional string memo = 6;
+message ListCustomerRequest {
+  string book_id = 1 [(buf.validate.field).string.uuid = true];
+  int32 limit = 2;
+  int32 offset = 3;
 }
 
-message SearchCustomerResponse {
+message ListCustomerResponse {
   repeated Customer customers = 1;
 }
 
+message GetCustomerRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message GetCustomerResponse {
+  Customer customer = 1;
+}
+
 message Customer {
-  string book_id = 1;
-  string category = 2;
-  string name = 3;
-  string corporation = 4;
-  string address = 5;
-  string memo = 6;
+  string id = 1;
+  string book_id = 2;
+  string category = 3;
+  string name = 4;
+  string corporation = 5;
+  string address = 6;
+  string memo = 7;
+  staff.v1.Staff pic = 8;
+  staff.v1.Staff leader = 9;
+  repeated contact.v1.Contact contacts = 10;
+  repeated call.v1.Call calls = 11;
 }
 
 message UpdateCustomerRequest {
-  string book_id = 1;
-  optional string name = 2;
-  optional string corporation = 3;
-  optional string address = 4;
-  optional string memo = 5;
+  string id = 1 [(buf.validate.field).string.uuid = true];
+  optional string category = 2 [(buf.validate.field).string.max_len = 128];
+  optional string name = 3 [(buf.validate.field).string.max_len = 128];
+  optional string corporation = 4 [(buf.validate.field).string.max_len = 128];
+  optional string address = 5 [(buf.validate.field).string.max_len = 128];
+  optional string memo = 6 [(buf.validate.field).string.max_len = 1024];
 }
 
 message UpdateCustomerResponse {
-  string id = 1;
-  string book_id = 2;
-  string name = 3;
+  Customer updated_customer = 1;
 }
 
 message DeleteCustomerRequest {
-  string customer_id = 1;
+  string customer_id = 1 [(buf.validate.field).string.uuid = true];
 }
 
 message DeleteCustomerResponse {

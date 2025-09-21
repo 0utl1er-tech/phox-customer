@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package call.v1;
+
+import "buf/validate/validate.proto";
+import "contact/v1/contact.proto";
+import "status/v1/status.proto";
+import "user/v1/user.proto";
+
+option go_package = "github.com/0utl1er-tech/phox-customer/gen/pb/call/v1;callv1";
+
+service CallService {
+  rpc CreateCall(CreateCallRequest) returns (CreateCallResponse);
+}
+
+message CreateCallRequest {
+  string contact_id = 1 [(buf.validate.field).string.uuid = true];
+  string user_id = 2 [(buf.validate.field).string.min_len = 1];
+  string status_id = 3 [(buf.validate.field).string.uuid = true];
+}
+
+message CreateCallResponse {
+  string id = 1;
+}
+
+message GetCallRequest {
+  string contact_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message GetCallResponse {
+  string id = 1;
+}
+
+message Call {
+  string id = 1;
+  contact.v1.Contact contact = 2;
+  user.v1.User user = 3;
+  status.v1.Status status = 4;
+}

@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+package status.v1;
+
+import "buf/validate/validate.proto";
+
+option go_package = "github.com/0utl1er-tech/phox-customer/gen/pb/status/v1;statusv1";
+
+service StatusService {
+  rpc GetStatus(GetStatusRequest) returns (GetStatusResponse);
+  rpc CreateStatus(CreateStatusRequest) returns (CreateStatusResponse);
+  rpc UpdateStatus(UpdateStatusRequest) returns (UpdateStatusResponse);
+  rpc DeleteStatus(DeleteStatusRequest) returns (DeleteStatusResponse);
+}
+
+message GetStatusRequest {
+  string company_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message GetStatusResponse {
+  repeated Status statuses = 1;
+}
+
+message CreateStatusRequest {
+  string company_id = 1 [(buf.validate.field).string.uuid = true];
+  string name = 2 [(buf.validate.field).string.min_len = 1];
+  bool effective = 3;
+  bool ng = 4;
+}
+
+message CreateStatusResponse {
+  Status status = 1;
+}
+
+message UpdateStatusRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+  optional string name = 2 [(buf.validate.field).string.min_len = 1];
+  optional bool effective = 3;
+  optional bool ng = 4;
+}
+
+message UpdateStatusResponse {
+  Status status = 1;
+}
+
+message DeleteStatusRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message DeleteStatusResponse {
+  string id = 1;
+}
+
+message Status {
+  string id = 1;
+  string name = 2;
+  bool effective = 3;
+  bool ng = 4;
+}

@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+package book.v1;
+
+import "buf/validate/validate.proto";
+
+option go_package = "github.com/0utl1er-tech/phox-customer/gen/pb/book/v1;bookv1";
+
+service BookService {
+  rpc GetBook(GetBookRequest) returns (GetBookResponse);
+  rpc CreateBook(CreateBookRequest) returns (CreateBookResponse);
+  rpc UpdateBook(UpdateBookRequest) returns (UpdateBookResponse);
+  rpc DeleteBook(DeleteBookRequest) returns (DeleteBookResponse);
+}
+
+message GetBookRequest {}
+message GetBookResponse {
+  repeated Book books = 1;
+}
+
+message CreateBookRequest {
+  string name = 1 [(buf.validate.field).string.min_len = 1];
+}
+
+message CreateBookResponse {
+  string id = 1;
+}
+
+message UpdateBookRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+  string name = 2 [
+    (buf.validate.field).string.min_len = 1,
+    (buf.validate.field).string.max_len = 32
+  ];
+}
+
+message UpdateBookResponse {
+  Book updated_book = 1;
+}
+
+message DeleteBookRequest {
+  string id = 1;
+}
+
+message DeleteBookResponse {
+  Book deleted_book = 1;
+}
+
+message Book {
+  string id = 1;
+  string name = 2;
+}
