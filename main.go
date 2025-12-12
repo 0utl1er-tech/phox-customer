@@ -3,14 +3,14 @@ package main
 import (
 	"context"
 	"net/http"
-	"os"
-	"syscall"
 
+	"connectrpc.com/connect"
 	"github.com/0utl1er-tech/phox-customer/gen/pb/book/v1/bookv1connect"
 	contactv1connect "github.com/0utl1er-tech/phox-customer/gen/pb/contact/v1/contactv1connect"
 	customerv1connect "github.com/0utl1er-tech/phox-customer/gen/pb/customer/v1/customerv1connect"
 	permitv1connect "github.com/0utl1er-tech/phox-customer/gen/pb/permit/v1/permitv1connect"
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
+	"github.com/0utl1er-tech/phox-customer/internal/service/auth"
 	"github.com/0utl1er-tech/phox-customer/internal/service/book"
 	"github.com/0utl1er-tech/phox-customer/internal/service/contact"
 	"github.com/0utl1er-tech/phox-customer/internal/service/customer"
@@ -22,12 +22,6 @@ import (
 	"golang.org/x/net/http2/h2c"
 	"golang.org/x/sync/errgroup"
 )
-
-var interruptSignals = []os.Signal{
-	os.Interrupt,
-	syscall.SIGTERM,
-	syscall.SIGINT,
-}
 
 func main() {
 	cfg, err := util.LoadConfig(".")
@@ -41,18 +35,25 @@ func main() {
 	}
 
 	queries := db.New(connPool)
+
+	// Create interceptor
+	authInterceptor := auth.NewAuthInterceptor(context.Background(), queries, cfg)
+	interceptors := connect.WithInterceptors(authInterceptor)
+
+	// Create services
 	customerService := customer.NewCustomerService(queries)
 	bookService := book.NewBookService(queries)
 	permitService := permit.NewPermitService(queries)
 	contactService := contact.NewContactService(queries)
+
 	// HTTPサーバーの設定
 	mux := http.NewServeMux()
 
-	// Connect-Goハンドラーを登録（認証interceptor付き）
-	customerPath, customerHandler := customerv1connect.NewCustomerServiceHandler(customerService)
-	bookPath, bookHandler := bookv1connect.NewBookServiceHandler(bookService)
-	permitPath, permitHandler := permitv1connect.NewPermitServiceHandler(permitService)
-	contactPath, contactHandler := contactv1connect.NewContactServiceHandler(contactService)
+	// Connect-Goハンドラーを登録（ミドルウェア付き）
+	customerPath, customerHandler := customerv1connect.NewCustomerServiceHandler(customerService, interceptors)
+	bookPath, bookHandler := bookv1connect.NewBookServiceHandler(bookService, interceptors)
+	permitPath, permitHandler := permitv1connect.NewPermitServiceHandler(permitService, interceptors)
+	contactPath, contactHandler := contactv1connect.NewContactServiceHandler(contactService, interceptors)
 
 	mux.Handle(customerPath, customerHandler)
 	mux.Handle(bookPath, bookHandler)

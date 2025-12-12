@@ -7,7 +7,7 @@ import (
 	contactv1 "github.com/0utl1er-tech/phox-customer/gen/pb/contact/v1"
 	staffv1 "github.com/0utl1er-tech/phox-customer/gen/pb/staff/v1"
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
-	"github.com/bufbuild/connect-go"
+	"connectrpc.com/connect"
 	"github.com/google/uuid"
 )
 

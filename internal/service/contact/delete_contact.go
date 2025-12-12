@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	contactv1 "github.com/0utl1er-tech/phox-customer/gen/pb/contact/v1"
-	"github.com/bufbuild/connect-go"
+	"connectrpc.com/connect"
 	"github.com/google/uuid"
 )
 

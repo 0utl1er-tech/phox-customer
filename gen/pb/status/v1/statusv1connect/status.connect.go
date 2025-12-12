@@ -5,10 +5,10 @@
 package statusv1connect
 
 import (
+	connect "connectrpc.com/connect"
 	context "context"
 	errors "errors"
 	v1 "github.com/0utl1er-tech/phox-customer/gen/pb/status/v1"
-	connect_go "github.com/bufbuild/connect-go"
 	http "net/http"
 	strings "strings"
 )
@@ -18,7 +18,7 @@ import (
 // generated with a version of connect newer than the one compiled into your binary. You can fix the
 // problem by either regenerating this code with an older version of connect or updating the connect
 // version compiled into your binary.
-const _ = connect_go.IsAtLeastVersion0_1_0
+const _ = connect.IsAtLeastVersion1_13_0
 
 const (
 	// StatusServiceName is the fully-qualified name of the StatusService service.
@@ -48,10 +48,10 @@ const (
 
 // StatusServiceClient is a client for the status.v1.StatusService service.
 type StatusServiceClient interface {
-	GetStatus(context.Context, *connect_go.Request[v1.GetStatusRequest]) (*connect_go.Response[v1.GetStatusResponse], error)
-	CreateStatus(context.Context, *connect_go.Request[v1.CreateStatusRequest]) (*connect_go.Response[v1.CreateStatusResponse], error)
-	UpdateStatus(context.Context, *connect_go.Request[v1.UpdateStatusRequest]) (*connect_go.Response[v1.UpdateStatusResponse], error)
-	DeleteStatus(context.Context, *connect_go.Request[v1.DeleteStatusRequest]) (*connect_go.Response[v1.DeleteStatusResponse], error)
+	GetStatus(context.Context, *connect.Request[v1.GetStatusRequest]) (*connect.Response[v1.GetStatusResponse], error)
+	CreateStatus(context.Context, *connect.Request[v1.CreateStatusRequest]) (*connect.Response[v1.CreateStatusResponse], error)
+	UpdateStatus(context.Context, *connect.Request[v1.UpdateStatusRequest]) (*connect.Response[v1.UpdateStatusResponse], error)
+	DeleteStatus(context.Context, *connect.Request[v1.DeleteStatusRequest]) (*connect.Response[v1.DeleteStatusResponse], error)
 }
 
 // NewStatusServiceClient constructs a client for the status.v1.StatusService service. By default,
@@ -61,66 +61,71 @@ type StatusServiceClient interface {
 //
 // The URL supplied here should be the base URL for the Connect or gRPC server (for example,
 // http://api.acme.com or https://acme.com/grpc).
-func NewStatusServiceClient(httpClient connect_go.HTTPClient, baseURL string, opts ...connect_go.ClientOption) StatusServiceClient {
+func NewStatusServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...connect.ClientOption) StatusServiceClient {
 	baseURL = strings.TrimRight(baseURL, "/")
+	statusServiceMethods := v1.File_status_v1_status_proto.Services().ByName("StatusService").Methods()
 	return &statusServiceClient{
-		getStatus: connect_go.NewClient[v1.GetStatusRequest, v1.GetStatusResponse](
+		getStatus: connect.NewClient[v1.GetStatusRequest, v1.GetStatusResponse](
 			httpClient,
 			baseURL+StatusServiceGetStatusProcedure,
-			opts...,
+			connect.WithSchema(statusServiceMethods.ByName("GetStatus")),
+			connect.WithClientOptions(opts...),
 		),
-		createStatus: connect_go.NewClient[v1.CreateStatusRequest, v1.CreateStatusResponse](
+		createStatus: connect.NewClient[v1.CreateStatusRequest, v1.CreateStatusResponse](
 			httpClient,
 			baseURL+StatusServiceCreateStatusProcedure,
-			opts...,
+			connect.WithSchema(statusServiceMethods.ByName("CreateStatus")),
+			connect.WithClientOptions(opts...),
 		),
-		updateStatus: connect_go.NewClient[v1.UpdateStatusRequest, v1.UpdateStatusResponse](
+		updateStatus: connect.NewClient[v1.UpdateStatusRequest, v1.UpdateStatusResponse](
 			httpClient,
 			baseURL+StatusServiceUpdateStatusProcedure,
-			opts...,
+			connect.WithSchema(statusServiceMethods.ByName("UpdateStatus")),
+			connect.WithClientOptions(opts...),
 		),
-		deleteStatus: connect_go.NewClient[v1.DeleteStatusRequest, v1.DeleteStatusResponse](
+		deleteStatus: connect.NewClient[v1.DeleteStatusRequest, v1.DeleteStatusResponse](
 			httpClient,
 			baseURL+StatusServiceDeleteStatusProcedure,
-			opts...,
+			connect.WithSchema(statusServiceMethods.ByName("DeleteStatus")),
+			connect.WithClientOptions(opts...),
 		),
 	}
 }
 
 // statusServiceClient implements StatusServiceClient.
 type statusServiceClient struct {
-	getStatus    *connect_go.Client[v1.GetStatusRequest, v1.GetStatusResponse]
-	createStatus *connect_go.Client[v1.CreateStatusRequest, v1.CreateStatusResponse]
-	updateStatus *connect_go.Client[v1.UpdateStatusRequest, v1.UpdateStatusResponse]
-	deleteStatus *connect_go.Client[v1.DeleteStatusRequest, v1.DeleteStatusResponse]
+	getStatus    *connect.Client[v1.GetStatusRequest, v1.GetStatusResponse]
+	createStatus *connect.Client[v1.CreateStatusRequest, v1.CreateStatusResponse]
+	updateStatus *connect.Client[v1.UpdateStatusRequest, v1.UpdateStatusResponse]
+	deleteStatus *connect.Client[v1.DeleteStatusRequest, v1.DeleteStatusResponse]
 }
 
 // GetStatus calls status.v1.StatusService.GetStatus.
-func (c *statusServiceClient) GetStatus(ctx context.Context, req *connect_go.Request[v1.GetStatusRequest]) (*connect_go.Response[v1.GetStatusResponse], error) {
+func (c *statusServiceClient) GetStatus(ctx context.Context, req *connect.Request[v1.GetStatusRequest]) (*connect.Response[v1.GetStatusResponse], error) {
 	return c.getStatus.CallUnary(ctx, req)
 }
 
 // CreateStatus calls status.v1.StatusService.CreateStatus.
-func (c *statusServiceClient) CreateStatus(ctx context.Context, req *connect_go.Request[v1.CreateStatusRequest]) (*connect_go.Response[v1.CreateStatusResponse], error) {
+func (c *statusServiceClient) CreateStatus(ctx context.Context, req *connect.Request[v1.CreateStatusRequest]) (*connect.Response[v1.CreateStatusResponse], error) {
 	return c.createStatus.CallUnary(ctx, req)
 }
 
 // UpdateStatus calls status.v1.StatusService.UpdateStatus.
-func (c *statusServiceClient) UpdateStatus(ctx context.Context, req *connect_go.Request[v1.UpdateStatusRequest]) (*connect_go.Response[v1.UpdateStatusResponse], error) {
+func (c *statusServiceClient) UpdateStatus(ctx context.Context, req *connect.Request[v1.UpdateStatusRequest]) (*connect.Response[v1.UpdateStatusResponse], error) {
 	return c.updateStatus.CallUnary(ctx, req)
 }
 
 // DeleteStatus calls status.v1.StatusService.DeleteStatus.
-func (c *statusServiceClient) DeleteStatus(ctx context.Context, req *connect_go.Request[v1.DeleteStatusRequest]) (*connect_go.Response[v1.DeleteStatusResponse], error) {
+func (c *statusServiceClient) DeleteStatus(ctx context.Context, req *connect.Request[v1.DeleteStatusRequest]) (*connect.Response[v1.DeleteStatusResponse], error) {
 	return c.deleteStatus.CallUnary(ctx, req)
 }
 
 // StatusServiceHandler is an implementation of the status.v1.StatusService service.
 type StatusServiceHandler interface {
-	GetStatus(context.Context, *connect_go.Request[v1.GetStatusRequest]) (*connect_go.Response[v1.GetStatusResponse], error)
-	CreateStatus(context.Context, *connect_go.Request[v1.CreateStatusRequest]) (*connect_go.Response[v1.CreateStatusResponse], error)
-	UpdateStatus(context.Context, *connect_go.Request[v1.UpdateStatusRequest]) (*connect_go.Response[v1.UpdateStatusResponse], error)
-	DeleteStatus(context.Context, *connect_go.Request[v1.DeleteStatusRequest]) (*connect_go.Response[v1.DeleteStatusResponse], error)
+	GetStatus(context.Context, *connect.Request[v1.GetStatusRequest]) (*connect.Response[v1.GetStatusResponse], error)
+	CreateStatus(context.Context, *connect.Request[v1.CreateStatusRequest]) (*connect.Response[v1.CreateStatusResponse], error)
+	UpdateStatus(context.Context, *connect.Request[v1.UpdateStatusRequest]) (*connect.Response[v1.UpdateStatusResponse], error)
+	DeleteStatus(context.Context, *connect.Request[v1.DeleteStatusRequest]) (*connect.Response[v1.DeleteStatusResponse], error)
 }
 
 // NewStatusServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -128,26 +133,31 @@ type StatusServiceHandler interface {
 //
 // By default, handlers support the Connect, gRPC, and gRPC-Web protocols with the binary Protobuf
 // and JSON codecs. They also support gzip compression.
-func NewStatusServiceHandler(svc StatusServiceHandler, opts ...connect_go.HandlerOption) (string, http.Handler) {
-	statusServiceGetStatusHandler := connect_go.NewUnaryHandler(
+func NewStatusServiceHandler(svc StatusServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
+	statusServiceMethods := v1.File_status_v1_status_proto.Services().ByName("StatusService").Methods()
+	statusServiceGetStatusHandler := connect.NewUnaryHandler(
 		StatusServiceGetStatusProcedure,
 		svc.GetStatus,
-		opts...,
+		connect.WithSchema(statusServiceMethods.ByName("GetStatus")),
+		connect.WithHandlerOptions(opts...),
 	)
-	statusServiceCreateStatusHandler := connect_go.NewUnaryHandler(
+	statusServiceCreateStatusHandler := connect.NewUnaryHandler(
 		StatusServiceCreateStatusProcedure,
 		svc.CreateStatus,
-		opts...,
+		connect.WithSchema(statusServiceMethods.ByName("CreateStatus")),
+		connect.WithHandlerOptions(opts...),
 	)
-	statusServiceUpdateStatusHandler := connect_go.NewUnaryHandler(
+	statusServiceUpdateStatusHandler := connect.NewUnaryHandler(
 		StatusServiceUpdateStatusProcedure,
 		svc.UpdateStatus,
-		opts...,
+		connect.WithSchema(statusServiceMethods.ByName("UpdateStatus")),
+		connect.WithHandlerOptions(opts...),
 	)
-	statusServiceDeleteStatusHandler := connect_go.NewUnaryHandler(
+	statusServiceDeleteStatusHandler := connect.NewUnaryHandler(
 		StatusServiceDeleteStatusProcedure,
 		svc.DeleteStatus,
-		opts...,
+		connect.WithSchema(statusServiceMethods.ByName("DeleteStatus")),
+		connect.WithHandlerOptions(opts...),
 	)
 	return "/status.v1.StatusService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -168,18 +178,18 @@ func NewStatusServiceHandler(svc StatusServiceHandler, opts ...connect_go.Handle
 // UnimplementedStatusServiceHandler returns CodeUnimplemented from all methods.
 type UnimplementedStatusServiceHandler struct{}
 
-func (UnimplementedStatusServiceHandler) GetStatus(context.Context, *connect_go.Request[v1.GetStatusRequest]) (*connect_go.Response[v1.GetStatusResponse], error) {
-	return nil, connect_go.NewError(connect_go.CodeUnimplemented, errors.New("status.v1.StatusService.GetStatus is not implemented"))
+func (UnimplementedStatusServiceHandler) GetStatus(context.Context, *connect.Request[v1.GetStatusRequest]) (*connect.Response[v1.GetStatusResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("status.v1.StatusService.GetStatus is not implemented"))
 }
 
-func (UnimplementedStatusServiceHandler) CreateStatus(context.Context, *connect_go.Request[v1.CreateStatusRequest]) (*connect_go.Response[v1.CreateStatusResponse], error) {
-	return nil, connect_go.NewError(connect_go.CodeUnimplemented, errors.New("status.v1.StatusService.CreateStatus is not implemented"))
+func (UnimplementedStatusServiceHandler) CreateStatus(context.Context, *connect.Request[v1.CreateStatusRequest]) (*connect.Response[v1.CreateStatusResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("status.v1.StatusService.CreateStatus is not implemented"))
 }
 
-func (UnimplementedStatusServiceHandler) UpdateStatus(context.Context, *connect_go.Request[v1.UpdateStatusRequest]) (*connect_go.Response[v1.UpdateStatusResponse], error) {
-	return nil, connect_go.NewError(connect_go.CodeUnimplemented, errors.New("status.v1.StatusService.UpdateStatus is not implemented"))
+func (UnimplementedStatusServiceHandler) UpdateStatus(context.Context, *connect.Request[v1.UpdateStatusRequest]) (*connect.Response[v1.UpdateStatusResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("status.v1.StatusService.UpdateStatus is not implemented"))
 }
 
-func (UnimplementedStatusServiceHandler) DeleteStatus(context.Context, *connect_go.Request[v1.DeleteStatusRequest]) (*connect_go.Response[v1.DeleteStatusResponse], error) {
-	return nil, connect_go.NewError(connect_go.CodeUnimplemented, errors.New("status.v1.StatusService.DeleteStatus is not implemented"))
+func (UnimplementedStatusServiceHandler) DeleteStatus(context.Context, *connect.Request[v1.DeleteStatusRequest]) (*connect.Response[v1.DeleteStatusResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("status.v1.StatusService.DeleteStatus is not implemented"))
 }

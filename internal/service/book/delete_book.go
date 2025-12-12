@@ -6,40 +6,30 @@ import (
 
 	bookv1 "github.com/0utl1er-tech/phox-customer/gen/pb/book/v1"
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
-	"github.com/bufbuild/connect-go"
+	"connectrpc.com/connect"
 	"github.com/google/uuid"
 )
 
-func (server *BookService) DeleteBook(
+func (s *BookService) DeleteBook(
 	ctx context.Context,
 	req *connect.Request[bookv1.DeleteBookRequest],
 ) (*connect.Response[bookv1.DeleteBookResponse], error) {
-	userID := req.Header().Get("X-User-ID")
-	if userID == "" {
-		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("X-User-IDがヘッダーに見つかりません"))
-	}
-	permit, err := server.queries.GetPermitByBookIDAndUserID(ctx, db.GetPermitByBookIDAndUserIDParams{
-		BookID: uuid.MustParse(req.Msg.Id),
-		UserID: userID,
-	})
+	bookId, err := uuid.Parse(req.Msg.Id)
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("bookの取得に失敗しました: %w", err))
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid book ID format: %w", err))
 	}
 
-	if permit.Role != db.RoleOwner {
-		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("bookの削除にはowner権限が必要です"))
+	if err := s.authorizer.CheckPermission(ctx, bookId, db.RoleOwner); err != nil {
+		return nil, err
 	}
 
-	bookId := uuid.MustParse(req.Msg.Id)
-	err = server.queries.DeleteBook(ctx, bookId)
+	err = s.queries.DeleteBook(ctx, bookId)
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("bookの削除に失敗しました: %w", err))
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to delete book: %w", err))
 	}
-	return &connect.Response[bookv1.DeleteBookResponse]{
-		Msg: &bookv1.DeleteBookResponse{
-			DeletedBook: &bookv1.Book{
-				Id: bookId.String(),
-			},
+	return connect.NewResponse(&bookv1.DeleteBookResponse{
+		DeletedBook: &bookv1.Book{
+			Id: bookId.String(),
 		},
-	}, nil
+	}), nil
 }

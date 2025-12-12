@@ -5,10 +5,10 @@
 package bookv1connect
 
 import (
+	connect "connectrpc.com/connect"
 	context "context"
 	errors "errors"
 	v1 "github.com/0utl1er-tech/phox-customer/gen/pb/book/v1"
-	connect_go "github.com/bufbuild/connect-go"
 	http "net/http"
 	strings "strings"
 )
@@ -18,7 +18,7 @@ import (
 // generated with a version of connect newer than the one compiled into your binary. You can fix the
 // problem by either regenerating this code with an older version of connect or updating the connect
 // version compiled into your binary.
-const _ = connect_go.IsAtLeastVersion0_1_0
+const _ = connect.IsAtLeastVersion1_13_0
 
 const (
 	// BookServiceName is the fully-qualified name of the BookService service.
@@ -45,10 +45,10 @@ const (
 
 // BookServiceClient is a client for the book.v1.BookService service.
 type BookServiceClient interface {
-	GetBook(context.Context, *connect_go.Request[v1.GetBookRequest]) (*connect_go.Response[v1.GetBookResponse], error)
-	CreateBook(context.Context, *connect_go.Request[v1.CreateBookRequest]) (*connect_go.Response[v1.CreateBookResponse], error)
-	UpdateBook(context.Context, *connect_go.Request[v1.UpdateBookRequest]) (*connect_go.Response[v1.UpdateBookResponse], error)
-	DeleteBook(context.Context, *connect_go.Request[v1.DeleteBookRequest]) (*connect_go.Response[v1.DeleteBookResponse], error)
+	GetBook(context.Context, *connect.Request[v1.GetBookRequest]) (*connect.Response[v1.GetBookResponse], error)
+	CreateBook(context.Context, *connect.Request[v1.CreateBookRequest]) (*connect.Response[v1.CreateBookResponse], error)
+	UpdateBook(context.Context, *connect.Request[v1.UpdateBookRequest]) (*connect.Response[v1.UpdateBookResponse], error)
+	DeleteBook(context.Context, *connect.Request[v1.DeleteBookRequest]) (*connect.Response[v1.DeleteBookResponse], error)
 }
 
 // NewBookServiceClient constructs a client for the book.v1.BookService service. By default, it uses
@@ -58,66 +58,71 @@ type BookServiceClient interface {
 //
 // The URL supplied here should be the base URL for the Connect or gRPC server (for example,
 // http://api.acme.com or https://acme.com/grpc).
-func NewBookServiceClient(httpClient connect_go.HTTPClient, baseURL string, opts ...connect_go.ClientOption) BookServiceClient {
+func NewBookServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...connect.ClientOption) BookServiceClient {
 	baseURL = strings.TrimRight(baseURL, "/")
+	bookServiceMethods := v1.File_book_v1_book_proto.Services().ByName("BookService").Methods()
 	return &bookServiceClient{
-		getBook: connect_go.NewClient[v1.GetBookRequest, v1.GetBookResponse](
+		getBook: connect.NewClient[v1.GetBookRequest, v1.GetBookResponse](
 			httpClient,
 			baseURL+BookServiceGetBookProcedure,
-			opts...,
+			connect.WithSchema(bookServiceMethods.ByName("GetBook")),
+			connect.WithClientOptions(opts...),
 		),
-		createBook: connect_go.NewClient[v1.CreateBookRequest, v1.CreateBookResponse](
+		createBook: connect.NewClient[v1.CreateBookRequest, v1.CreateBookResponse](
 			httpClient,
 			baseURL+BookServiceCreateBookProcedure,
-			opts...,
+			connect.WithSchema(bookServiceMethods.ByName("CreateBook")),
+			connect.WithClientOptions(opts...),
 		),
-		updateBook: connect_go.NewClient[v1.UpdateBookRequest, v1.UpdateBookResponse](
+		updateBook: connect.NewClient[v1.UpdateBookRequest, v1.UpdateBookResponse](
 			httpClient,
 			baseURL+BookServiceUpdateBookProcedure,
-			opts...,
+			connect.WithSchema(bookServiceMethods.ByName("UpdateBook")),
+			connect.WithClientOptions(opts...),
 		),
-		deleteBook: connect_go.NewClient[v1.DeleteBookRequest, v1.DeleteBookResponse](
+		deleteBook: connect.NewClient[v1.DeleteBookRequest, v1.DeleteBookResponse](
 			httpClient,
 			baseURL+BookServiceDeleteBookProcedure,
-			opts...,
+			connect.WithSchema(bookServiceMethods.ByName("DeleteBook")),
+			connect.WithClientOptions(opts...),
 		),
 	}
 }
 
 // bookServiceClient implements BookServiceClient.
 type bookServiceClient struct {
-	getBook    *connect_go.Client[v1.GetBookRequest, v1.GetBookResponse]
-	createBook *connect_go.Client[v1.CreateBookRequest, v1.CreateBookResponse]
-	updateBook *connect_go.Client[v1.UpdateBookRequest, v1.UpdateBookResponse]
-	deleteBook *connect_go.Client[v1.DeleteBookRequest, v1.DeleteBookResponse]
+	getBook    *connect.Client[v1.GetBookRequest, v1.GetBookResponse]
+	createBook *connect.Client[v1.CreateBookRequest, v1.CreateBookResponse]
+	updateBook *connect.Client[v1.UpdateBookRequest, v1.UpdateBookResponse]
+	deleteBook *connect.Client[v1.DeleteBookRequest, v1.DeleteBookResponse]
 }
 
 // GetBook calls book.v1.BookService.GetBook.
-func (c *bookServiceClient) GetBook(ctx context.Context, req *connect_go.Request[v1.GetBookRequest]) (*connect_go.Response[v1.GetBookResponse], error) {
+func (c *bookServiceClient) GetBook(ctx context.Context, req *connect.Request[v1.GetBookRequest]) (*connect.Response[v1.GetBookResponse], error) {
 	return c.getBook.CallUnary(ctx, req)
 }
 
 // CreateBook calls book.v1.BookService.CreateBook.
-func (c *bookServiceClient) CreateBook(ctx context.Context, req *connect_go.Request[v1.CreateBookRequest]) (*connect_go.Response[v1.CreateBookResponse], error) {
+func (c *bookServiceClient) CreateBook(ctx context.Context, req *connect.Request[v1.CreateBookRequest]) (*connect.Response[v1.CreateBookResponse], error) {
 	return c.createBook.CallUnary(ctx, req)
 }
 
 // UpdateBook calls book.v1.BookService.UpdateBook.
-func (c *bookServiceClient) UpdateBook(ctx context.Context, req *connect_go.Request[v1.UpdateBookRequest]) (*connect_go.Response[v1.UpdateBookResponse], error) {
+func (c *bookServiceClient) UpdateBook(ctx context.Context, req *connect.Request[v1.UpdateBookRequest]) (*connect.Response[v1.UpdateBookResponse], error) {
 	return c.updateBook.CallUnary(ctx, req)
 }
 
 // DeleteBook calls book.v1.BookService.DeleteBook.
-func (c *bookServiceClient) DeleteBook(ctx context.Context, req *connect_go.Request[v1.DeleteBookRequest]) (*connect_go.Response[v1.DeleteBookResponse], error) {
+func (c *bookServiceClient) DeleteBook(ctx context.Context, req *connect.Request[v1.DeleteBookRequest]) (*connect.Response[v1.DeleteBookResponse], error) {
 	return c.deleteBook.CallUnary(ctx, req)
 }
 
 // BookServiceHandler is an implementation of the book.v1.BookService service.
 type BookServiceHandler interface {
-	GetBook(context.Context, *connect_go.Request[v1.GetBookRequest]) (*connect_go.Response[v1.GetBookResponse], error)
-	CreateBook(context.Context, *connect_go.Request[v1.CreateBookRequest]) (*connect_go.Response[v1.CreateBookResponse], error)
-	UpdateBook(context.Context, *connect_go.Request[v1.UpdateBookRequest]) (*connect_go.Response[v1.UpdateBookResponse], error)
-	DeleteBook(context.Context, *connect_go.Request[v1.DeleteBookRequest]) (*connect_go.Response[v1.DeleteBookResponse], error)
+	GetBook(context.Context, *connect.Request[v1.GetBookRequest]) (*connect.Response[v1.GetBookResponse], error)
+	CreateBook(context.Context, *connect.Request[v1.CreateBookRequest]) (*connect.Response[v1.CreateBookResponse], error)
+	UpdateBook(context.Context, *connect.Request[v1.UpdateBookRequest]) (*connect.Response[v1.UpdateBookResponse], error)
+	DeleteBook(context.Context, *connect.Request[v1.DeleteBookRequest]) (*connect.Response[v1.DeleteBookResponse], error)
 }
 
 // NewBookServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -125,26 +130,31 @@ type BookServiceHandler interface {
 //
 // By default, handlers support the Connect, gRPC, and gRPC-Web protocols with the binary Protobuf
 // and JSON codecs. They also support gzip compression.
-func NewBookServiceHandler(svc BookServiceHandler, opts ...connect_go.HandlerOption) (string, http.Handler) {
-	bookServiceGetBookHandler := connect_go.NewUnaryHandler(
+func NewBookServiceHandler(svc BookServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
+	bookServiceMethods := v1.File_book_v1_book_proto.Services().ByName("BookService").Methods()
+	bookServiceGetBookHandler := connect.NewUnaryHandler(
 		BookServiceGetBookProcedure,
 		svc.GetBook,
-		opts...,
+		connect.WithSchema(bookServiceMethods.ByName("GetBook")),
+		connect.WithHandlerOptions(opts...),
 	)
-	bookServiceCreateBookHandler := connect_go.NewUnaryHandler(
+	bookServiceCreateBookHandler := connect.NewUnaryHandler(
 		BookServiceCreateBookProcedure,
 		svc.CreateBook,
-		opts...,
+		connect.WithSchema(bookServiceMethods.ByName("CreateBook")),
+		connect.WithHandlerOptions(opts...),
 	)
-	bookServiceUpdateBookHandler := connect_go.NewUnaryHandler(
+	bookServiceUpdateBookHandler := connect.NewUnaryHandler(
 		BookServiceUpdateBookProcedure,
 		svc.UpdateBook,
-		opts...,
+		connect.WithSchema(bookServiceMethods.ByName("UpdateBook")),
+		connect.WithHandlerOptions(opts...),
 	)
-	bookServiceDeleteBookHandler := connect_go.NewUnaryHandler(
+	bookServiceDeleteBookHandler := connect.NewUnaryHandler(
 		BookServiceDeleteBookProcedure,
 		svc.DeleteBook,
-		opts...,
+		connect.WithSchema(bookServiceMethods.ByName("DeleteBook")),
+		connect.WithHandlerOptions(opts...),
 	)
 	return "/book.v1.BookService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -165,18 +175,18 @@ func NewBookServiceHandler(svc BookServiceHandler, opts ...connect_go.HandlerOpt
 // UnimplementedBookServiceHandler returns CodeUnimplemented from all methods.
 type UnimplementedBookServiceHandler struct{}
 
-func (UnimplementedBookServiceHandler) GetBook(context.Context, *connect_go.Request[v1.GetBookRequest]) (*connect_go.Response[v1.GetBookResponse], error) {
-	return nil, connect_go.NewError(connect_go.CodeUnimplemented, errors.New("book.v1.BookService.GetBook is not implemented"))
+func (UnimplementedBookServiceHandler) GetBook(context.Context, *connect.Request[v1.GetBookRequest]) (*connect.Response[v1.GetBookResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("book.v1.BookService.GetBook is not implemented"))
 }
 
-func (UnimplementedBookServiceHandler) CreateBook(context.Context, *connect_go.Request[v1.CreateBookRequest]) (*connect_go.Response[v1.CreateBookResponse], error) {
-	return nil, connect_go.NewError(connect_go.CodeUnimplemented, errors.New("book.v1.BookService.CreateBook is not implemented"))
+func (UnimplementedBookServiceHandler) CreateBook(context.Context, *connect.Request[v1.CreateBookRequest]) (*connect.Response[v1.CreateBookResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("book.v1.BookService.CreateBook is not implemented"))
 }
 
-func (UnimplementedBookServiceHandler) UpdateBook(context.Context, *connect_go.Request[v1.UpdateBookRequest]) (*connect_go.Response[v1.UpdateBookResponse], error) {
-	return nil, connect_go.NewError(connect_go.CodeUnimplemented, errors.New("book.v1.BookService.UpdateBook is not implemented"))
+func (UnimplementedBookServiceHandler) UpdateBook(context.Context, *connect.Request[v1.UpdateBookRequest]) (*connect.Response[v1.UpdateBookResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("book.v1.BookService.UpdateBook is not implemented"))
 }
 
-func (UnimplementedBookServiceHandler) DeleteBook(context.Context, *connect_go.Request[v1.DeleteBookRequest]) (*connect_go.Response[v1.DeleteBookResponse], error) {
-	return nil, connect_go.NewError(connect_go.CodeUnimplemented, errors.New("book.v1.BookService.DeleteBook is not implemented"))
+func (UnimplementedBookServiceHandler) DeleteBook(context.Context, *connect.Request[v1.DeleteBookRequest]) (*connect.Response[v1.DeleteBookResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("book.v1.BookService.DeleteBook is not implemented"))
 }

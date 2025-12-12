@@ -4,7 +4,7 @@ import (
 	"context"
 
 	permitv1 "github.com/0utl1er-tech/phox-customer/gen/pb/permit/v1"
-	"github.com/bufbuild/connect-go"
+	"connectrpc.com/connect"
 	"github.com/google/uuid"
 )
 
@@ -13,5 +13,7 @@ func (server *PermitService) DeletePermit(ctx context.Context, req *connect.Requ
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	return nil, nil
+	return connect.NewResponse(&permitv1.DeletePermitResponse{
+		Id: req.Msg.Id,
+	}), nil
 }

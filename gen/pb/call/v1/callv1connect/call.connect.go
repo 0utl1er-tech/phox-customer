@@ -5,10 +5,10 @@
 package callv1connect
 
 import (
+	connect "connectrpc.com/connect"
 	context "context"
 	errors "errors"
 	v1 "github.com/0utl1er-tech/phox-customer/gen/pb/call/v1"
-	connect_go "github.com/bufbuild/connect-go"
 	http "net/http"
 	strings "strings"
 )
@@ -18,7 +18,7 @@ import (
 // generated with a version of connect newer than the one compiled into your binary. You can fix the
 // problem by either regenerating this code with an older version of connect or updating the connect
 // version compiled into your binary.
-const _ = connect_go.IsAtLeastVersion0_1_0
+const _ = connect.IsAtLeastVersion1_13_0
 
 const (
 	// CallServiceName is the fully-qualified name of the CallService service.
@@ -39,7 +39,7 @@ const (
 
 // CallServiceClient is a client for the call.v1.CallService service.
 type CallServiceClient interface {
-	CreateCall(context.Context, *connect_go.Request[v1.CreateCallRequest]) (*connect_go.Response[v1.CreateCallResponse], error)
+	CreateCall(context.Context, *connect.Request[v1.CreateCallRequest]) (*connect.Response[v1.CreateCallResponse], error)
 }
 
 // NewCallServiceClient constructs a client for the call.v1.CallService service. By default, it uses
@@ -49,30 +49,32 @@ type CallServiceClient interface {
 //
 // The URL supplied here should be the base URL for the Connect or gRPC server (for example,
 // http://api.acme.com or https://acme.com/grpc).
-func NewCallServiceClient(httpClient connect_go.HTTPClient, baseURL string, opts ...connect_go.ClientOption) CallServiceClient {
+func NewCallServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...connect.ClientOption) CallServiceClient {
 	baseURL = strings.TrimRight(baseURL, "/")
+	callServiceMethods := v1.File_call_v1_call_proto.Services().ByName("CallService").Methods()
 	return &callServiceClient{
-		createCall: connect_go.NewClient[v1.CreateCallRequest, v1.CreateCallResponse](
+		createCall: connect.NewClient[v1.CreateCallRequest, v1.CreateCallResponse](
 			httpClient,
 			baseURL+CallServiceCreateCallProcedure,
-			opts...,
+			connect.WithSchema(callServiceMethods.ByName("CreateCall")),
+			connect.WithClientOptions(opts...),
 		),
 	}
 }
 
 // callServiceClient implements CallServiceClient.
 type callServiceClient struct {
-	createCall *connect_go.Client[v1.CreateCallRequest, v1.CreateCallResponse]
+	createCall *connect.Client[v1.CreateCallRequest, v1.CreateCallResponse]
 }
 
 // CreateCall calls call.v1.CallService.CreateCall.
-func (c *callServiceClient) CreateCall(ctx context.Context, req *connect_go.Request[v1.CreateCallRequest]) (*connect_go.Response[v1.CreateCallResponse], error) {
+func (c *callServiceClient) CreateCall(ctx context.Context, req *connect.Request[v1.CreateCallRequest]) (*connect.Response[v1.CreateCallResponse], error) {
 	return c.createCall.CallUnary(ctx, req)
 }
 
 // CallServiceHandler is an implementation of the call.v1.CallService service.
 type CallServiceHandler interface {
-	CreateCall(context.Context, *connect_go.Request[v1.CreateCallRequest]) (*connect_go.Response[v1.CreateCallResponse], error)
+	CreateCall(context.Context, *connect.Request[v1.CreateCallRequest]) (*connect.Response[v1.CreateCallResponse], error)
 }
 
 // NewCallServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -80,11 +82,13 @@ type CallServiceHandler interface {
 //
 // By default, handlers support the Connect, gRPC, and gRPC-Web protocols with the binary Protobuf
 // and JSON codecs. They also support gzip compression.
-func NewCallServiceHandler(svc CallServiceHandler, opts ...connect_go.HandlerOption) (string, http.Handler) {
-	callServiceCreateCallHandler := connect_go.NewUnaryHandler(
+func NewCallServiceHandler(svc CallServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
+	callServiceMethods := v1.File_call_v1_call_proto.Services().ByName("CallService").Methods()
+	callServiceCreateCallHandler := connect.NewUnaryHandler(
 		CallServiceCreateCallProcedure,
 		svc.CreateCall,
-		opts...,
+		connect.WithSchema(callServiceMethods.ByName("CreateCall")),
+		connect.WithHandlerOptions(opts...),
 	)
 	return "/call.v1.CallService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -99,6 +103,6 @@ func NewCallServiceHandler(svc CallServiceHandler, opts ...connect_go.HandlerOpt
 // UnimplementedCallServiceHandler returns CodeUnimplemented from all methods.
 type UnimplementedCallServiceHandler struct{}
 
-func (UnimplementedCallServiceHandler) CreateCall(context.Context, *connect_go.Request[v1.CreateCallRequest]) (*connect_go.Response[v1.CreateCallResponse], error) {
-	return nil, connect_go.NewError(connect_go.CodeUnimplemented, errors.New("call.v1.CallService.CreateCall is not implemented"))
+func (UnimplementedCallServiceHandler) CreateCall(context.Context, *connect.Request[v1.CreateCallRequest]) (*connect.Response[v1.CreateCallResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("call.v1.CallService.CreateCall is not implemented"))
 }

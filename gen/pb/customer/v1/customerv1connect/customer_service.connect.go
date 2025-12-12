@@ -5,10 +5,10 @@
 package customerv1connect
 
 import (
+	connect "connectrpc.com/connect"
 	context "context"
 	errors "errors"
 	v1 "github.com/0utl1er-tech/phox-customer/gen/pb/customer/v1"
-	connect_go "github.com/bufbuild/connect-go"
 	http "net/http"
 	strings "strings"
 )
@@ -18,7 +18,7 @@ import (
 // generated with a version of connect newer than the one compiled into your binary. You can fix the
 // problem by either regenerating this code with an older version of connect or updating the connect
 // version compiled into your binary.
-const _ = connect_go.IsAtLeastVersion0_1_0
+const _ = connect.IsAtLeastVersion1_13_0
 
 const (
 	// CustomerServiceName is the fully-qualified name of the CustomerService service.
@@ -52,11 +52,11 @@ const (
 
 // CustomerServiceClient is a client for the customer.v1.CustomerService service.
 type CustomerServiceClient interface {
-	CreateCustomer(context.Context, *connect_go.Request[v1.CreateCustomerRequest]) (*connect_go.Response[v1.CreateCustomerResponse], error)
-	ListCustomer(context.Context, *connect_go.Request[v1.ListCustomerRequest]) (*connect_go.Response[v1.ListCustomerResponse], error)
-	GetCustomer(context.Context, *connect_go.Request[v1.GetCustomerRequest]) (*connect_go.Response[v1.GetCustomerResponse], error)
-	UpdateCustomer(context.Context, *connect_go.Request[v1.UpdateCustomerRequest]) (*connect_go.Response[v1.UpdateCustomerResponse], error)
-	DeleteCustomer(context.Context, *connect_go.Request[v1.DeleteCustomerRequest]) (*connect_go.Response[v1.DeleteCustomerResponse], error)
+	CreateCustomer(context.Context, *connect.Request[v1.CreateCustomerRequest]) (*connect.Response[v1.CreateCustomerResponse], error)
+	ListCustomer(context.Context, *connect.Request[v1.ListCustomerRequest]) (*connect.Response[v1.ListCustomerResponse], error)
+	GetCustomer(context.Context, *connect.Request[v1.GetCustomerRequest]) (*connect.Response[v1.GetCustomerResponse], error)
+	UpdateCustomer(context.Context, *connect.Request[v1.UpdateCustomerRequest]) (*connect.Response[v1.UpdateCustomerResponse], error)
+	DeleteCustomer(context.Context, *connect.Request[v1.DeleteCustomerRequest]) (*connect.Response[v1.DeleteCustomerResponse], error)
 }
 
 // NewCustomerServiceClient constructs a client for the customer.v1.CustomerService service. By
@@ -66,78 +66,84 @@ type CustomerServiceClient interface {
 //
 // The URL supplied here should be the base URL for the Connect or gRPC server (for example,
 // http://api.acme.com or https://acme.com/grpc).
-func NewCustomerServiceClient(httpClient connect_go.HTTPClient, baseURL string, opts ...connect_go.ClientOption) CustomerServiceClient {
+func NewCustomerServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...connect.ClientOption) CustomerServiceClient {
 	baseURL = strings.TrimRight(baseURL, "/")
+	customerServiceMethods := v1.File_customer_v1_customer_service_proto.Services().ByName("CustomerService").Methods()
 	return &customerServiceClient{
-		createCustomer: connect_go.NewClient[v1.CreateCustomerRequest, v1.CreateCustomerResponse](
+		createCustomer: connect.NewClient[v1.CreateCustomerRequest, v1.CreateCustomerResponse](
 			httpClient,
 			baseURL+CustomerServiceCreateCustomerProcedure,
-			opts...,
+			connect.WithSchema(customerServiceMethods.ByName("CreateCustomer")),
+			connect.WithClientOptions(opts...),
 		),
-		listCustomer: connect_go.NewClient[v1.ListCustomerRequest, v1.ListCustomerResponse](
+		listCustomer: connect.NewClient[v1.ListCustomerRequest, v1.ListCustomerResponse](
 			httpClient,
 			baseURL+CustomerServiceListCustomerProcedure,
-			opts...,
+			connect.WithSchema(customerServiceMethods.ByName("ListCustomer")),
+			connect.WithClientOptions(opts...),
 		),
-		getCustomer: connect_go.NewClient[v1.GetCustomerRequest, v1.GetCustomerResponse](
+		getCustomer: connect.NewClient[v1.GetCustomerRequest, v1.GetCustomerResponse](
 			httpClient,
 			baseURL+CustomerServiceGetCustomerProcedure,
-			opts...,
+			connect.WithSchema(customerServiceMethods.ByName("GetCustomer")),
+			connect.WithClientOptions(opts...),
 		),
-		updateCustomer: connect_go.NewClient[v1.UpdateCustomerRequest, v1.UpdateCustomerResponse](
+		updateCustomer: connect.NewClient[v1.UpdateCustomerRequest, v1.UpdateCustomerResponse](
 			httpClient,
 			baseURL+CustomerServiceUpdateCustomerProcedure,
-			opts...,
+			connect.WithSchema(customerServiceMethods.ByName("UpdateCustomer")),
+			connect.WithClientOptions(opts...),
 		),
-		deleteCustomer: connect_go.NewClient[v1.DeleteCustomerRequest, v1.DeleteCustomerResponse](
+		deleteCustomer: connect.NewClient[v1.DeleteCustomerRequest, v1.DeleteCustomerResponse](
 			httpClient,
 			baseURL+CustomerServiceDeleteCustomerProcedure,
-			opts...,
+			connect.WithSchema(customerServiceMethods.ByName("DeleteCustomer")),
+			connect.WithClientOptions(opts...),
 		),
 	}
 }
 
 // customerServiceClient implements CustomerServiceClient.
 type customerServiceClient struct {
-	createCustomer *connect_go.Client[v1.CreateCustomerRequest, v1.CreateCustomerResponse]
-	listCustomer   *connect_go.Client[v1.ListCustomerRequest, v1.ListCustomerResponse]
-	getCustomer    *connect_go.Client[v1.GetCustomerRequest, v1.GetCustomerResponse]
-	updateCustomer *connect_go.Client[v1.UpdateCustomerRequest, v1.UpdateCustomerResponse]
-	deleteCustomer *connect_go.Client[v1.DeleteCustomerRequest, v1.DeleteCustomerResponse]
+	createCustomer *connect.Client[v1.CreateCustomerRequest, v1.CreateCustomerResponse]
+	listCustomer   *connect.Client[v1.ListCustomerRequest, v1.ListCustomerResponse]
+	getCustomer    *connect.Client[v1.GetCustomerRequest, v1.GetCustomerResponse]
+	updateCustomer *connect.Client[v1.UpdateCustomerRequest, v1.UpdateCustomerResponse]
+	deleteCustomer *connect.Client[v1.DeleteCustomerRequest, v1.DeleteCustomerResponse]
 }
 
 // CreateCustomer calls customer.v1.CustomerService.CreateCustomer.
-func (c *customerServiceClient) CreateCustomer(ctx context.Context, req *connect_go.Request[v1.CreateCustomerRequest]) (*connect_go.Response[v1.CreateCustomerResponse], error) {
+func (c *customerServiceClient) CreateCustomer(ctx context.Context, req *connect.Request[v1.CreateCustomerRequest]) (*connect.Response[v1.CreateCustomerResponse], error) {
 	return c.createCustomer.CallUnary(ctx, req)
 }
 
 // ListCustomer calls customer.v1.CustomerService.ListCustomer.
-func (c *customerServiceClient) ListCustomer(ctx context.Context, req *connect_go.Request[v1.ListCustomerRequest]) (*connect_go.Response[v1.ListCustomerResponse], error) {
+func (c *customerServiceClient) ListCustomer(ctx context.Context, req *connect.Request[v1.ListCustomerRequest]) (*connect.Response[v1.ListCustomerResponse], error) {
 	return c.listCustomer.CallUnary(ctx, req)
 }
 
 // GetCustomer calls customer.v1.CustomerService.GetCustomer.
-func (c *customerServiceClient) GetCustomer(ctx context.Context, req *connect_go.Request[v1.GetCustomerRequest]) (*connect_go.Response[v1.GetCustomerResponse], error) {
+func (c *customerServiceClient) GetCustomer(ctx context.Context, req *connect.Request[v1.GetCustomerRequest]) (*connect.Response[v1.GetCustomerResponse], error) {
 	return c.getCustomer.CallUnary(ctx, req)
 }
 
 // UpdateCustomer calls customer.v1.CustomerService.UpdateCustomer.
-func (c *customerServiceClient) UpdateCustomer(ctx context.Context, req *connect_go.Request[v1.UpdateCustomerRequest]) (*connect_go.Response[v1.UpdateCustomerResponse], error) {
+func (c *customerServiceClient) UpdateCustomer(ctx context.Context, req *connect.Request[v1.UpdateCustomerRequest]) (*connect.Response[v1.UpdateCustomerResponse], error) {
 	return c.updateCustomer.CallUnary(ctx, req)
 }
 
 // DeleteCustomer calls customer.v1.CustomerService.DeleteCustomer.
-func (c *customerServiceClient) DeleteCustomer(ctx context.Context, req *connect_go.Request[v1.DeleteCustomerRequest]) (*connect_go.Response[v1.DeleteCustomerResponse], error) {
+func (c *customerServiceClient) DeleteCustomer(ctx context.Context, req *connect.Request[v1.DeleteCustomerRequest]) (*connect.Response[v1.DeleteCustomerResponse], error) {
 	return c.deleteCustomer.CallUnary(ctx, req)
 }
 
 // CustomerServiceHandler is an implementation of the customer.v1.CustomerService service.
 type CustomerServiceHandler interface {
-	CreateCustomer(context.Context, *connect_go.Request[v1.CreateCustomerRequest]) (*connect_go.Response[v1.CreateCustomerResponse], error)
-	ListCustomer(context.Context, *connect_go.Request[v1.ListCustomerRequest]) (*connect_go.Response[v1.ListCustomerResponse], error)
-	GetCustomer(context.Context, *connect_go.Request[v1.GetCustomerRequest]) (*connect_go.Response[v1.GetCustomerResponse], error)
-	UpdateCustomer(context.Context, *connect_go.Request[v1.UpdateCustomerRequest]) (*connect_go.Response[v1.UpdateCustomerResponse], error)
-	DeleteCustomer(context.Context, *connect_go.Request[v1.DeleteCustomerRequest]) (*connect_go.Response[v1.DeleteCustomerResponse], error)
+	CreateCustomer(context.Context, *connect.Request[v1.CreateCustomerRequest]) (*connect.Response[v1.CreateCustomerResponse], error)
+	ListCustomer(context.Context, *connect.Request[v1.ListCustomerRequest]) (*connect.Response[v1.ListCustomerResponse], error)
+	GetCustomer(context.Context, *connect.Request[v1.GetCustomerRequest]) (*connect.Response[v1.GetCustomerResponse], error)
+	UpdateCustomer(context.Context, *connect.Request[v1.UpdateCustomerRequest]) (*connect.Response[v1.UpdateCustomerResponse], error)
+	DeleteCustomer(context.Context, *connect.Request[v1.DeleteCustomerRequest]) (*connect.Response[v1.DeleteCustomerResponse], error)
 }
 
 // NewCustomerServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -145,31 +151,37 @@ type CustomerServiceHandler interface {
 //
 // By default, handlers support the Connect, gRPC, and gRPC-Web protocols with the binary Protobuf
 // and JSON codecs. They also support gzip compression.
-func NewCustomerServiceHandler(svc CustomerServiceHandler, opts ...connect_go.HandlerOption) (string, http.Handler) {
-	customerServiceCreateCustomerHandler := connect_go.NewUnaryHandler(
+func NewCustomerServiceHandler(svc CustomerServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
+	customerServiceMethods := v1.File_customer_v1_customer_service_proto.Services().ByName("CustomerService").Methods()
+	customerServiceCreateCustomerHandler := connect.NewUnaryHandler(
 		CustomerServiceCreateCustomerProcedure,
 		svc.CreateCustomer,
-		opts...,
+		connect.WithSchema(customerServiceMethods.ByName("CreateCustomer")),
+		connect.WithHandlerOptions(opts...),
 	)
-	customerServiceListCustomerHandler := connect_go.NewUnaryHandler(
+	customerServiceListCustomerHandler := connect.NewUnaryHandler(
 		CustomerServiceListCustomerProcedure,
 		svc.ListCustomer,
-		opts...,
+		connect.WithSchema(customerServiceMethods.ByName("ListCustomer")),
+		connect.WithHandlerOptions(opts...),
 	)
-	customerServiceGetCustomerHandler := connect_go.NewUnaryHandler(
+	customerServiceGetCustomerHandler := connect.NewUnaryHandler(
 		CustomerServiceGetCustomerProcedure,
 		svc.GetCustomer,
-		opts...,
+		connect.WithSchema(customerServiceMethods.ByName("GetCustomer")),
+		connect.WithHandlerOptions(opts...),
 	)
-	customerServiceUpdateCustomerHandler := connect_go.NewUnaryHandler(
+	customerServiceUpdateCustomerHandler := connect.NewUnaryHandler(
 		CustomerServiceUpdateCustomerProcedure,
 		svc.UpdateCustomer,
-		opts...,
+		connect.WithSchema(customerServiceMethods.ByName("UpdateCustomer")),
+		connect.WithHandlerOptions(opts...),
 	)
-	customerServiceDeleteCustomerHandler := connect_go.NewUnaryHandler(
+	customerServiceDeleteCustomerHandler := connect.NewUnaryHandler(
 		CustomerServiceDeleteCustomerProcedure,
 		svc.DeleteCustomer,
-		opts...,
+		connect.WithSchema(customerServiceMethods.ByName("DeleteCustomer")),
+		connect.WithHandlerOptions(opts...),
 	)
 	return "/customer.v1.CustomerService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -192,22 +204,22 @@ func NewCustomerServiceHandler(svc CustomerServiceHandler, opts ...connect_go.Ha
 // UnimplementedCustomerServiceHandler returns CodeUnimplemented from all methods.
 type UnimplementedCustomerServiceHandler struct{}
 
-func (UnimplementedCustomerServiceHandler) CreateCustomer(context.Context, *connect_go.Request[v1.CreateCustomerRequest]) (*connect_go.Response[v1.CreateCustomerResponse], error) {
-	return nil, connect_go.NewError(connect_go.CodeUnimplemented, errors.New("customer.v1.CustomerService.CreateCustomer is not implemented"))
+func (UnimplementedCustomerServiceHandler) CreateCustomer(context.Context, *connect.Request[v1.CreateCustomerRequest]) (*connect.Response[v1.CreateCustomerResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("customer.v1.CustomerService.CreateCustomer is not implemented"))
 }
 
-func (UnimplementedCustomerServiceHandler) ListCustomer(context.Context, *connect_go.Request[v1.ListCustomerRequest]) (*connect_go.Response[v1.ListCustomerResponse], error) {
-	return nil, connect_go.NewError(connect_go.CodeUnimplemented, errors.New("customer.v1.CustomerService.ListCustomer is not implemented"))
+func (UnimplementedCustomerServiceHandler) ListCustomer(context.Context, *connect.Request[v1.ListCustomerRequest]) (*connect.Response[v1.ListCustomerResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("customer.v1.CustomerService.ListCustomer is not implemented"))
 }
 
-func (UnimplementedCustomerServiceHandler) GetCustomer(context.Context, *connect_go.Request[v1.GetCustomerRequest]) (*connect_go.Response[v1.GetCustomerResponse], error) {
-	return nil, connect_go.NewError(connect_go.CodeUnimplemented, errors.New("customer.v1.CustomerService.GetCustomer is not implemented"))
+func (UnimplementedCustomerServiceHandler) GetCustomer(context.Context, *connect.Request[v1.GetCustomerRequest]) (*connect.Response[v1.GetCustomerResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("customer.v1.CustomerService.GetCustomer is not implemented"))
 }
 
-func (UnimplementedCustomerServiceHandler) UpdateCustomer(context.Context, *connect_go.Request[v1.UpdateCustomerRequest]) (*connect_go.Response[v1.UpdateCustomerResponse], error) {
-	return nil, connect_go.NewError(connect_go.CodeUnimplemented, errors.New("customer.v1.CustomerService.UpdateCustomer is not implemented"))
+func (UnimplementedCustomerServiceHandler) UpdateCustomer(context.Context, *connect.Request[v1.UpdateCustomerRequest]) (*connect.Response[v1.UpdateCustomerResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("customer.v1.CustomerService.UpdateCustomer is not implemented"))
 }
 
-func (UnimplementedCustomerServiceHandler) DeleteCustomer(context.Context, *connect_go.Request[v1.DeleteCustomerRequest]) (*connect_go.Response[v1.DeleteCustomerResponse], error) {
-	return nil, connect_go.NewError(connect_go.CodeUnimplemented, errors.New("customer.v1.CustomerService.DeleteCustomer is not implemented"))
+func (UnimplementedCustomerServiceHandler) DeleteCustomer(context.Context, *connect.Request[v1.DeleteCustomerRequest]) (*connect.Response[v1.DeleteCustomerResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("customer.v1.CustomerService.DeleteCustomer is not implemented"))
 }

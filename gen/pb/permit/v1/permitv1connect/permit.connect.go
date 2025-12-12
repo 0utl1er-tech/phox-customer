@@ -5,10 +5,10 @@
 package permitv1connect
 
 import (
+	connect "connectrpc.com/connect"
 	context "context"
 	errors "errors"
 	v1 "github.com/0utl1er-tech/phox-customer/gen/pb/permit/v1"
-	connect_go "github.com/bufbuild/connect-go"
 	http "net/http"
 	strings "strings"
 )
@@ -18,7 +18,7 @@ import (
 // generated with a version of connect newer than the one compiled into your binary. You can fix the
 // problem by either regenerating this code with an older version of connect or updating the connect
 // version compiled into your binary.
-const _ = connect_go.IsAtLeastVersion0_1_0
+const _ = connect.IsAtLeastVersion1_13_0
 
 const (
 	// PermitServiceName is the fully-qualified name of the PermitService service.
@@ -48,10 +48,10 @@ const (
 
 // PermitServiceClient is a client for the permit.v1.PermitService service.
 type PermitServiceClient interface {
-	GetPermit(context.Context, *connect_go.Request[v1.GetPermitRequest]) (*connect_go.Response[v1.GetPermitResponse], error)
-	CreatePermit(context.Context, *connect_go.Request[v1.CreatePermitRequest]) (*connect_go.Response[v1.CreatePermitResponse], error)
-	UpdatePermit(context.Context, *connect_go.Request[v1.UpdatePermitRequest]) (*connect_go.Response[v1.UpdatePermitResponse], error)
-	DeletePermit(context.Context, *connect_go.Request[v1.DeletePermitRequest]) (*connect_go.Response[v1.DeletePermitResponse], error)
+	GetPermit(context.Context, *connect.Request[v1.GetPermitRequest]) (*connect.Response[v1.GetPermitResponse], error)
+	CreatePermit(context.Context, *connect.Request[v1.CreatePermitRequest]) (*connect.Response[v1.CreatePermitResponse], error)
+	UpdatePermit(context.Context, *connect.Request[v1.UpdatePermitRequest]) (*connect.Response[v1.UpdatePermitResponse], error)
+	DeletePermit(context.Context, *connect.Request[v1.DeletePermitRequest]) (*connect.Response[v1.DeletePermitResponse], error)
 }
 
 // NewPermitServiceClient constructs a client for the permit.v1.PermitService service. By default,
@@ -61,66 +61,71 @@ type PermitServiceClient interface {
 //
 // The URL supplied here should be the base URL for the Connect or gRPC server (for example,
 // http://api.acme.com or https://acme.com/grpc).
-func NewPermitServiceClient(httpClient connect_go.HTTPClient, baseURL string, opts ...connect_go.ClientOption) PermitServiceClient {
+func NewPermitServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...connect.ClientOption) PermitServiceClient {
 	baseURL = strings.TrimRight(baseURL, "/")
+	permitServiceMethods := v1.File_permit_v1_permit_proto.Services().ByName("PermitService").Methods()
 	return &permitServiceClient{
-		getPermit: connect_go.NewClient[v1.GetPermitRequest, v1.GetPermitResponse](
+		getPermit: connect.NewClient[v1.GetPermitRequest, v1.GetPermitResponse](
 			httpClient,
 			baseURL+PermitServiceGetPermitProcedure,
-			opts...,
+			connect.WithSchema(permitServiceMethods.ByName("GetPermit")),
+			connect.WithClientOptions(opts...),
 		),
-		createPermit: connect_go.NewClient[v1.CreatePermitRequest, v1.CreatePermitResponse](
+		createPermit: connect.NewClient[v1.CreatePermitRequest, v1.CreatePermitResponse](
 			httpClient,
 			baseURL+PermitServiceCreatePermitProcedure,
-			opts...,
+			connect.WithSchema(permitServiceMethods.ByName("CreatePermit")),
+			connect.WithClientOptions(opts...),
 		),
-		updatePermit: connect_go.NewClient[v1.UpdatePermitRequest, v1.UpdatePermitResponse](
+		updatePermit: connect.NewClient[v1.UpdatePermitRequest, v1.UpdatePermitResponse](
 			httpClient,
 			baseURL+PermitServiceUpdatePermitProcedure,
-			opts...,
+			connect.WithSchema(permitServiceMethods.ByName("UpdatePermit")),
+			connect.WithClientOptions(opts...),
 		),
-		deletePermit: connect_go.NewClient[v1.DeletePermitRequest, v1.DeletePermitResponse](
+		deletePermit: connect.NewClient[v1.DeletePermitRequest, v1.DeletePermitResponse](
 			httpClient,
 			baseURL+PermitServiceDeletePermitProcedure,
-			opts...,
+			connect.WithSchema(permitServiceMethods.ByName("DeletePermit")),
+			connect.WithClientOptions(opts...),
 		),
 	}
 }
 
 // permitServiceClient implements PermitServiceClient.
 type permitServiceClient struct {
-	getPermit    *connect_go.Client[v1.GetPermitRequest, v1.GetPermitResponse]
-	createPermit *connect_go.Client[v1.CreatePermitRequest, v1.CreatePermitResponse]
-	updatePermit *connect_go.Client[v1.UpdatePermitRequest, v1.UpdatePermitResponse]
-	deletePermit *connect_go.Client[v1.DeletePermitRequest, v1.DeletePermitResponse]
+	getPermit    *connect.Client[v1.GetPermitRequest, v1.GetPermitResponse]
+	createPermit *connect.Client[v1.CreatePermitRequest, v1.CreatePermitResponse]
+	updatePermit *connect.Client[v1.UpdatePermitRequest, v1.UpdatePermitResponse]
+	deletePermit *connect.Client[v1.DeletePermitRequest, v1.DeletePermitResponse]
 }
 
 // GetPermit calls permit.v1.PermitService.GetPermit.
-func (c *permitServiceClient) GetPermit(ctx context.Context, req *connect_go.Request[v1.GetPermitRequest]) (*connect_go.Response[v1.GetPermitResponse], error) {
+func (c *permitServiceClient) GetPermit(ctx context.Context, req *connect.Request[v1.GetPermitRequest]) (*connect.Response[v1.GetPermitResponse], error) {
 	return c.getPermit.CallUnary(ctx, req)
 }
 
 // CreatePermit calls permit.v1.PermitService.CreatePermit.
-func (c *permitServiceClient) CreatePermit(ctx context.Context, req *connect_go.Request[v1.CreatePermitRequest]) (*connect_go.Response[v1.CreatePermitResponse], error) {
+func (c *permitServiceClient) CreatePermit(ctx context.Context, req *connect.Request[v1.CreatePermitRequest]) (*connect.Response[v1.CreatePermitResponse], error) {
 	return c.createPermit.CallUnary(ctx, req)
 }
 
 // UpdatePermit calls permit.v1.PermitService.UpdatePermit.
-func (c *permitServiceClient) UpdatePermit(ctx context.Context, req *connect_go.Request[v1.UpdatePermitRequest]) (*connect_go.Response[v1.UpdatePermitResponse], error) {
+func (c *permitServiceClient) UpdatePermit(ctx context.Context, req *connect.Request[v1.UpdatePermitRequest]) (*connect.Response[v1.UpdatePermitResponse], error) {
 	return c.updatePermit.CallUnary(ctx, req)
 }
 
 // DeletePermit calls permit.v1.PermitService.DeletePermit.
-func (c *permitServiceClient) DeletePermit(ctx context.Context, req *connect_go.Request[v1.DeletePermitRequest]) (*connect_go.Response[v1.DeletePermitResponse], error) {
+func (c *permitServiceClient) DeletePermit(ctx context.Context, req *connect.Request[v1.DeletePermitRequest]) (*connect.Response[v1.DeletePermitResponse], error) {
 	return c.deletePermit.CallUnary(ctx, req)
 }
 
 // PermitServiceHandler is an implementation of the permit.v1.PermitService service.
 type PermitServiceHandler interface {
-	GetPermit(context.Context, *connect_go.Request[v1.GetPermitRequest]) (*connect_go.Response[v1.GetPermitResponse], error)
-	CreatePermit(context.Context, *connect_go.Request[v1.CreatePermitRequest]) (*connect_go.Response[v1.CreatePermitResponse], error)
-	UpdatePermit(context.Context, *connect_go.Request[v1.UpdatePermitRequest]) (*connect_go.Response[v1.UpdatePermitResponse], error)
-	DeletePermit(context.Context, *connect_go.Request[v1.DeletePermitRequest]) (*connect_go.Response[v1.DeletePermitResponse], error)
+	GetPermit(context.Context, *connect.Request[v1.GetPermitRequest]) (*connect.Response[v1.GetPermitResponse], error)
+	CreatePermit(context.Context, *connect.Request[v1.CreatePermitRequest]) (*connect.Response[v1.CreatePermitResponse], error)
+	UpdatePermit(context.Context, *connect.Request[v1.UpdatePermitRequest]) (*connect.Response[v1.UpdatePermitResponse], error)
+	DeletePermit(context.Context, *connect.Request[v1.DeletePermitRequest]) (*connect.Response[v1.DeletePermitResponse], error)
 }
 
 // NewPermitServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -128,26 +133,31 @@ type PermitServiceHandler interface {
 //
 // By default, handlers support the Connect, gRPC, and gRPC-Web protocols with the binary Protobuf
 // and JSON codecs. They also support gzip compression.
-func NewPermitServiceHandler(svc PermitServiceHandler, opts ...connect_go.HandlerOption) (string, http.Handler) {
-	permitServiceGetPermitHandler := connect_go.NewUnaryHandler(
+func NewPermitServiceHandler(svc PermitServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
+	permitServiceMethods := v1.File_permit_v1_permit_proto.Services().ByName("PermitService").Methods()
+	permitServiceGetPermitHandler := connect.NewUnaryHandler(
 		PermitServiceGetPermitProcedure,
 		svc.GetPermit,
-		opts...,
+		connect.WithSchema(permitServiceMethods.ByName("GetPermit")),
+		connect.WithHandlerOptions(opts...),
 	)
-	permitServiceCreatePermitHandler := connect_go.NewUnaryHandler(
+	permitServiceCreatePermitHandler := connect.NewUnaryHandler(
 		PermitServiceCreatePermitProcedure,
 		svc.CreatePermit,
-		opts...,
+		connect.WithSchema(permitServiceMethods.ByName("CreatePermit")),
+		connect.WithHandlerOptions(opts...),
 	)
-	permitServiceUpdatePermitHandler := connect_go.NewUnaryHandler(
+	permitServiceUpdatePermitHandler := connect.NewUnaryHandler(
 		PermitServiceUpdatePermitProcedure,
 		svc.UpdatePermit,
-		opts...,
+		connect.WithSchema(permitServiceMethods.ByName("UpdatePermit")),
+		connect.WithHandlerOptions(opts...),
 	)
-	permitServiceDeletePermitHandler := connect_go.NewUnaryHandler(
+	permitServiceDeletePermitHandler := connect.NewUnaryHandler(
 		PermitServiceDeletePermitProcedure,
 		svc.DeletePermit,
-		opts...,
+		connect.WithSchema(permitServiceMethods.ByName("DeletePermit")),
+		connect.WithHandlerOptions(opts...),
 	)
 	return "/permit.v1.PermitService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -168,18 +178,18 @@ func NewPermitServiceHandler(svc PermitServiceHandler, opts ...connect_go.Handle
 // UnimplementedPermitServiceHandler returns CodeUnimplemented from all methods.
 type UnimplementedPermitServiceHandler struct{}
 
-func (UnimplementedPermitServiceHandler) GetPermit(context.Context, *connect_go.Request[v1.GetPermitRequest]) (*connect_go.Response[v1.GetPermitResponse], error) {
-	return nil, connect_go.NewError(connect_go.CodeUnimplemented, errors.New("permit.v1.PermitService.GetPermit is not implemented"))
+func (UnimplementedPermitServiceHandler) GetPermit(context.Context, *connect.Request[v1.GetPermitRequest]) (*connect.Response[v1.GetPermitResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("permit.v1.PermitService.GetPermit is not implemented"))
 }
 
-func (UnimplementedPermitServiceHandler) CreatePermit(context.Context, *connect_go.Request[v1.CreatePermitRequest]) (*connect_go.Response[v1.CreatePermitResponse], error) {
-	return nil, connect_go.NewError(connect_go.CodeUnimplemented, errors.New("permit.v1.PermitService.CreatePermit is not implemented"))
+func (UnimplementedPermitServiceHandler) CreatePermit(context.Context, *connect.Request[v1.CreatePermitRequest]) (*connect.Response[v1.CreatePermitResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("permit.v1.PermitService.CreatePermit is not implemented"))
 }
 
-func (UnimplementedPermitServiceHandler) UpdatePermit(context.Context, *connect_go.Request[v1.UpdatePermitRequest]) (*connect_go.Response[v1.UpdatePermitResponse], error) {
-	return nil, connect_go.NewError(connect_go.CodeUnimplemented, errors.New("permit.v1.PermitService.UpdatePermit is not implemented"))
+func (UnimplementedPermitServiceHandler) UpdatePermit(context.Context, *connect.Request[v1.UpdatePermitRequest]) (*connect.Response[v1.UpdatePermitResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("permit.v1.PermitService.UpdatePermit is not implemented"))
 }
 
-func (UnimplementedPermitServiceHandler) DeletePermit(context.Context, *connect_go.Request[v1.DeletePermitRequest]) (*connect_go.Response[v1.DeletePermitResponse], error) {
-	return nil, connect_go.NewError(connect_go.CodeUnimplemented, errors.New("permit.v1.PermitService.DeletePermit is not implemented"))
+func (UnimplementedPermitServiceHandler) DeletePermit(context.Context, *connect.Request[v1.DeletePermitRequest]) (*connect.Response[v1.DeletePermitResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("permit.v1.PermitService.DeletePermit is not implemented"))
 }

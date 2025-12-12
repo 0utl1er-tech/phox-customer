@@ -7,7 +7,7 @@ import (
 	permitv1 "github.com/0utl1er-tech/phox-customer/gen/pb/permit/v1"
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
 	"github.com/0utl1er-tech/phox-customer/internal/util"
-	"github.com/bufbuild/connect-go"
+	"connectrpc.com/connect"
 	"github.com/google/uuid"
 )
 

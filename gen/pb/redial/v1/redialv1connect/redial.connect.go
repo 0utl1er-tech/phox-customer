@@ -5,10 +5,10 @@
 package redialv1connect
 
 import (
+	connect "connectrpc.com/connect"
 	context "context"
 	errors "errors"
 	v1 "github.com/0utl1er-tech/phox-customer/gen/pb/redial/v1"
-	connect_go "github.com/bufbuild/connect-go"
 	http "net/http"
 	strings "strings"
 )
@@ -18,7 +18,7 @@ import (
 // generated with a version of connect newer than the one compiled into your binary. You can fix the
 // problem by either regenerating this code with an older version of connect or updating the connect
 // version compiled into your binary.
-const _ = connect_go.IsAtLeastVersion0_1_0
+const _ = connect.IsAtLeastVersion1_13_0
 
 const (
 	// RedialServiceName is the fully-qualified name of the RedialService service.
@@ -40,7 +40,7 @@ const (
 
 // RedialServiceClient is a client for the redial.v1.RedialService service.
 type RedialServiceClient interface {
-	CreateRedial(context.Context, *connect_go.Request[v1.CreateRedialRequest]) (*connect_go.Response[v1.CreateRedialResponse], error)
+	CreateRedial(context.Context, *connect.Request[v1.CreateRedialRequest]) (*connect.Response[v1.CreateRedialResponse], error)
 }
 
 // NewRedialServiceClient constructs a client for the redial.v1.RedialService service. By default,
@@ -50,30 +50,32 @@ type RedialServiceClient interface {
 //
 // The URL supplied here should be the base URL for the Connect or gRPC server (for example,
 // http://api.acme.com or https://acme.com/grpc).
-func NewRedialServiceClient(httpClient connect_go.HTTPClient, baseURL string, opts ...connect_go.ClientOption) RedialServiceClient {
+func NewRedialServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...connect.ClientOption) RedialServiceClient {
 	baseURL = strings.TrimRight(baseURL, "/")
+	redialServiceMethods := v1.File_redial_v1_redial_proto.Services().ByName("RedialService").Methods()
 	return &redialServiceClient{
-		createRedial: connect_go.NewClient[v1.CreateRedialRequest, v1.CreateRedialResponse](
+		createRedial: connect.NewClient[v1.CreateRedialRequest, v1.CreateRedialResponse](
 			httpClient,
 			baseURL+RedialServiceCreateRedialProcedure,
-			opts...,
+			connect.WithSchema(redialServiceMethods.ByName("CreateRedial")),
+			connect.WithClientOptions(opts...),
 		),
 	}
 }
 
 // redialServiceClient implements RedialServiceClient.
 type redialServiceClient struct {
-	createRedial *connect_go.Client[v1.CreateRedialRequest, v1.CreateRedialResponse]
+	createRedial *connect.Client[v1.CreateRedialRequest, v1.CreateRedialResponse]
 }
 
 // CreateRedial calls redial.v1.RedialService.CreateRedial.
-func (c *redialServiceClient) CreateRedial(ctx context.Context, req *connect_go.Request[v1.CreateRedialRequest]) (*connect_go.Response[v1.CreateRedialResponse], error) {
+func (c *redialServiceClient) CreateRedial(ctx context.Context, req *connect.Request[v1.CreateRedialRequest]) (*connect.Response[v1.CreateRedialResponse], error) {
 	return c.createRedial.CallUnary(ctx, req)
 }
 
 // RedialServiceHandler is an implementation of the redial.v1.RedialService service.
 type RedialServiceHandler interface {
-	CreateRedial(context.Context, *connect_go.Request[v1.CreateRedialRequest]) (*connect_go.Response[v1.CreateRedialResponse], error)
+	CreateRedial(context.Context, *connect.Request[v1.CreateRedialRequest]) (*connect.Response[v1.CreateRedialResponse], error)
 }
 
 // NewRedialServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -81,11 +83,13 @@ type RedialServiceHandler interface {
 //
 // By default, handlers support the Connect, gRPC, and gRPC-Web protocols with the binary Protobuf
 // and JSON codecs. They also support gzip compression.
-func NewRedialServiceHandler(svc RedialServiceHandler, opts ...connect_go.HandlerOption) (string, http.Handler) {
-	redialServiceCreateRedialHandler := connect_go.NewUnaryHandler(
+func NewRedialServiceHandler(svc RedialServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
+	redialServiceMethods := v1.File_redial_v1_redial_proto.Services().ByName("RedialService").Methods()
+	redialServiceCreateRedialHandler := connect.NewUnaryHandler(
 		RedialServiceCreateRedialProcedure,
 		svc.CreateRedial,
-		opts...,
+		connect.WithSchema(redialServiceMethods.ByName("CreateRedial")),
+		connect.WithHandlerOptions(opts...),
 	)
 	return "/redial.v1.RedialService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -100,6 +104,6 @@ func NewRedialServiceHandler(svc RedialServiceHandler, opts ...connect_go.Handle
 // UnimplementedRedialServiceHandler returns CodeUnimplemented from all methods.
 type UnimplementedRedialServiceHandler struct{}
 
-func (UnimplementedRedialServiceHandler) CreateRedial(context.Context, *connect_go.Request[v1.CreateRedialRequest]) (*connect_go.Response[v1.CreateRedialResponse], error) {
-	return nil, connect_go.NewError(connect_go.CodeUnimplemented, errors.New("redial.v1.RedialService.CreateRedial is not implemented"))
+func (UnimplementedRedialServiceHandler) CreateRedial(context.Context, *connect.Request[v1.CreateRedialRequest]) (*connect.Response[v1.CreateRedialResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("redial.v1.RedialService.CreateRedial is not implemented"))
 }

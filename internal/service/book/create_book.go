@@ -6,38 +6,41 @@ import (
 
 	bookv1 "github.com/0utl1er-tech/phox-customer/gen/pb/book/v1"
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
-	"github.com/bufbuild/connect-go"
+	"github.com/0utl1er-tech/phox-customer/internal/service/auth"
+	"connectrpc.com/connect"
 	"github.com/google/uuid"
 )
 
-func (server *BookService) CreateBook(
+func (s *BookService) CreateBook(
 	ctx context.Context,
 	req *connect.Request[bookv1.CreateBookRequest],
 ) (*connect.Response[bookv1.CreateBookResponse], error) {
-	bookId := uuid.New()
-	userID := req.Header().Get("X-User-ID")
-	if userID == "" {
-		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("x-user-idがヘッダーに見つかりません"))
+	payload, err := auth.AuthorizeUser(ctx)
+	if err != nil {
+		return nil, err
 	}
 
-	result, err := server.queries.CreateBook(ctx, db.CreateBookParams{
+	bookId := uuid.New()
+
+	// TODO: Execute in a single transaction
+	result, err := s.queries.CreateBook(ctx, db.CreateBookParams{
 		ID:   bookId,
 		Name: req.Msg.Name,
 	})
 
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("bookの作成に失敗しました: %w", err))
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create book: %w", err))
 	}
 
-	_, err = server.queries.CreatePermit(ctx, db.CreatePermitParams{
+	_, err = s.queries.CreatePermit(ctx, db.CreatePermitParams{
 		ID:     uuid.New(),
 		BookID: bookId,
-		UserID: userID,
-		Role:   db.Role(db.RoleOwner),
+		UserID: payload.Subject(),
+		Role:   db.RoleOwner,
 	})
 
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("permitの作成に失敗しました: %w", err))
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create permit: %w", err))
 	}
 
 	return connect.NewResponse(&bookv1.CreateBookResponse{

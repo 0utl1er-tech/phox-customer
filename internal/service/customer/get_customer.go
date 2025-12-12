@@ -10,7 +10,7 @@ import (
 	staffv1 "github.com/0utl1er-tech/phox-customer/gen/pb/staff/v1"
 	userv1 "github.com/0utl1er-tech/phox-customer/gen/pb/user/v1"
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
-	"github.com/bufbuild/connect-go"
+	"connectrpc.com/connect"
 	"github.com/google/uuid"
 )
 

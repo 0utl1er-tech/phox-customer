@@ -5,10 +5,10 @@
 package contactv1connect
 
 import (
+	connect "connectrpc.com/connect"
 	context "context"
 	errors "errors"
 	v1 "github.com/0utl1er-tech/phox-customer/gen/pb/contact/v1"
-	connect_go "github.com/bufbuild/connect-go"
 	http "net/http"
 	strings "strings"
 )
@@ -18,7 +18,7 @@ import (
 // generated with a version of connect newer than the one compiled into your binary. You can fix the
 // problem by either regenerating this code with an older version of connect or updating the connect
 // version compiled into your binary.
-const _ = connect_go.IsAtLeastVersion0_1_0
+const _ = connect.IsAtLeastVersion1_13_0
 
 const (
 	// ContactServiceName is the fully-qualified name of the ContactService service.
@@ -46,9 +46,9 @@ const (
 
 // ContactServiceClient is a client for the contact.v1.ContactService service.
 type ContactServiceClient interface {
-	CreateContact(context.Context, *connect_go.Request[v1.CreateContactRequest]) (*connect_go.Response[v1.CreateContactResponse], error)
-	UpdateContact(context.Context, *connect_go.Request[v1.UpdateContactRequest]) (*connect_go.Response[v1.UpdateContactResponse], error)
-	DeleteContact(context.Context, *connect_go.Request[v1.DeleteContactRequest]) (*connect_go.Response[v1.DeleteContactResponse], error)
+	CreateContact(context.Context, *connect.Request[v1.CreateContactRequest]) (*connect.Response[v1.CreateContactResponse], error)
+	UpdateContact(context.Context, *connect.Request[v1.UpdateContactRequest]) (*connect.Response[v1.UpdateContactResponse], error)
+	DeleteContact(context.Context, *connect.Request[v1.DeleteContactRequest]) (*connect.Response[v1.DeleteContactResponse], error)
 }
 
 // NewContactServiceClient constructs a client for the contact.v1.ContactService service. By
@@ -58,54 +58,58 @@ type ContactServiceClient interface {
 //
 // The URL supplied here should be the base URL for the Connect or gRPC server (for example,
 // http://api.acme.com or https://acme.com/grpc).
-func NewContactServiceClient(httpClient connect_go.HTTPClient, baseURL string, opts ...connect_go.ClientOption) ContactServiceClient {
+func NewContactServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...connect.ClientOption) ContactServiceClient {
 	baseURL = strings.TrimRight(baseURL, "/")
+	contactServiceMethods := v1.File_contact_v1_contact_proto.Services().ByName("ContactService").Methods()
 	return &contactServiceClient{
-		createContact: connect_go.NewClient[v1.CreateContactRequest, v1.CreateContactResponse](
+		createContact: connect.NewClient[v1.CreateContactRequest, v1.CreateContactResponse](
 			httpClient,
 			baseURL+ContactServiceCreateContactProcedure,
-			opts...,
+			connect.WithSchema(contactServiceMethods.ByName("CreateContact")),
+			connect.WithClientOptions(opts...),
 		),
-		updateContact: connect_go.NewClient[v1.UpdateContactRequest, v1.UpdateContactResponse](
+		updateContact: connect.NewClient[v1.UpdateContactRequest, v1.UpdateContactResponse](
 			httpClient,
 			baseURL+ContactServiceUpdateContactProcedure,
-			opts...,
+			connect.WithSchema(contactServiceMethods.ByName("UpdateContact")),
+			connect.WithClientOptions(opts...),
 		),
-		deleteContact: connect_go.NewClient[v1.DeleteContactRequest, v1.DeleteContactResponse](
+		deleteContact: connect.NewClient[v1.DeleteContactRequest, v1.DeleteContactResponse](
 			httpClient,
 			baseURL+ContactServiceDeleteContactProcedure,
-			opts...,
+			connect.WithSchema(contactServiceMethods.ByName("DeleteContact")),
+			connect.WithClientOptions(opts...),
 		),
 	}
 }
 
 // contactServiceClient implements ContactServiceClient.
 type contactServiceClient struct {
-	createContact *connect_go.Client[v1.CreateContactRequest, v1.CreateContactResponse]
-	updateContact *connect_go.Client[v1.UpdateContactRequest, v1.UpdateContactResponse]
-	deleteContact *connect_go.Client[v1.DeleteContactRequest, v1.DeleteContactResponse]
+	createContact *connect.Client[v1.CreateContactRequest, v1.CreateContactResponse]
+	updateContact *connect.Client[v1.UpdateContactRequest, v1.UpdateContactResponse]
+	deleteContact *connect.Client[v1.DeleteContactRequest, v1.DeleteContactResponse]
 }
 
 // CreateContact calls contact.v1.ContactService.CreateContact.
-func (c *contactServiceClient) CreateContact(ctx context.Context, req *connect_go.Request[v1.CreateContactRequest]) (*connect_go.Response[v1.CreateContactResponse], error) {
+func (c *contactServiceClient) CreateContact(ctx context.Context, req *connect.Request[v1.CreateContactRequest]) (*connect.Response[v1.CreateContactResponse], error) {
 	return c.createContact.CallUnary(ctx, req)
 }
 
 // UpdateContact calls contact.v1.ContactService.UpdateContact.
-func (c *contactServiceClient) UpdateContact(ctx context.Context, req *connect_go.Request[v1.UpdateContactRequest]) (*connect_go.Response[v1.UpdateContactResponse], error) {
+func (c *contactServiceClient) UpdateContact(ctx context.Context, req *connect.Request[v1.UpdateContactRequest]) (*connect.Response[v1.UpdateContactResponse], error) {
 	return c.updateContact.CallUnary(ctx, req)
 }
 
 // DeleteContact calls contact.v1.ContactService.DeleteContact.
-func (c *contactServiceClient) DeleteContact(ctx context.Context, req *connect_go.Request[v1.DeleteContactRequest]) (*connect_go.Response[v1.DeleteContactResponse], error) {
+func (c *contactServiceClient) DeleteContact(ctx context.Context, req *connect.Request[v1.DeleteContactRequest]) (*connect.Response[v1.DeleteContactResponse], error) {
 	return c.deleteContact.CallUnary(ctx, req)
 }
 
 // ContactServiceHandler is an implementation of the contact.v1.ContactService service.
 type ContactServiceHandler interface {
-	CreateContact(context.Context, *connect_go.Request[v1.CreateContactRequest]) (*connect_go.Response[v1.CreateContactResponse], error)
-	UpdateContact(context.Context, *connect_go.Request[v1.UpdateContactRequest]) (*connect_go.Response[v1.UpdateContactResponse], error)
-	DeleteContact(context.Context, *connect_go.Request[v1.DeleteContactRequest]) (*connect_go.Response[v1.DeleteContactResponse], error)
+	CreateContact(context.Context, *connect.Request[v1.CreateContactRequest]) (*connect.Response[v1.CreateContactResponse], error)
+	UpdateContact(context.Context, *connect.Request[v1.UpdateContactRequest]) (*connect.Response[v1.UpdateContactResponse], error)
+	DeleteContact(context.Context, *connect.Request[v1.DeleteContactRequest]) (*connect.Response[v1.DeleteContactResponse], error)
 }
 
 // NewContactServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -113,21 +117,25 @@ type ContactServiceHandler interface {
 //
 // By default, handlers support the Connect, gRPC, and gRPC-Web protocols with the binary Protobuf
 // and JSON codecs. They also support gzip compression.
-func NewContactServiceHandler(svc ContactServiceHandler, opts ...connect_go.HandlerOption) (string, http.Handler) {
-	contactServiceCreateContactHandler := connect_go.NewUnaryHandler(
+func NewContactServiceHandler(svc ContactServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
+	contactServiceMethods := v1.File_contact_v1_contact_proto.Services().ByName("ContactService").Methods()
+	contactServiceCreateContactHandler := connect.NewUnaryHandler(
 		ContactServiceCreateContactProcedure,
 		svc.CreateContact,
-		opts...,
+		connect.WithSchema(contactServiceMethods.ByName("CreateContact")),
+		connect.WithHandlerOptions(opts...),
 	)
-	contactServiceUpdateContactHandler := connect_go.NewUnaryHandler(
+	contactServiceUpdateContactHandler := connect.NewUnaryHandler(
 		ContactServiceUpdateContactProcedure,
 		svc.UpdateContact,
-		opts...,
+		connect.WithSchema(contactServiceMethods.ByName("UpdateContact")),
+		connect.WithHandlerOptions(opts...),
 	)
-	contactServiceDeleteContactHandler := connect_go.NewUnaryHandler(
+	contactServiceDeleteContactHandler := connect.NewUnaryHandler(
 		ContactServiceDeleteContactProcedure,
 		svc.DeleteContact,
-		opts...,
+		connect.WithSchema(contactServiceMethods.ByName("DeleteContact")),
+		connect.WithHandlerOptions(opts...),
 	)
 	return "/contact.v1.ContactService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -146,14 +154,14 @@ func NewContactServiceHandler(svc ContactServiceHandler, opts ...connect_go.Hand
 // UnimplementedContactServiceHandler returns CodeUnimplemented from all methods.
 type UnimplementedContactServiceHandler struct{}
 
-func (UnimplementedContactServiceHandler) CreateContact(context.Context, *connect_go.Request[v1.CreateContactRequest]) (*connect_go.Response[v1.CreateContactResponse], error) {
-	return nil, connect_go.NewError(connect_go.CodeUnimplemented, errors.New("contact.v1.ContactService.CreateContact is not implemented"))
+func (UnimplementedContactServiceHandler) CreateContact(context.Context, *connect.Request[v1.CreateContactRequest]) (*connect.Response[v1.CreateContactResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("contact.v1.ContactService.CreateContact is not implemented"))
 }
 
-func (UnimplementedContactServiceHandler) UpdateContact(context.Context, *connect_go.Request[v1.UpdateContactRequest]) (*connect_go.Response[v1.UpdateContactResponse], error) {
-	return nil, connect_go.NewError(connect_go.CodeUnimplemented, errors.New("contact.v1.ContactService.UpdateContact is not implemented"))
+func (UnimplementedContactServiceHandler) UpdateContact(context.Context, *connect.Request[v1.UpdateContactRequest]) (*connect.Response[v1.UpdateContactResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("contact.v1.ContactService.UpdateContact is not implemented"))
 }
 
-func (UnimplementedContactServiceHandler) DeleteContact(context.Context, *connect_go.Request[v1.DeleteContactRequest]) (*connect_go.Response[v1.DeleteContactResponse], error) {
-	return nil, connect_go.NewError(connect_go.CodeUnimplemented, errors.New("contact.v1.ContactService.DeleteContact is not implemented"))
+func (UnimplementedContactServiceHandler) DeleteContact(context.Context, *connect.Request[v1.DeleteContactRequest]) (*connect.Response[v1.DeleteContactResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("contact.v1.ContactService.DeleteContact is not implemented"))
 }
