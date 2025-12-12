@@ -9,6 +9,7 @@ import (
 	"github.com/0utl1er-tech/phox-customer/internal/service/auth"
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func (s *BookService) CreateBook(
@@ -44,6 +45,11 @@ func (s *BookService) CreateBook(
 	}
 
 	return connect.NewResponse(&bookv1.CreateBookResponse{
-		Id: result.ID.String(),
+		Book: &bookv1.Book{
+			Id:        result.ID.String(),
+			Name:      result.Name,
+			CreatedAt: timestamppb.New(result.CreatedAt),
+			UpdatedAt: timestamppb.New(result.UpdatedAt),
+		},
 	}), nil
 }

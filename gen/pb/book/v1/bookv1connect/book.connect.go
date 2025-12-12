@@ -35,20 +35,26 @@ const (
 const (
 	// BookServiceGetBookProcedure is the fully-qualified name of the BookService's GetBook RPC.
 	BookServiceGetBookProcedure = "/book.v1.BookService/GetBook"
+	// BookServiceListBooksProcedure is the fully-qualified name of the BookService's ListBooks RPC.
+	BookServiceListBooksProcedure = "/book.v1.BookService/ListBooks"
 	// BookServiceCreateBookProcedure is the fully-qualified name of the BookService's CreateBook RPC.
 	BookServiceCreateBookProcedure = "/book.v1.BookService/CreateBook"
 	// BookServiceUpdateBookProcedure is the fully-qualified name of the BookService's UpdateBook RPC.
 	BookServiceUpdateBookProcedure = "/book.v1.BookService/UpdateBook"
 	// BookServiceDeleteBookProcedure is the fully-qualified name of the BookService's DeleteBook RPC.
 	BookServiceDeleteBookProcedure = "/book.v1.BookService/DeleteBook"
+	// BookServiceImportBookProcedure is the fully-qualified name of the BookService's ImportBook RPC.
+	BookServiceImportBookProcedure = "/book.v1.BookService/ImportBook"
 )
 
 // BookServiceClient is a client for the book.v1.BookService service.
 type BookServiceClient interface {
 	GetBook(context.Context, *connect.Request[v1.GetBookRequest]) (*connect.Response[v1.GetBookResponse], error)
+	ListBooks(context.Context, *connect.Request[v1.ListBooksRequest]) (*connect.Response[v1.ListBooksResponse], error)
 	CreateBook(context.Context, *connect.Request[v1.CreateBookRequest]) (*connect.Response[v1.CreateBookResponse], error)
 	UpdateBook(context.Context, *connect.Request[v1.UpdateBookRequest]) (*connect.Response[v1.UpdateBookResponse], error)
 	DeleteBook(context.Context, *connect.Request[v1.DeleteBookRequest]) (*connect.Response[v1.DeleteBookResponse], error)
+	ImportBook(context.Context, *connect.Request[v1.ImportBookRequest]) (*connect.Response[v1.ImportBookResponse], error)
 }
 
 // NewBookServiceClient constructs a client for the book.v1.BookService service. By default, it uses
@@ -66,6 +72,12 @@ func NewBookServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			httpClient,
 			baseURL+BookServiceGetBookProcedure,
 			connect.WithSchema(bookServiceMethods.ByName("GetBook")),
+			connect.WithClientOptions(opts...),
+		),
+		listBooks: connect.NewClient[v1.ListBooksRequest, v1.ListBooksResponse](
+			httpClient,
+			baseURL+BookServiceListBooksProcedure,
+			connect.WithSchema(bookServiceMethods.ByName("ListBooks")),
 			connect.WithClientOptions(opts...),
 		),
 		createBook: connect.NewClient[v1.CreateBookRequest, v1.CreateBookResponse](
@@ -86,20 +98,33 @@ func NewBookServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(bookServiceMethods.ByName("DeleteBook")),
 			connect.WithClientOptions(opts...),
 		),
+		importBook: connect.NewClient[v1.ImportBookRequest, v1.ImportBookResponse](
+			httpClient,
+			baseURL+BookServiceImportBookProcedure,
+			connect.WithSchema(bookServiceMethods.ByName("ImportBook")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // bookServiceClient implements BookServiceClient.
 type bookServiceClient struct {
 	getBook    *connect.Client[v1.GetBookRequest, v1.GetBookResponse]
+	listBooks  *connect.Client[v1.ListBooksRequest, v1.ListBooksResponse]
 	createBook *connect.Client[v1.CreateBookRequest, v1.CreateBookResponse]
 	updateBook *connect.Client[v1.UpdateBookRequest, v1.UpdateBookResponse]
 	deleteBook *connect.Client[v1.DeleteBookRequest, v1.DeleteBookResponse]
+	importBook *connect.Client[v1.ImportBookRequest, v1.ImportBookResponse]
 }
 
 // GetBook calls book.v1.BookService.GetBook.
 func (c *bookServiceClient) GetBook(ctx context.Context, req *connect.Request[v1.GetBookRequest]) (*connect.Response[v1.GetBookResponse], error) {
 	return c.getBook.CallUnary(ctx, req)
+}
+
+// ListBooks calls book.v1.BookService.ListBooks.
+func (c *bookServiceClient) ListBooks(ctx context.Context, req *connect.Request[v1.ListBooksRequest]) (*connect.Response[v1.ListBooksResponse], error) {
+	return c.listBooks.CallUnary(ctx, req)
 }
 
 // CreateBook calls book.v1.BookService.CreateBook.
@@ -117,12 +142,19 @@ func (c *bookServiceClient) DeleteBook(ctx context.Context, req *connect.Request
 	return c.deleteBook.CallUnary(ctx, req)
 }
 
+// ImportBook calls book.v1.BookService.ImportBook.
+func (c *bookServiceClient) ImportBook(ctx context.Context, req *connect.Request[v1.ImportBookRequest]) (*connect.Response[v1.ImportBookResponse], error) {
+	return c.importBook.CallUnary(ctx, req)
+}
+
 // BookServiceHandler is an implementation of the book.v1.BookService service.
 type BookServiceHandler interface {
 	GetBook(context.Context, *connect.Request[v1.GetBookRequest]) (*connect.Response[v1.GetBookResponse], error)
+	ListBooks(context.Context, *connect.Request[v1.ListBooksRequest]) (*connect.Response[v1.ListBooksResponse], error)
 	CreateBook(context.Context, *connect.Request[v1.CreateBookRequest]) (*connect.Response[v1.CreateBookResponse], error)
 	UpdateBook(context.Context, *connect.Request[v1.UpdateBookRequest]) (*connect.Response[v1.UpdateBookResponse], error)
 	DeleteBook(context.Context, *connect.Request[v1.DeleteBookRequest]) (*connect.Response[v1.DeleteBookResponse], error)
+	ImportBook(context.Context, *connect.Request[v1.ImportBookRequest]) (*connect.Response[v1.ImportBookResponse], error)
 }
 
 // NewBookServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -136,6 +168,12 @@ func NewBookServiceHandler(svc BookServiceHandler, opts ...connect.HandlerOption
 		BookServiceGetBookProcedure,
 		svc.GetBook,
 		connect.WithSchema(bookServiceMethods.ByName("GetBook")),
+		connect.WithHandlerOptions(opts...),
+	)
+	bookServiceListBooksHandler := connect.NewUnaryHandler(
+		BookServiceListBooksProcedure,
+		svc.ListBooks,
+		connect.WithSchema(bookServiceMethods.ByName("ListBooks")),
 		connect.WithHandlerOptions(opts...),
 	)
 	bookServiceCreateBookHandler := connect.NewUnaryHandler(
@@ -156,16 +194,26 @@ func NewBookServiceHandler(svc BookServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(bookServiceMethods.ByName("DeleteBook")),
 		connect.WithHandlerOptions(opts...),
 	)
+	bookServiceImportBookHandler := connect.NewUnaryHandler(
+		BookServiceImportBookProcedure,
+		svc.ImportBook,
+		connect.WithSchema(bookServiceMethods.ByName("ImportBook")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/book.v1.BookService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case BookServiceGetBookProcedure:
 			bookServiceGetBookHandler.ServeHTTP(w, r)
+		case BookServiceListBooksProcedure:
+			bookServiceListBooksHandler.ServeHTTP(w, r)
 		case BookServiceCreateBookProcedure:
 			bookServiceCreateBookHandler.ServeHTTP(w, r)
 		case BookServiceUpdateBookProcedure:
 			bookServiceUpdateBookHandler.ServeHTTP(w, r)
 		case BookServiceDeleteBookProcedure:
 			bookServiceDeleteBookHandler.ServeHTTP(w, r)
+		case BookServiceImportBookProcedure:
+			bookServiceImportBookHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -179,6 +227,10 @@ func (UnimplementedBookServiceHandler) GetBook(context.Context, *connect.Request
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("book.v1.BookService.GetBook is not implemented"))
 }
 
+func (UnimplementedBookServiceHandler) ListBooks(context.Context, *connect.Request[v1.ListBooksRequest]) (*connect.Response[v1.ListBooksResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("book.v1.BookService.ListBooks is not implemented"))
+}
+
 func (UnimplementedBookServiceHandler) CreateBook(context.Context, *connect.Request[v1.CreateBookRequest]) (*connect.Response[v1.CreateBookResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("book.v1.BookService.CreateBook is not implemented"))
 }
@@ -189,4 +241,8 @@ func (UnimplementedBookServiceHandler) UpdateBook(context.Context, *connect.Requ
 
 func (UnimplementedBookServiceHandler) DeleteBook(context.Context, *connect.Request[v1.DeleteBookRequest]) (*connect.Response[v1.DeleteBookResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("book.v1.BookService.DeleteBook is not implemented"))
+}
+
+func (UnimplementedBookServiceHandler) ImportBook(context.Context, *connect.Request[v1.ImportBookRequest]) (*connect.Response[v1.ImportBookResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("book.v1.BookService.ImportBook is not implemented"))
 }

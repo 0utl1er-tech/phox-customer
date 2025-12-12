@@ -23,6 +23,30 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// corsMiddleware adds CORS headers to allow cross-origin requests
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Allow requests from localhost:3000 (Next.js dev server)
+		origin := r.Header.Get("Origin")
+		if origin == "http://localhost:3000" || origin == "http://localhost:3001" {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+		}
+
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Connect-Protocol-Version, Connect-Timeout-Ms")
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
+		w.Header().Set("Access-Control-Max-Age", "86400")
+
+		// Handle preflight requests
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
 func main() {
 	cfg, err := util.LoadConfig(".")
 	if err != nil {
@@ -60,10 +84,13 @@ func main() {
 	mux.Handle(permitPath, permitHandler)
 	mux.Handle(contactPath, contactHandler)
 
+	// CORSミドルウェアを適用
+	corsHandler := corsMiddleware(mux)
+
 	// HTTP/2対応のサーバーを作成
 	server := &http.Server{
 		Addr:    cfg.ConnectServerAddress,
-		Handler: h2c.NewHandler(mux, &http2.Server{}),
+		Handler: h2c.NewHandler(corsHandler, &http2.Server{}),
 	}
 
 	// サーバー起動とGraceful Shutdown

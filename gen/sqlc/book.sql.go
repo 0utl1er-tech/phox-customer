@@ -45,7 +45,7 @@ func (q *Queries) DeleteBook(ctx context.Context, id uuid.UUID) error {
 }
 
 const getBookByIDAndUserID = `-- name: GetBookByIDAndUserID :one
-SELECT b.id, b.name, b.created_at, p.role
+SELECT b.id, b.name, b.created_at, b.updated_at, p.role
 FROM "Book" b
 JOIN "Permit" p ON b.id = p.book_id
 WHERE b.id = $1 AND p.user_id = $2
@@ -60,6 +60,7 @@ type GetBookByIDAndUserIDRow struct {
 	ID        uuid.UUID `json:"id"`
 	Name      string    `json:"name"`
 	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 	Role      Role      `json:"role"`
 }
 
@@ -70,13 +71,14 @@ func (q *Queries) GetBookByIDAndUserID(ctx context.Context, arg GetBookByIDAndUs
 		&i.ID,
 		&i.Name,
 		&i.CreatedAt,
+		&i.UpdatedAt,
 		&i.Role,
 	)
 	return i, err
 }
 
 const getBooksByUserID = `-- name: GetBooksByUserID :many
-SELECT b.id, b.name, b.created_at, p.role
+SELECT b.id, b.name, b.created_at, b.updated_at, p.role
 FROM "Book" b
 JOIN "Permit" p ON b.id = p.book_id
 WHERE p.user_id = $1
@@ -87,6 +89,7 @@ type GetBooksByUserIDRow struct {
 	ID        uuid.UUID `json:"id"`
 	Name      string    `json:"name"`
 	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 	Role      Role      `json:"role"`
 }
 
@@ -103,6 +106,7 @@ func (q *Queries) GetBooksByUserID(ctx context.Context, userID string) ([]GetBoo
 			&i.ID,
 			&i.Name,
 			&i.CreatedAt,
+			&i.UpdatedAt,
 			&i.Role,
 		); err != nil {
 			return nil, err

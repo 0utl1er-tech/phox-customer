@@ -4,3 +4,4 @@ modules:
     name: buf.build/outlier/phox-customer
 deps:
   - buf.build/bufbuild/protovalidate
+  - buf.build/googleapis/googleapis

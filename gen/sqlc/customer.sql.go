@@ -68,7 +68,7 @@ func (q *Queries) DeleteCustomer(ctx context.Context, id uuid.UUID) error {
 }
 
 const getCustomer = `-- name: GetCustomer :one
-SELECT 
+SELECT
 "Customer".id,
 "Customer".book_id,
 "Customer".category,
@@ -137,8 +137,1487 @@ func (q *Queries) GetCustomer(ctx context.Context, bookID uuid.UUID) (GetCustome
 	return i, err
 }
 
+const getCustomerCount = `-- name: GetCustomerCount :one
+SELECT COUNT(*) FROM "Customer" WHERE book_id = $1
+`
+
+func (q *Queries) GetCustomerCount(ctx context.Context, bookID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCount, bookID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByAddress = `-- name: GetCustomerCountByAddress :one
+SELECT COUNT(*) FROM "Customer" WHERE address = $1
+`
+
+func (q *Queries) GetCustomerCountByAddress(ctx context.Context, address string) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByAddress, address)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByCategory = `-- name: GetCustomerCountByCategory :one
+SELECT COUNT(*) FROM "Customer" WHERE category = $1
+`
+
+func (q *Queries) GetCustomerCountByCategory(ctx context.Context, category string) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByCategory, category)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByCorporation = `-- name: GetCustomerCountByCorporation :one
+SELECT COUNT(*) FROM "Customer" WHERE corporation = $1
+`
+
+func (q *Queries) GetCustomerCountByCorporation(ctx context.Context, corporation string) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByCorporation, corporation)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDate = `-- name: GetCustomerCountByDate :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2
+`
+
+type GetCustomerCountByDateParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+}
+
+func (q *Queries) GetCustomerCountByDate(ctx context.Context, arg GetCustomerCountByDateParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDate, arg.CreatedAt, arg.CreatedAt_2)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndAddress = `-- name: GetCustomerCountByDateAndAddress :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND address = $3
+`
+
+type GetCustomerCountByDateAndAddressParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	Address     string    `json:"address"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndAddress(ctx context.Context, arg GetCustomerCountByDateAndAddressParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndAddress, arg.CreatedAt, arg.CreatedAt_2, arg.Address)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndBook = `-- name: GetCustomerCountByDateAndBook :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND book_id = $3
+`
+
+type GetCustomerCountByDateAndBookParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	BookID      uuid.UUID `json:"book_id"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndBook(ctx context.Context, arg GetCustomerCountByDateAndBookParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndBook, arg.CreatedAt, arg.CreatedAt_2, arg.BookID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndBookAndAddress = `-- name: GetCustomerCountByDateAndBookAndAddress :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND book_id = $3 AND address = $4
+`
+
+type GetCustomerCountByDateAndBookAndAddressParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	BookID      uuid.UUID `json:"book_id"`
+	Address     string    `json:"address"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndBookAndAddress(ctx context.Context, arg GetCustomerCountByDateAndBookAndAddressParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndBookAndAddress,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.BookID,
+		arg.Address,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndBookAndCategory = `-- name: GetCustomerCountByDateAndBookAndCategory :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND book_id = $3 AND category = $4
+`
+
+type GetCustomerCountByDateAndBookAndCategoryParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	BookID      uuid.UUID `json:"book_id"`
+	Category    string    `json:"category"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndBookAndCategory(ctx context.Context, arg GetCustomerCountByDateAndBookAndCategoryParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndBookAndCategory,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.BookID,
+		arg.Category,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndBookAndCategoryAndAddress = `-- name: GetCustomerCountByDateAndBookAndCategoryAndAddress :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND book_id = $3 AND category = $4 AND address = $5
+`
+
+type GetCustomerCountByDateAndBookAndCategoryAndAddressParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	BookID      uuid.UUID `json:"book_id"`
+	Category    string    `json:"category"`
+	Address     string    `json:"address"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndBookAndCategoryAndAddress(ctx context.Context, arg GetCustomerCountByDateAndBookAndCategoryAndAddressParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndBookAndCategoryAndAddress,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.BookID,
+		arg.Category,
+		arg.Address,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndBookAndCorporation = `-- name: GetCustomerCountByDateAndBookAndCorporation :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND book_id = $3 AND corporation = $4
+`
+
+type GetCustomerCountByDateAndBookAndCorporationParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	BookID      uuid.UUID `json:"book_id"`
+	Corporation string    `json:"corporation"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndBookAndCorporation(ctx context.Context, arg GetCustomerCountByDateAndBookAndCorporationParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndBookAndCorporation,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.BookID,
+		arg.Corporation,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndBookAndCorporationAndAddress = `-- name: GetCustomerCountByDateAndBookAndCorporationAndAddress :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND book_id = $3 AND corporation = $4 AND address = $5
+`
+
+type GetCustomerCountByDateAndBookAndCorporationAndAddressParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	BookID      uuid.UUID `json:"book_id"`
+	Corporation string    `json:"corporation"`
+	Address     string    `json:"address"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndBookAndCorporationAndAddress(ctx context.Context, arg GetCustomerCountByDateAndBookAndCorporationAndAddressParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndBookAndCorporationAndAddress,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.BookID,
+		arg.Corporation,
+		arg.Address,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndBookAndCorporationAndCategory = `-- name: GetCustomerCountByDateAndBookAndCorporationAndCategory :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND book_id = $3 AND corporation = $4 AND category = $5
+`
+
+type GetCustomerCountByDateAndBookAndCorporationAndCategoryParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	BookID      uuid.UUID `json:"book_id"`
+	Corporation string    `json:"corporation"`
+	Category    string    `json:"category"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndBookAndCorporationAndCategory(ctx context.Context, arg GetCustomerCountByDateAndBookAndCorporationAndCategoryParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndBookAndCorporationAndCategory,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.BookID,
+		arg.Corporation,
+		arg.Category,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndBookAndCorporationAndLeader = `-- name: GetCustomerCountByDateAndBookAndCorporationAndLeader :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND book_id = $3 AND corporation = $4 AND leader = $5
+`
+
+type GetCustomerCountByDateAndBookAndCorporationAndLeaderParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	BookID      uuid.UUID `json:"book_id"`
+	Corporation string    `json:"corporation"`
+	Leader      uuid.UUID `json:"leader"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndBookAndCorporationAndLeader(ctx context.Context, arg GetCustomerCountByDateAndBookAndCorporationAndLeaderParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndBookAndCorporationAndLeader,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.BookID,
+		arg.Corporation,
+		arg.Leader,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndBookAndCorporationAndLeaderAndAddress = `-- name: GetCustomerCountByDateAndBookAndCorporationAndLeaderAndAddress :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND book_id = $3 AND corporation = $4 AND leader = $5 AND address = $6
+`
+
+type GetCustomerCountByDateAndBookAndCorporationAndLeaderAndAddressParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	BookID      uuid.UUID `json:"book_id"`
+	Corporation string    `json:"corporation"`
+	Leader      uuid.UUID `json:"leader"`
+	Address     string    `json:"address"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndBookAndCorporationAndLeaderAndAddress(ctx context.Context, arg GetCustomerCountByDateAndBookAndCorporationAndLeaderAndAddressParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndBookAndCorporationAndLeaderAndAddress,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.BookID,
+		arg.Corporation,
+		arg.Leader,
+		arg.Address,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndBookAndCorporationAndLeaderAndCategory = `-- name: GetCustomerCountByDateAndBookAndCorporationAndLeaderAndCategory :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND book_id = $3 AND corporation = $4 AND leader = $5 AND category = $6
+`
+
+type GetCustomerCountByDateAndBookAndCorporationAndLeaderAndCategoryParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	BookID      uuid.UUID `json:"book_id"`
+	Corporation string    `json:"corporation"`
+	Leader      uuid.UUID `json:"leader"`
+	Category    string    `json:"category"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndBookAndCorporationAndLeaderAndCategory(ctx context.Context, arg GetCustomerCountByDateAndBookAndCorporationAndLeaderAndCategoryParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndBookAndCorporationAndLeaderAndCategory,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.BookID,
+		arg.Corporation,
+		arg.Leader,
+		arg.Category,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndBookAndCorporationAndLeaderAndCategoryAndAddress = `-- name: GetCustomerCountByDateAndBookAndCorporationAndLeaderAndCategoryAndAddress :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND book_id = $3 AND corporation = $4 AND leader = $5 AND category = $6 AND address = $7
+`
+
+type GetCustomerCountByDateAndBookAndCorporationAndLeaderAndCategoryAndAddressParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	BookID      uuid.UUID `json:"book_id"`
+	Corporation string    `json:"corporation"`
+	Leader      uuid.UUID `json:"leader"`
+	Category    string    `json:"category"`
+	Address     string    `json:"address"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndBookAndCorporationAndLeaderAndCategoryAndAddress(ctx context.Context, arg GetCustomerCountByDateAndBookAndCorporationAndLeaderAndCategoryAndAddressParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndBookAndCorporationAndLeaderAndCategoryAndAddress,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.BookID,
+		arg.Corporation,
+		arg.Leader,
+		arg.Category,
+		arg.Address,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndBookAndCorporationAndPIC = `-- name: GetCustomerCountByDateAndBookAndCorporationAndPIC :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND book_id = $3 AND corporation = $4 AND pic = $5
+`
+
+type GetCustomerCountByDateAndBookAndCorporationAndPICParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	BookID      uuid.UUID `json:"book_id"`
+	Corporation string    `json:"corporation"`
+	Pic         uuid.UUID `json:"pic"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndBookAndCorporationAndPIC(ctx context.Context, arg GetCustomerCountByDateAndBookAndCorporationAndPICParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndBookAndCorporationAndPIC,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.BookID,
+		arg.Corporation,
+		arg.Pic,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndBookAndCorporationAndPICAndAddress = `-- name: GetCustomerCountByDateAndBookAndCorporationAndPICAndAddress :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND book_id = $3 AND corporation = $4 AND pic = $5 AND address = $6
+`
+
+type GetCustomerCountByDateAndBookAndCorporationAndPICAndAddressParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	BookID      uuid.UUID `json:"book_id"`
+	Corporation string    `json:"corporation"`
+	Pic         uuid.UUID `json:"pic"`
+	Address     string    `json:"address"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndBookAndCorporationAndPICAndAddress(ctx context.Context, arg GetCustomerCountByDateAndBookAndCorporationAndPICAndAddressParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndBookAndCorporationAndPICAndAddress,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.BookID,
+		arg.Corporation,
+		arg.Pic,
+		arg.Address,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndBookAndCorporationAndPICAndCategory = `-- name: GetCustomerCountByDateAndBookAndCorporationAndPICAndCategory :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND book_id = $3 AND corporation = $4 AND pic = $5 AND category = $6
+`
+
+type GetCustomerCountByDateAndBookAndCorporationAndPICAndCategoryParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	BookID      uuid.UUID `json:"book_id"`
+	Corporation string    `json:"corporation"`
+	Pic         uuid.UUID `json:"pic"`
+	Category    string    `json:"category"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndBookAndCorporationAndPICAndCategory(ctx context.Context, arg GetCustomerCountByDateAndBookAndCorporationAndPICAndCategoryParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndBookAndCorporationAndPICAndCategory,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.BookID,
+		arg.Corporation,
+		arg.Pic,
+		arg.Category,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndBookAndCorporationAndPICAndLeader = `-- name: GetCustomerCountByDateAndBookAndCorporationAndPICAndLeader :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND book_id = $3 AND corporation = $4 AND pic = $5 AND leader = $6
+`
+
+type GetCustomerCountByDateAndBookAndCorporationAndPICAndLeaderParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	BookID      uuid.UUID `json:"book_id"`
+	Corporation string    `json:"corporation"`
+	Pic         uuid.UUID `json:"pic"`
+	Leader      uuid.UUID `json:"leader"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndBookAndCorporationAndPICAndLeader(ctx context.Context, arg GetCustomerCountByDateAndBookAndCorporationAndPICAndLeaderParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndBookAndCorporationAndPICAndLeader,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.BookID,
+		arg.Corporation,
+		arg.Pic,
+		arg.Leader,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndBookAndCorporationAndPICAndLeaderAndAddress = `-- name: GetCustomerCountByDateAndBookAndCorporationAndPICAndLeaderAndAddress :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND book_id = $3 AND corporation = $4 AND pic = $5 AND leader = $6 AND address = $7
+`
+
+type GetCustomerCountByDateAndBookAndCorporationAndPICAndLeaderAndAddressParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	BookID      uuid.UUID `json:"book_id"`
+	Corporation string    `json:"corporation"`
+	Pic         uuid.UUID `json:"pic"`
+	Leader      uuid.UUID `json:"leader"`
+	Address     string    `json:"address"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndBookAndCorporationAndPICAndLeaderAndAddress(ctx context.Context, arg GetCustomerCountByDateAndBookAndCorporationAndPICAndLeaderAndAddressParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndBookAndCorporationAndPICAndLeaderAndAddress,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.BookID,
+		arg.Corporation,
+		arg.Pic,
+		arg.Leader,
+		arg.Address,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndBookAndCorporationAndPICAndLeaderAndCategory = `-- name: GetCustomerCountByDateAndBookAndCorporationAndPICAndLeaderAndCategory :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND book_id = $3 AND corporation = $4 AND pic = $5 AND leader = $6 AND category = $7
+`
+
+type GetCustomerCountByDateAndBookAndCorporationAndPICAndLeaderAndCategoryParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	BookID      uuid.UUID `json:"book_id"`
+	Corporation string    `json:"corporation"`
+	Pic         uuid.UUID `json:"pic"`
+	Leader      uuid.UUID `json:"leader"`
+	Category    string    `json:"category"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndBookAndCorporationAndPICAndLeaderAndCategory(ctx context.Context, arg GetCustomerCountByDateAndBookAndCorporationAndPICAndLeaderAndCategoryParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndBookAndCorporationAndPICAndLeaderAndCategory,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.BookID,
+		arg.Corporation,
+		arg.Pic,
+		arg.Leader,
+		arg.Category,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndBookAndCorporationAndPICAndLeaderAndCategoryAndAddress = `-- name: GetCustomerCountByDateAndBookAndCorporationAndPICAndLeaderAndCategoryAndAddress :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND book_id = $3 AND corporation = $4 AND pic = $5 AND leader = $6 AND category = $7 AND address = $8
+`
+
+type GetCustomerCountByDateAndBookAndCorporationAndPICAndLeaderAndCategoryAndAddressParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	BookID      uuid.UUID `json:"book_id"`
+	Corporation string    `json:"corporation"`
+	Pic         uuid.UUID `json:"pic"`
+	Leader      uuid.UUID `json:"leader"`
+	Category    string    `json:"category"`
+	Address     string    `json:"address"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndBookAndCorporationAndPICAndLeaderAndCategoryAndAddress(ctx context.Context, arg GetCustomerCountByDateAndBookAndCorporationAndPICAndLeaderAndCategoryAndAddressParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndBookAndCorporationAndPICAndLeaderAndCategoryAndAddress,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.BookID,
+		arg.Corporation,
+		arg.Pic,
+		arg.Leader,
+		arg.Category,
+		arg.Address,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndBookAndLeader = `-- name: GetCustomerCountByDateAndBookAndLeader :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND book_id = $3 AND leader = $4
+`
+
+type GetCustomerCountByDateAndBookAndLeaderParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	BookID      uuid.UUID `json:"book_id"`
+	Leader      uuid.UUID `json:"leader"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndBookAndLeader(ctx context.Context, arg GetCustomerCountByDateAndBookAndLeaderParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndBookAndLeader,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.BookID,
+		arg.Leader,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndBookAndLeaderAndAddress = `-- name: GetCustomerCountByDateAndBookAndLeaderAndAddress :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND book_id = $3 AND leader = $4 AND address = $5
+`
+
+type GetCustomerCountByDateAndBookAndLeaderAndAddressParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	BookID      uuid.UUID `json:"book_id"`
+	Leader      uuid.UUID `json:"leader"`
+	Address     string    `json:"address"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndBookAndLeaderAndAddress(ctx context.Context, arg GetCustomerCountByDateAndBookAndLeaderAndAddressParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndBookAndLeaderAndAddress,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.BookID,
+		arg.Leader,
+		arg.Address,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndBookAndLeaderAndCategory = `-- name: GetCustomerCountByDateAndBookAndLeaderAndCategory :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND book_id = $3 AND leader = $4 AND category = $5
+`
+
+type GetCustomerCountByDateAndBookAndLeaderAndCategoryParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	BookID      uuid.UUID `json:"book_id"`
+	Leader      uuid.UUID `json:"leader"`
+	Category    string    `json:"category"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndBookAndLeaderAndCategory(ctx context.Context, arg GetCustomerCountByDateAndBookAndLeaderAndCategoryParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndBookAndLeaderAndCategory,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.BookID,
+		arg.Leader,
+		arg.Category,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndBookAndLeaderAndCategoryAndAddress = `-- name: GetCustomerCountByDateAndBookAndLeaderAndCategoryAndAddress :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND book_id = $3 AND leader = $4 AND category = $5 AND address = $6
+`
+
+type GetCustomerCountByDateAndBookAndLeaderAndCategoryAndAddressParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	BookID      uuid.UUID `json:"book_id"`
+	Leader      uuid.UUID `json:"leader"`
+	Category    string    `json:"category"`
+	Address     string    `json:"address"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndBookAndLeaderAndCategoryAndAddress(ctx context.Context, arg GetCustomerCountByDateAndBookAndLeaderAndCategoryAndAddressParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndBookAndLeaderAndCategoryAndAddress,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.BookID,
+		arg.Leader,
+		arg.Category,
+		arg.Address,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndBookAndPIC = `-- name: GetCustomerCountByDateAndBookAndPIC :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND book_id = $3 AND pic = $4
+`
+
+type GetCustomerCountByDateAndBookAndPICParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	BookID      uuid.UUID `json:"book_id"`
+	Pic         uuid.UUID `json:"pic"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndBookAndPIC(ctx context.Context, arg GetCustomerCountByDateAndBookAndPICParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndBookAndPIC,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.BookID,
+		arg.Pic,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndBookAndPICAndAddress = `-- name: GetCustomerCountByDateAndBookAndPICAndAddress :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND book_id = $3 AND pic = $4 AND address = $5
+`
+
+type GetCustomerCountByDateAndBookAndPICAndAddressParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	BookID      uuid.UUID `json:"book_id"`
+	Pic         uuid.UUID `json:"pic"`
+	Address     string    `json:"address"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndBookAndPICAndAddress(ctx context.Context, arg GetCustomerCountByDateAndBookAndPICAndAddressParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndBookAndPICAndAddress,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.BookID,
+		arg.Pic,
+		arg.Address,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndBookAndPICAndCategory = `-- name: GetCustomerCountByDateAndBookAndPICAndCategory :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND book_id = $3 AND pic = $4 AND category = $5
+`
+
+type GetCustomerCountByDateAndBookAndPICAndCategoryParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	BookID      uuid.UUID `json:"book_id"`
+	Pic         uuid.UUID `json:"pic"`
+	Category    string    `json:"category"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndBookAndPICAndCategory(ctx context.Context, arg GetCustomerCountByDateAndBookAndPICAndCategoryParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndBookAndPICAndCategory,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.BookID,
+		arg.Pic,
+		arg.Category,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndBookAndPICAndLeader = `-- name: GetCustomerCountByDateAndBookAndPICAndLeader :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND book_id = $3 AND pic = $4 AND leader = $5
+`
+
+type GetCustomerCountByDateAndBookAndPICAndLeaderParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	BookID      uuid.UUID `json:"book_id"`
+	Pic         uuid.UUID `json:"pic"`
+	Leader      uuid.UUID `json:"leader"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndBookAndPICAndLeader(ctx context.Context, arg GetCustomerCountByDateAndBookAndPICAndLeaderParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndBookAndPICAndLeader,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.BookID,
+		arg.Pic,
+		arg.Leader,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndBookAndPICAndLeaderAndAddress = `-- name: GetCustomerCountByDateAndBookAndPICAndLeaderAndAddress :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND book_id = $3 AND pic = $4 AND leader = $5 AND address = $6
+`
+
+type GetCustomerCountByDateAndBookAndPICAndLeaderAndAddressParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	BookID      uuid.UUID `json:"book_id"`
+	Pic         uuid.UUID `json:"pic"`
+	Leader      uuid.UUID `json:"leader"`
+	Address     string    `json:"address"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndBookAndPICAndLeaderAndAddress(ctx context.Context, arg GetCustomerCountByDateAndBookAndPICAndLeaderAndAddressParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndBookAndPICAndLeaderAndAddress,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.BookID,
+		arg.Pic,
+		arg.Leader,
+		arg.Address,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndBookAndPICAndLeaderAndCategory = `-- name: GetCustomerCountByDateAndBookAndPICAndLeaderAndCategory :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND book_id = $3 AND pic = $4 AND leader = $5 AND category = $6
+`
+
+type GetCustomerCountByDateAndBookAndPICAndLeaderAndCategoryParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	BookID      uuid.UUID `json:"book_id"`
+	Pic         uuid.UUID `json:"pic"`
+	Leader      uuid.UUID `json:"leader"`
+	Category    string    `json:"category"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndBookAndPICAndLeaderAndCategory(ctx context.Context, arg GetCustomerCountByDateAndBookAndPICAndLeaderAndCategoryParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndBookAndPICAndLeaderAndCategory,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.BookID,
+		arg.Pic,
+		arg.Leader,
+		arg.Category,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndBookAndPICAndLeaderAndCategoryAndAddress = `-- name: GetCustomerCountByDateAndBookAndPICAndLeaderAndCategoryAndAddress :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND book_id = $3 AND pic = $4 AND leader = $5 AND category = $6 AND address = $7
+`
+
+type GetCustomerCountByDateAndBookAndPICAndLeaderAndCategoryAndAddressParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	BookID      uuid.UUID `json:"book_id"`
+	Pic         uuid.UUID `json:"pic"`
+	Leader      uuid.UUID `json:"leader"`
+	Category    string    `json:"category"`
+	Address     string    `json:"address"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndBookAndPICAndLeaderAndCategoryAndAddress(ctx context.Context, arg GetCustomerCountByDateAndBookAndPICAndLeaderAndCategoryAndAddressParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndBookAndPICAndLeaderAndCategoryAndAddress,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.BookID,
+		arg.Pic,
+		arg.Leader,
+		arg.Category,
+		arg.Address,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndCategory = `-- name: GetCustomerCountByDateAndCategory :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND category = $3
+`
+
+type GetCustomerCountByDateAndCategoryParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	Category    string    `json:"category"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndCategory(ctx context.Context, arg GetCustomerCountByDateAndCategoryParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndCategory, arg.CreatedAt, arg.CreatedAt_2, arg.Category)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndCategoryAndAddress = `-- name: GetCustomerCountByDateAndCategoryAndAddress :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND category = $3 AND address = $4
+`
+
+type GetCustomerCountByDateAndCategoryAndAddressParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	Category    string    `json:"category"`
+	Address     string    `json:"address"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndCategoryAndAddress(ctx context.Context, arg GetCustomerCountByDateAndCategoryAndAddressParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndCategoryAndAddress,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.Category,
+		arg.Address,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndCorporation = `-- name: GetCustomerCountByDateAndCorporation :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND corporation = $3
+`
+
+type GetCustomerCountByDateAndCorporationParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	Corporation string    `json:"corporation"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndCorporation(ctx context.Context, arg GetCustomerCountByDateAndCorporationParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndCorporation, arg.CreatedAt, arg.CreatedAt_2, arg.Corporation)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndCorporationAndAddress = `-- name: GetCustomerCountByDateAndCorporationAndAddress :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND corporation = $3 AND address = $4
+`
+
+type GetCustomerCountByDateAndCorporationAndAddressParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	Corporation string    `json:"corporation"`
+	Address     string    `json:"address"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndCorporationAndAddress(ctx context.Context, arg GetCustomerCountByDateAndCorporationAndAddressParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndCorporationAndAddress,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.Corporation,
+		arg.Address,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndCorporationAndCategory = `-- name: GetCustomerCountByDateAndCorporationAndCategory :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND corporation = $3 AND category = $4
+`
+
+type GetCustomerCountByDateAndCorporationAndCategoryParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	Corporation string    `json:"corporation"`
+	Category    string    `json:"category"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndCorporationAndCategory(ctx context.Context, arg GetCustomerCountByDateAndCorporationAndCategoryParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndCorporationAndCategory,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.Corporation,
+		arg.Category,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndCorporationAndLeader = `-- name: GetCustomerCountByDateAndCorporationAndLeader :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND corporation = $3 AND leader = $4
+`
+
+type GetCustomerCountByDateAndCorporationAndLeaderParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	Corporation string    `json:"corporation"`
+	Leader      uuid.UUID `json:"leader"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndCorporationAndLeader(ctx context.Context, arg GetCustomerCountByDateAndCorporationAndLeaderParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndCorporationAndLeader,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.Corporation,
+		arg.Leader,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndCorporationAndLeaderAndAddress = `-- name: GetCustomerCountByDateAndCorporationAndLeaderAndAddress :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND corporation = $3 AND leader = $4 AND address = $5
+`
+
+type GetCustomerCountByDateAndCorporationAndLeaderAndAddressParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	Corporation string    `json:"corporation"`
+	Leader      uuid.UUID `json:"leader"`
+	Address     string    `json:"address"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndCorporationAndLeaderAndAddress(ctx context.Context, arg GetCustomerCountByDateAndCorporationAndLeaderAndAddressParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndCorporationAndLeaderAndAddress,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.Corporation,
+		arg.Leader,
+		arg.Address,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndCorporationAndLeaderAndCategory = `-- name: GetCustomerCountByDateAndCorporationAndLeaderAndCategory :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND corporation = $3 AND leader = $4 AND category = $5
+`
+
+type GetCustomerCountByDateAndCorporationAndLeaderAndCategoryParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	Corporation string    `json:"corporation"`
+	Leader      uuid.UUID `json:"leader"`
+	Category    string    `json:"category"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndCorporationAndLeaderAndCategory(ctx context.Context, arg GetCustomerCountByDateAndCorporationAndLeaderAndCategoryParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndCorporationAndLeaderAndCategory,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.Corporation,
+		arg.Leader,
+		arg.Category,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndCorporationAndLeaderAndCategoryAndAddress = `-- name: GetCustomerCountByDateAndCorporationAndLeaderAndCategoryAndAddress :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND corporation = $3 AND leader = $4 AND category = $5 AND address = $6
+`
+
+type GetCustomerCountByDateAndCorporationAndLeaderAndCategoryAndAddressParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	Corporation string    `json:"corporation"`
+	Leader      uuid.UUID `json:"leader"`
+	Category    string    `json:"category"`
+	Address     string    `json:"address"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndCorporationAndLeaderAndCategoryAndAddress(ctx context.Context, arg GetCustomerCountByDateAndCorporationAndLeaderAndCategoryAndAddressParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndCorporationAndLeaderAndCategoryAndAddress,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.Corporation,
+		arg.Leader,
+		arg.Category,
+		arg.Address,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndCorporationAndPIC = `-- name: GetCustomerCountByDateAndCorporationAndPIC :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND corporation = $3 AND pic = $4
+`
+
+type GetCustomerCountByDateAndCorporationAndPICParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	Corporation string    `json:"corporation"`
+	Pic         uuid.UUID `json:"pic"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndCorporationAndPIC(ctx context.Context, arg GetCustomerCountByDateAndCorporationAndPICParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndCorporationAndPIC,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.Corporation,
+		arg.Pic,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndCorporationAndPICAndAddress = `-- name: GetCustomerCountByDateAndCorporationAndPICAndAddress :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND corporation = $3 AND pic = $4 AND address = $5
+`
+
+type GetCustomerCountByDateAndCorporationAndPICAndAddressParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	Corporation string    `json:"corporation"`
+	Pic         uuid.UUID `json:"pic"`
+	Address     string    `json:"address"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndCorporationAndPICAndAddress(ctx context.Context, arg GetCustomerCountByDateAndCorporationAndPICAndAddressParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndCorporationAndPICAndAddress,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.Corporation,
+		arg.Pic,
+		arg.Address,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndCorporationAndPICAndCategory = `-- name: GetCustomerCountByDateAndCorporationAndPICAndCategory :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND corporation = $3 AND pic = $4 AND category = $5
+`
+
+type GetCustomerCountByDateAndCorporationAndPICAndCategoryParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	Corporation string    `json:"corporation"`
+	Pic         uuid.UUID `json:"pic"`
+	Category    string    `json:"category"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndCorporationAndPICAndCategory(ctx context.Context, arg GetCustomerCountByDateAndCorporationAndPICAndCategoryParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndCorporationAndPICAndCategory,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.Corporation,
+		arg.Pic,
+		arg.Category,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndCorporationAndPICAndLeader = `-- name: GetCustomerCountByDateAndCorporationAndPICAndLeader :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND corporation = $3 AND pic = $4 AND leader = $5
+`
+
+type GetCustomerCountByDateAndCorporationAndPICAndLeaderParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	Corporation string    `json:"corporation"`
+	Pic         uuid.UUID `json:"pic"`
+	Leader      uuid.UUID `json:"leader"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndCorporationAndPICAndLeader(ctx context.Context, arg GetCustomerCountByDateAndCorporationAndPICAndLeaderParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndCorporationAndPICAndLeader,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.Corporation,
+		arg.Pic,
+		arg.Leader,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndCorporationAndPICAndLeaderAndAddress = `-- name: GetCustomerCountByDateAndCorporationAndPICAndLeaderAndAddress :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND corporation = $3 AND pic = $4 AND leader = $5 AND address = $6
+`
+
+type GetCustomerCountByDateAndCorporationAndPICAndLeaderAndAddressParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	Corporation string    `json:"corporation"`
+	Pic         uuid.UUID `json:"pic"`
+	Leader      uuid.UUID `json:"leader"`
+	Address     string    `json:"address"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndCorporationAndPICAndLeaderAndAddress(ctx context.Context, arg GetCustomerCountByDateAndCorporationAndPICAndLeaderAndAddressParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndCorporationAndPICAndLeaderAndAddress,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.Corporation,
+		arg.Pic,
+		arg.Leader,
+		arg.Address,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndCorporationAndPICAndLeaderAndCategory = `-- name: GetCustomerCountByDateAndCorporationAndPICAndLeaderAndCategory :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND corporation = $3 AND pic = $4 AND leader = $5 AND category = $6
+`
+
+type GetCustomerCountByDateAndCorporationAndPICAndLeaderAndCategoryParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	Corporation string    `json:"corporation"`
+	Pic         uuid.UUID `json:"pic"`
+	Leader      uuid.UUID `json:"leader"`
+	Category    string    `json:"category"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndCorporationAndPICAndLeaderAndCategory(ctx context.Context, arg GetCustomerCountByDateAndCorporationAndPICAndLeaderAndCategoryParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndCorporationAndPICAndLeaderAndCategory,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.Corporation,
+		arg.Pic,
+		arg.Leader,
+		arg.Category,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndCorporationAndPICAndLeaderAndCategoryAndAddress = `-- name: GetCustomerCountByDateAndCorporationAndPICAndLeaderAndCategoryAndAddress :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND corporation = $3 AND pic = $4 AND leader = $5 AND category = $6 AND address = $7
+`
+
+type GetCustomerCountByDateAndCorporationAndPICAndLeaderAndCategoryAndAddressParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	Corporation string    `json:"corporation"`
+	Pic         uuid.UUID `json:"pic"`
+	Leader      uuid.UUID `json:"leader"`
+	Category    string    `json:"category"`
+	Address     string    `json:"address"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndCorporationAndPICAndLeaderAndCategoryAndAddress(ctx context.Context, arg GetCustomerCountByDateAndCorporationAndPICAndLeaderAndCategoryAndAddressParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndCorporationAndPICAndLeaderAndCategoryAndAddress,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.Corporation,
+		arg.Pic,
+		arg.Leader,
+		arg.Category,
+		arg.Address,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndLeader = `-- name: GetCustomerCountByDateAndLeader :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND leader = $3
+`
+
+type GetCustomerCountByDateAndLeaderParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	Leader      uuid.UUID `json:"leader"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndLeader(ctx context.Context, arg GetCustomerCountByDateAndLeaderParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndLeader, arg.CreatedAt, arg.CreatedAt_2, arg.Leader)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndLeaderAndAddress = `-- name: GetCustomerCountByDateAndLeaderAndAddress :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND leader = $3 AND address = $4
+`
+
+type GetCustomerCountByDateAndLeaderAndAddressParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	Leader      uuid.UUID `json:"leader"`
+	Address     string    `json:"address"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndLeaderAndAddress(ctx context.Context, arg GetCustomerCountByDateAndLeaderAndAddressParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndLeaderAndAddress,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.Leader,
+		arg.Address,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndLeaderAndCategory = `-- name: GetCustomerCountByDateAndLeaderAndCategory :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND leader = $3 AND category = $4
+`
+
+type GetCustomerCountByDateAndLeaderAndCategoryParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	Leader      uuid.UUID `json:"leader"`
+	Category    string    `json:"category"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndLeaderAndCategory(ctx context.Context, arg GetCustomerCountByDateAndLeaderAndCategoryParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndLeaderAndCategory,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.Leader,
+		arg.Category,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndLeaderAndCategoryAndAddress = `-- name: GetCustomerCountByDateAndLeaderAndCategoryAndAddress :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND leader = $3 AND category = $4 AND address = $5
+`
+
+type GetCustomerCountByDateAndLeaderAndCategoryAndAddressParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	Leader      uuid.UUID `json:"leader"`
+	Category    string    `json:"category"`
+	Address     string    `json:"address"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndLeaderAndCategoryAndAddress(ctx context.Context, arg GetCustomerCountByDateAndLeaderAndCategoryAndAddressParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndLeaderAndCategoryAndAddress,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.Leader,
+		arg.Category,
+		arg.Address,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndPIC = `-- name: GetCustomerCountByDateAndPIC :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND pic = $3
+`
+
+type GetCustomerCountByDateAndPICParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	Pic         uuid.UUID `json:"pic"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndPIC(ctx context.Context, arg GetCustomerCountByDateAndPICParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndPIC, arg.CreatedAt, arg.CreatedAt_2, arg.Pic)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndPICAndAddress = `-- name: GetCustomerCountByDateAndPICAndAddress :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND pic = $3 AND address = $4
+`
+
+type GetCustomerCountByDateAndPICAndAddressParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	Pic         uuid.UUID `json:"pic"`
+	Address     string    `json:"address"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndPICAndAddress(ctx context.Context, arg GetCustomerCountByDateAndPICAndAddressParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndPICAndAddress,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.Pic,
+		arg.Address,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndPICAndCategory = `-- name: GetCustomerCountByDateAndPICAndCategory :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND pic = $3 AND category = $4
+`
+
+type GetCustomerCountByDateAndPICAndCategoryParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	Pic         uuid.UUID `json:"pic"`
+	Category    string    `json:"category"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndPICAndCategory(ctx context.Context, arg GetCustomerCountByDateAndPICAndCategoryParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndPICAndCategory,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.Pic,
+		arg.Category,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndPICAndLeader = `-- name: GetCustomerCountByDateAndPICAndLeader :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND pic = $3 AND leader = $4
+`
+
+type GetCustomerCountByDateAndPICAndLeaderParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	Pic         uuid.UUID `json:"pic"`
+	Leader      uuid.UUID `json:"leader"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndPICAndLeader(ctx context.Context, arg GetCustomerCountByDateAndPICAndLeaderParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndPICAndLeader,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.Pic,
+		arg.Leader,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndPICAndLeaderAndAddress = `-- name: GetCustomerCountByDateAndPICAndLeaderAndAddress :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND pic = $3 AND leader = $4 AND address = $5
+`
+
+type GetCustomerCountByDateAndPICAndLeaderAndAddressParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	Pic         uuid.UUID `json:"pic"`
+	Leader      uuid.UUID `json:"leader"`
+	Address     string    `json:"address"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndPICAndLeaderAndAddress(ctx context.Context, arg GetCustomerCountByDateAndPICAndLeaderAndAddressParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndPICAndLeaderAndAddress,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.Pic,
+		arg.Leader,
+		arg.Address,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndPICAndLeaderAndCategory = `-- name: GetCustomerCountByDateAndPICAndLeaderAndCategory :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND pic = $3 AND leader = $4 AND category = $5
+`
+
+type GetCustomerCountByDateAndPICAndLeaderAndCategoryParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	Pic         uuid.UUID `json:"pic"`
+	Leader      uuid.UUID `json:"leader"`
+	Category    string    `json:"category"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndPICAndLeaderAndCategory(ctx context.Context, arg GetCustomerCountByDateAndPICAndLeaderAndCategoryParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndPICAndLeaderAndCategory,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.Pic,
+		arg.Leader,
+		arg.Category,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByDateAndPICAndLeaderAndCategoryAndAddress = `-- name: GetCustomerCountByDateAndPICAndLeaderAndCategoryAndAddress :one
+SELECT COUNT(*) FROM "Customer" WHERE created_at >= $1 AND created_at <= $2 AND pic = $3 AND leader = $4 AND category = $5 AND address = $6
+`
+
+type GetCustomerCountByDateAndPICAndLeaderAndCategoryAndAddressParams struct {
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedAt_2 time.Time `json:"created_at_2"`
+	Pic         uuid.UUID `json:"pic"`
+	Leader      uuid.UUID `json:"leader"`
+	Category    string    `json:"category"`
+	Address     string    `json:"address"`
+}
+
+func (q *Queries) GetCustomerCountByDateAndPICAndLeaderAndCategoryAndAddress(ctx context.Context, arg GetCustomerCountByDateAndPICAndLeaderAndCategoryAndAddressParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByDateAndPICAndLeaderAndCategoryAndAddress,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.Pic,
+		arg.Leader,
+		arg.Category,
+		arg.Address,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByLeader = `-- name: GetCustomerCountByLeader :one
+SELECT COUNT(*) FROM "Customer" WHERE leader = $1
+`
+
+func (q *Queries) GetCustomerCountByLeader(ctx context.Context, leader uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByLeader, leader)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCustomerCountByPIC = `-- name: GetCustomerCountByPIC :one
+SELECT COUNT(*) FROM "Customer" WHERE pic = $1
+`
+
+func (q *Queries) GetCustomerCountByPIC(ctx context.Context, pic uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, getCustomerCountByPIC, pic)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const listCustomers = `-- name: ListCustomers :many
-SELECT 
+SELECT
 "Customer".id,
 "Customer".book_id,
 "Customer".category,
@@ -156,10 +1635,10 @@ pic."sex" as pic_sex,
 leader."id" as leader_id,
 leader."name" as leader_name,
 leader."sex" as leader_sex
-FROM "Customer" 
+FROM "Customer"
 JOIN "Staff" AS pic ON "Customer".pic = "Staff".id
 JOIN "Staff" AS leader ON "Customer".leader = "Staff".id
-WHERE book_id = $1 
+WHERE book_id = $1
 ORDER BY "Customer"."updated_at" DESC
 LIMIT $2
 OFFSET $3
@@ -230,8 +1709,8 @@ func (q *Queries) ListCustomers(ctx context.Context, arg ListCustomersParams) ([
 }
 
 const updateCustomer = `-- name: UpdateCustomer :one
-UPDATE "Customer" 
-SET 
+UPDATE "Customer"
+SET
   category = COALESCE($1, category),
   name = COALESCE($2, name),
   corporation = COALESCE($3, corporation),

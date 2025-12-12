@@ -27,9 +27,5 @@ func (s *BookService) DeleteBook(
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to delete book: %w", err))
 	}
-	return connect.NewResponse(&bookv1.DeleteBookResponse{
-		DeletedBook: &bookv1.Book{
-			Id: bookId.String(),
-		},
-	}), nil
+	return connect.NewResponse(&bookv1.DeleteBookResponse{}), nil
 }
