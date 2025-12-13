@@ -7,13 +7,14 @@ RETURNING *;
 SELECT * FROM "Status"
 WHERE id = $1;
 
--- name: ListStatuses :many
-SELECT * FROM "Status";
+-- name: ListStatusesByBookID :many
+SELECT * FROM "Status"
+WHERE book_id = $1
+ORDER BY priority ASC;
 
 -- name: UpdateStatus :one
 UPDATE "Status"
 SET 
-  book_id = COALESCE(sqlc.narg(book_id), book_id),
   priority = COALESCE(sqlc.narg(priority), priority),
   name = COALESCE(sqlc.narg(name), name),
   effective = COALESCE(sqlc.narg(effective), effective),
@@ -24,3 +25,7 @@ RETURNING *;
 -- name: DeleteStatus :exec
 DELETE FROM "Status"
 WHERE id = $1;
+
+-- name: GetMaxStatusPriority :one
+SELECT COALESCE(MAX(priority), 0) as max_priority FROM "Status"
+WHERE book_id = $1;

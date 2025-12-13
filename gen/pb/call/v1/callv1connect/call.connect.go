@@ -33,12 +33,16 @@ const (
 // reflection-formatted method names, remove the leading slash and convert the remaining slash to a
 // period.
 const (
+	// CallServiceListCallsByCustomerIDProcedure is the fully-qualified name of the CallService's
+	// ListCallsByCustomerID RPC.
+	CallServiceListCallsByCustomerIDProcedure = "/call.v1.CallService/ListCallsByCustomerID"
 	// CallServiceCreateCallProcedure is the fully-qualified name of the CallService's CreateCall RPC.
 	CallServiceCreateCallProcedure = "/call.v1.CallService/CreateCall"
 )
 
 // CallServiceClient is a client for the call.v1.CallService service.
 type CallServiceClient interface {
+	ListCallsByCustomerID(context.Context, *connect.Request[v1.ListCallsByCustomerIDRequest]) (*connect.Response[v1.ListCallsByCustomerIDResponse], error)
 	CreateCall(context.Context, *connect.Request[v1.CreateCallRequest]) (*connect.Response[v1.CreateCallResponse], error)
 }
 
@@ -53,6 +57,12 @@ func NewCallServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 	baseURL = strings.TrimRight(baseURL, "/")
 	callServiceMethods := v1.File_call_v1_call_proto.Services().ByName("CallService").Methods()
 	return &callServiceClient{
+		listCallsByCustomerID: connect.NewClient[v1.ListCallsByCustomerIDRequest, v1.ListCallsByCustomerIDResponse](
+			httpClient,
+			baseURL+CallServiceListCallsByCustomerIDProcedure,
+			connect.WithSchema(callServiceMethods.ByName("ListCallsByCustomerID")),
+			connect.WithClientOptions(opts...),
+		),
 		createCall: connect.NewClient[v1.CreateCallRequest, v1.CreateCallResponse](
 			httpClient,
 			baseURL+CallServiceCreateCallProcedure,
@@ -64,7 +74,13 @@ func NewCallServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 
 // callServiceClient implements CallServiceClient.
 type callServiceClient struct {
-	createCall *connect.Client[v1.CreateCallRequest, v1.CreateCallResponse]
+	listCallsByCustomerID *connect.Client[v1.ListCallsByCustomerIDRequest, v1.ListCallsByCustomerIDResponse]
+	createCall            *connect.Client[v1.CreateCallRequest, v1.CreateCallResponse]
+}
+
+// ListCallsByCustomerID calls call.v1.CallService.ListCallsByCustomerID.
+func (c *callServiceClient) ListCallsByCustomerID(ctx context.Context, req *connect.Request[v1.ListCallsByCustomerIDRequest]) (*connect.Response[v1.ListCallsByCustomerIDResponse], error) {
+	return c.listCallsByCustomerID.CallUnary(ctx, req)
 }
 
 // CreateCall calls call.v1.CallService.CreateCall.
@@ -74,6 +90,7 @@ func (c *callServiceClient) CreateCall(ctx context.Context, req *connect.Request
 
 // CallServiceHandler is an implementation of the call.v1.CallService service.
 type CallServiceHandler interface {
+	ListCallsByCustomerID(context.Context, *connect.Request[v1.ListCallsByCustomerIDRequest]) (*connect.Response[v1.ListCallsByCustomerIDResponse], error)
 	CreateCall(context.Context, *connect.Request[v1.CreateCallRequest]) (*connect.Response[v1.CreateCallResponse], error)
 }
 
@@ -84,6 +101,12 @@ type CallServiceHandler interface {
 // and JSON codecs. They also support gzip compression.
 func NewCallServiceHandler(svc CallServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
 	callServiceMethods := v1.File_call_v1_call_proto.Services().ByName("CallService").Methods()
+	callServiceListCallsByCustomerIDHandler := connect.NewUnaryHandler(
+		CallServiceListCallsByCustomerIDProcedure,
+		svc.ListCallsByCustomerID,
+		connect.WithSchema(callServiceMethods.ByName("ListCallsByCustomerID")),
+		connect.WithHandlerOptions(opts...),
+	)
 	callServiceCreateCallHandler := connect.NewUnaryHandler(
 		CallServiceCreateCallProcedure,
 		svc.CreateCall,
@@ -92,6 +115,8 @@ func NewCallServiceHandler(svc CallServiceHandler, opts ...connect.HandlerOption
 	)
 	return "/call.v1.CallService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
+		case CallServiceListCallsByCustomerIDProcedure:
+			callServiceListCallsByCustomerIDHandler.ServeHTTP(w, r)
 		case CallServiceCreateCallProcedure:
 			callServiceCreateCallHandler.ServeHTTP(w, r)
 		default:
@@ -102,6 +127,10 @@ func NewCallServiceHandler(svc CallServiceHandler, opts ...connect.HandlerOption
 
 // UnimplementedCallServiceHandler returns CodeUnimplemented from all methods.
 type UnimplementedCallServiceHandler struct{}
+
+func (UnimplementedCallServiceHandler) ListCallsByCustomerID(context.Context, *connect.Request[v1.ListCallsByCustomerIDRequest]) (*connect.Response[v1.ListCallsByCustomerIDResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("call.v1.CallService.ListCallsByCustomerID is not implemented"))
+}
 
 func (UnimplementedCallServiceHandler) CreateCall(context.Context, *connect.Request[v1.CreateCallRequest]) (*connect.Response[v1.CreateCallResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("call.v1.CallService.CreateCall is not implemented"))

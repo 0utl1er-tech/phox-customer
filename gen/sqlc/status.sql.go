@@ -60,6 +60,18 @@ func (q *Queries) DeleteStatus(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+const getMaxStatusPriority = `-- name: GetMaxStatusPriority :one
+SELECT COALESCE(MAX(priority), 0) as max_priority FROM "Status"
+WHERE book_id = $1
+`
+
+func (q *Queries) GetMaxStatusPriority(ctx context.Context, bookID uuid.UUID) (interface{}, error) {
+	row := q.db.QueryRow(ctx, getMaxStatusPriority, bookID)
+	var max_priority interface{}
+	err := row.Scan(&max_priority)
+	return max_priority, err
+}
+
 const getStatus = `-- name: GetStatus :one
 SELECT id, book_id, priority, name, effective, ng, updated_at, created_at FROM "Status"
 WHERE id = $1
@@ -81,12 +93,14 @@ func (q *Queries) GetStatus(ctx context.Context, id uuid.UUID) (Status, error) {
 	return i, err
 }
 
-const listStatuses = `-- name: ListStatuses :many
+const listStatusesByBookID = `-- name: ListStatusesByBookID :many
 SELECT id, book_id, priority, name, effective, ng, updated_at, created_at FROM "Status"
+WHERE book_id = $1
+ORDER BY priority ASC
 `
 
-func (q *Queries) ListStatuses(ctx context.Context) ([]Status, error) {
-	rows, err := q.db.Query(ctx, listStatuses)
+func (q *Queries) ListStatusesByBookID(ctx context.Context, bookID uuid.UUID) ([]Status, error) {
+	rows, err := q.db.Query(ctx, listStatusesByBookID, bookID)
 	if err != nil {
 		return nil, err
 	}
@@ -117,17 +131,15 @@ func (q *Queries) ListStatuses(ctx context.Context) ([]Status, error) {
 const updateStatus = `-- name: UpdateStatus :one
 UPDATE "Status"
 SET 
-  book_id = COALESCE($1, book_id),
-  priority = COALESCE($2, priority),
-  name = COALESCE($3, name),
-  effective = COALESCE($4, effective),
-  ng = COALESCE($5, ng)
-WHERE id = $6
+  priority = COALESCE($1, priority),
+  name = COALESCE($2, name),
+  effective = COALESCE($3, effective),
+  ng = COALESCE($4, ng)
+WHERE id = $5
 RETURNING id, book_id, priority, name, effective, ng, updated_at, created_at
 `
 
 type UpdateStatusParams struct {
-	BookID    pgtype.UUID `json:"book_id"`
 	Priority  pgtype.Int4 `json:"priority"`
 	Name      pgtype.Text `json:"name"`
 	Effective pgtype.Bool `json:"effective"`
@@ -137,7 +149,6 @@ type UpdateStatusParams struct {
 
 func (q *Queries) UpdateStatus(ctx context.Context, arg UpdateStatusParams) (Status, error) {
 	row := q.db.QueryRow(ctx, updateStatus,
-		arg.BookID,
 		arg.Priority,
 		arg.Name,
 		arg.Effective,

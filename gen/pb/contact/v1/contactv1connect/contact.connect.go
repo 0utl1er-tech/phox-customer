@@ -33,6 +33,12 @@ const (
 // reflection-formatted method names, remove the leading slash and convert the remaining slash to a
 // period.
 const (
+	// ContactServiceListContactProcedure is the fully-qualified name of the ContactService's
+	// ListContact RPC.
+	ContactServiceListContactProcedure = "/contact.v1.ContactService/ListContact"
+	// ContactServiceListAllContactsProcedure is the fully-qualified name of the ContactService's
+	// ListAllContacts RPC.
+	ContactServiceListAllContactsProcedure = "/contact.v1.ContactService/ListAllContacts"
 	// ContactServiceCreateContactProcedure is the fully-qualified name of the ContactService's
 	// CreateContact RPC.
 	ContactServiceCreateContactProcedure = "/contact.v1.ContactService/CreateContact"
@@ -42,13 +48,19 @@ const (
 	// ContactServiceDeleteContactProcedure is the fully-qualified name of the ContactService's
 	// DeleteContact RPC.
 	ContactServiceDeleteContactProcedure = "/contact.v1.ContactService/DeleteContact"
+	// ContactServiceImportContactWithCustomerProcedure is the fully-qualified name of the
+	// ContactService's ImportContactWithCustomer RPC.
+	ContactServiceImportContactWithCustomerProcedure = "/contact.v1.ContactService/ImportContactWithCustomer"
 )
 
 // ContactServiceClient is a client for the contact.v1.ContactService service.
 type ContactServiceClient interface {
+	ListContact(context.Context, *connect.Request[v1.ListContactRequest]) (*connect.Response[v1.ListContactResponse], error)
+	ListAllContacts(context.Context, *connect.Request[v1.ListAllContactsRequest]) (*connect.Response[v1.ListAllContactsResponse], error)
 	CreateContact(context.Context, *connect.Request[v1.CreateContactRequest]) (*connect.Response[v1.CreateContactResponse], error)
 	UpdateContact(context.Context, *connect.Request[v1.UpdateContactRequest]) (*connect.Response[v1.UpdateContactResponse], error)
 	DeleteContact(context.Context, *connect.Request[v1.DeleteContactRequest]) (*connect.Response[v1.DeleteContactResponse], error)
+	ImportContactWithCustomer(context.Context, *connect.Request[v1.ImportContactWithCustomerRequest]) (*connect.Response[v1.ImportContactWithCustomerResponse], error)
 }
 
 // NewContactServiceClient constructs a client for the contact.v1.ContactService service. By
@@ -62,6 +74,18 @@ func NewContactServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 	baseURL = strings.TrimRight(baseURL, "/")
 	contactServiceMethods := v1.File_contact_v1_contact_proto.Services().ByName("ContactService").Methods()
 	return &contactServiceClient{
+		listContact: connect.NewClient[v1.ListContactRequest, v1.ListContactResponse](
+			httpClient,
+			baseURL+ContactServiceListContactProcedure,
+			connect.WithSchema(contactServiceMethods.ByName("ListContact")),
+			connect.WithClientOptions(opts...),
+		),
+		listAllContacts: connect.NewClient[v1.ListAllContactsRequest, v1.ListAllContactsResponse](
+			httpClient,
+			baseURL+ContactServiceListAllContactsProcedure,
+			connect.WithSchema(contactServiceMethods.ByName("ListAllContacts")),
+			connect.WithClientOptions(opts...),
+		),
 		createContact: connect.NewClient[v1.CreateContactRequest, v1.CreateContactResponse](
 			httpClient,
 			baseURL+ContactServiceCreateContactProcedure,
@@ -80,14 +104,33 @@ func NewContactServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(contactServiceMethods.ByName("DeleteContact")),
 			connect.WithClientOptions(opts...),
 		),
+		importContactWithCustomer: connect.NewClient[v1.ImportContactWithCustomerRequest, v1.ImportContactWithCustomerResponse](
+			httpClient,
+			baseURL+ContactServiceImportContactWithCustomerProcedure,
+			connect.WithSchema(contactServiceMethods.ByName("ImportContactWithCustomer")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // contactServiceClient implements ContactServiceClient.
 type contactServiceClient struct {
-	createContact *connect.Client[v1.CreateContactRequest, v1.CreateContactResponse]
-	updateContact *connect.Client[v1.UpdateContactRequest, v1.UpdateContactResponse]
-	deleteContact *connect.Client[v1.DeleteContactRequest, v1.DeleteContactResponse]
+	listContact               *connect.Client[v1.ListContactRequest, v1.ListContactResponse]
+	listAllContacts           *connect.Client[v1.ListAllContactsRequest, v1.ListAllContactsResponse]
+	createContact             *connect.Client[v1.CreateContactRequest, v1.CreateContactResponse]
+	updateContact             *connect.Client[v1.UpdateContactRequest, v1.UpdateContactResponse]
+	deleteContact             *connect.Client[v1.DeleteContactRequest, v1.DeleteContactResponse]
+	importContactWithCustomer *connect.Client[v1.ImportContactWithCustomerRequest, v1.ImportContactWithCustomerResponse]
+}
+
+// ListContact calls contact.v1.ContactService.ListContact.
+func (c *contactServiceClient) ListContact(ctx context.Context, req *connect.Request[v1.ListContactRequest]) (*connect.Response[v1.ListContactResponse], error) {
+	return c.listContact.CallUnary(ctx, req)
+}
+
+// ListAllContacts calls contact.v1.ContactService.ListAllContacts.
+func (c *contactServiceClient) ListAllContacts(ctx context.Context, req *connect.Request[v1.ListAllContactsRequest]) (*connect.Response[v1.ListAllContactsResponse], error) {
+	return c.listAllContacts.CallUnary(ctx, req)
 }
 
 // CreateContact calls contact.v1.ContactService.CreateContact.
@@ -105,11 +148,19 @@ func (c *contactServiceClient) DeleteContact(ctx context.Context, req *connect.R
 	return c.deleteContact.CallUnary(ctx, req)
 }
 
+// ImportContactWithCustomer calls contact.v1.ContactService.ImportContactWithCustomer.
+func (c *contactServiceClient) ImportContactWithCustomer(ctx context.Context, req *connect.Request[v1.ImportContactWithCustomerRequest]) (*connect.Response[v1.ImportContactWithCustomerResponse], error) {
+	return c.importContactWithCustomer.CallUnary(ctx, req)
+}
+
 // ContactServiceHandler is an implementation of the contact.v1.ContactService service.
 type ContactServiceHandler interface {
+	ListContact(context.Context, *connect.Request[v1.ListContactRequest]) (*connect.Response[v1.ListContactResponse], error)
+	ListAllContacts(context.Context, *connect.Request[v1.ListAllContactsRequest]) (*connect.Response[v1.ListAllContactsResponse], error)
 	CreateContact(context.Context, *connect.Request[v1.CreateContactRequest]) (*connect.Response[v1.CreateContactResponse], error)
 	UpdateContact(context.Context, *connect.Request[v1.UpdateContactRequest]) (*connect.Response[v1.UpdateContactResponse], error)
 	DeleteContact(context.Context, *connect.Request[v1.DeleteContactRequest]) (*connect.Response[v1.DeleteContactResponse], error)
+	ImportContactWithCustomer(context.Context, *connect.Request[v1.ImportContactWithCustomerRequest]) (*connect.Response[v1.ImportContactWithCustomerResponse], error)
 }
 
 // NewContactServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -119,6 +170,18 @@ type ContactServiceHandler interface {
 // and JSON codecs. They also support gzip compression.
 func NewContactServiceHandler(svc ContactServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
 	contactServiceMethods := v1.File_contact_v1_contact_proto.Services().ByName("ContactService").Methods()
+	contactServiceListContactHandler := connect.NewUnaryHandler(
+		ContactServiceListContactProcedure,
+		svc.ListContact,
+		connect.WithSchema(contactServiceMethods.ByName("ListContact")),
+		connect.WithHandlerOptions(opts...),
+	)
+	contactServiceListAllContactsHandler := connect.NewUnaryHandler(
+		ContactServiceListAllContactsProcedure,
+		svc.ListAllContacts,
+		connect.WithSchema(contactServiceMethods.ByName("ListAllContacts")),
+		connect.WithHandlerOptions(opts...),
+	)
 	contactServiceCreateContactHandler := connect.NewUnaryHandler(
 		ContactServiceCreateContactProcedure,
 		svc.CreateContact,
@@ -137,14 +200,26 @@ func NewContactServiceHandler(svc ContactServiceHandler, opts ...connect.Handler
 		connect.WithSchema(contactServiceMethods.ByName("DeleteContact")),
 		connect.WithHandlerOptions(opts...),
 	)
+	contactServiceImportContactWithCustomerHandler := connect.NewUnaryHandler(
+		ContactServiceImportContactWithCustomerProcedure,
+		svc.ImportContactWithCustomer,
+		connect.WithSchema(contactServiceMethods.ByName("ImportContactWithCustomer")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/contact.v1.ContactService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
+		case ContactServiceListContactProcedure:
+			contactServiceListContactHandler.ServeHTTP(w, r)
+		case ContactServiceListAllContactsProcedure:
+			contactServiceListAllContactsHandler.ServeHTTP(w, r)
 		case ContactServiceCreateContactProcedure:
 			contactServiceCreateContactHandler.ServeHTTP(w, r)
 		case ContactServiceUpdateContactProcedure:
 			contactServiceUpdateContactHandler.ServeHTTP(w, r)
 		case ContactServiceDeleteContactProcedure:
 			contactServiceDeleteContactHandler.ServeHTTP(w, r)
+		case ContactServiceImportContactWithCustomerProcedure:
+			contactServiceImportContactWithCustomerHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -153,6 +228,14 @@ func NewContactServiceHandler(svc ContactServiceHandler, opts ...connect.Handler
 
 // UnimplementedContactServiceHandler returns CodeUnimplemented from all methods.
 type UnimplementedContactServiceHandler struct{}
+
+func (UnimplementedContactServiceHandler) ListContact(context.Context, *connect.Request[v1.ListContactRequest]) (*connect.Response[v1.ListContactResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("contact.v1.ContactService.ListContact is not implemented"))
+}
+
+func (UnimplementedContactServiceHandler) ListAllContacts(context.Context, *connect.Request[v1.ListAllContactsRequest]) (*connect.Response[v1.ListAllContactsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("contact.v1.ContactService.ListAllContacts is not implemented"))
+}
 
 func (UnimplementedContactServiceHandler) CreateContact(context.Context, *connect.Request[v1.CreateContactRequest]) (*connect.Response[v1.CreateContactResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("contact.v1.ContactService.CreateContact is not implemented"))
@@ -164,4 +247,8 @@ func (UnimplementedContactServiceHandler) UpdateContact(context.Context, *connec
 
 func (UnimplementedContactServiceHandler) DeleteContact(context.Context, *connect.Request[v1.DeleteContactRequest]) (*connect.Response[v1.DeleteContactResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("contact.v1.ContactService.DeleteContact is not implemented"))
+}
+
+func (UnimplementedContactServiceHandler) ImportContactWithCustomer(context.Context, *connect.Request[v1.ImportContactWithCustomerRequest]) (*connect.Response[v1.ImportContactWithCustomerResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("contact.v1.ContactService.ImportContactWithCustomer is not implemented"))
 }

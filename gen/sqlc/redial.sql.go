@@ -21,7 +21,7 @@ INSERT INTO "Redial" (
   time
 ) VALUES (
   $1, $2, $3, $4, $5
-) RETURNING id, customer_id, user_id, date, time, updated_at, created_at
+) RETURNING id, customer_id, user_id, phone, date, time, updated_at, created_at
 `
 
 type CreateRedialParams struct {
@@ -45,6 +45,7 @@ func (q *Queries) CreateRedial(ctx context.Context, arg CreateRedialParams) (Red
 		&i.ID,
 		&i.CustomerID,
 		&i.UserID,
+		&i.Phone,
 		&i.Date,
 		&i.Time,
 		&i.UpdatedAt,
@@ -64,7 +65,7 @@ func (q *Queries) DeleteRedial(ctx context.Context, id string) error {
 }
 
 const getRedial = `-- name: GetRedial :one
-SELECT id, customer_id, user_id, date, time, updated_at, created_at FROM "Redial"
+SELECT id, customer_id, user_id, phone, date, time, updated_at, created_at FROM "Redial"
 WHERE id = $1
 `
 
@@ -75,6 +76,7 @@ func (q *Queries) GetRedial(ctx context.Context, id string) (Redial, error) {
 		&i.ID,
 		&i.CustomerID,
 		&i.UserID,
+		&i.Phone,
 		&i.Date,
 		&i.Time,
 		&i.UpdatedAt,
@@ -90,7 +92,7 @@ SET
   user_id = COALESCE($2, user_id),
   date = COALESCE($3, date),
   time = COALESCE($4, time)
-WHERE id = $5 RETURNING id, customer_id, user_id, date, time, updated_at, created_at
+WHERE id = $5 RETURNING id, customer_id, user_id, phone, date, time, updated_at, created_at
 `
 
 type UpdateRedialParams struct {
@@ -114,6 +116,7 @@ func (q *Queries) UpdateRedial(ctx context.Context, arg UpdateRedialParams) (Red
 		&i.ID,
 		&i.CustomerID,
 		&i.UserID,
+		&i.Phone,
 		&i.Date,
 		&i.Time,
 		&i.UpdatedAt,

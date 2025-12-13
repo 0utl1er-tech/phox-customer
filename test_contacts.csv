@@ -1,0 +1,5 @@
+customer_id,name,sex,phone,mail,fax
+550e8400-e29b-41d4-a716-446655440000,山田太郎,男,03-1234-5678,yamada@example.com,03-1234-5679
+550e8400-e29b-41d4-a716-446655440000,田中花子,女,03-2345-6789,tanaka@example.com,03-2345-6780
+6ba7b810-9dad-11d1-80b4-00c04fd430c8,佐藤一郎,男,06-1111-2222,sato@example.com,06-1111-2223
+6ba7b810-9dad-11d1-80b4-00c04fd430c8,鈴木美咲,女,06-3333-4444,suzuki@example.com,

@@ -4,14 +4,12 @@ import (
 	"context"
 	"fmt"
 
-	callv1 "github.com/0utl1er-tech/phox-customer/gen/pb/call/v1"
-	contactv1 "github.com/0utl1er-tech/phox-customer/gen/pb/contact/v1"
-	customerv1 "github.com/0utl1er-tech/phox-customer/gen/pb/customer/v1"
-	staffv1 "github.com/0utl1er-tech/phox-customer/gen/pb/staff/v1"
-	userv1 "github.com/0utl1er-tech/phox-customer/gen/pb/user/v1"
-	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
 	"connectrpc.com/connect"
+	callv1 "github.com/0utl1er-tech/phox-customer/gen/pb/call/v1"
+	customerv1 "github.com/0utl1er-tech/phox-customer/gen/pb/customer/v1"
+	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
 	"github.com/google/uuid"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func (s *CustomerService) GetCustomer(
@@ -35,7 +33,7 @@ func (s *CustomerService) GetCustomer(
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("このbookにアクセスする権限がありません: %w", err))
 	}
 
-	callRows, err := s.queries.ListCalls(ctx, customer.ID)
+	callRows, err := s.queries.ListCallsByCustomerID(ctx, customer.ID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("callsの取得に失敗しました: %w", err))
 	}
@@ -43,17 +41,17 @@ func (s *CustomerService) GetCustomer(
 	calls := make([]*callv1.Call, len(callRows))
 	for i, call := range callRows {
 		calls[i] = &callv1.Call{
-			Id: call.ID.String(),
-			Contact: &contactv1.Contact{
-				Id:    call.ContactID.String(),
-				Phone: call.ContactPhone,
-				Mail:  call.ContactMail,
-				Fax:   call.ContactFax,
-			},
-			User: &userv1.User{
-				Id:   call.UserID,
-				Name: call.UserName,
-			},
+			Id:              call.ID.String(),
+			CustomerId:      call.CustomerID.String(),
+			Phone:           call.Phone,
+			UserId:          call.UserID,
+			UserName:        call.UserName,
+			StatusId:        call.StatusID.String(),
+			StatusName:      call.StatusName,
+			StatusPriority:  call.StatusPriority,
+			StatusEffective: call.StatusEffective,
+			StatusNg:        call.StatusNg,
+			CreatedAt:       timestamppb.New(call.CreatedAt),
 		}
 	}
 
@@ -61,22 +59,13 @@ func (s *CustomerService) GetCustomer(
 		Customer: &customerv1.Customer{
 			Id:          customer.ID.String(),
 			BookId:      customer.BookID.String(),
+			Phone:       customer.Phone,
 			Category:    customer.Category,
 			Name:        customer.Name,
 			Corporation: customer.Corporation,
 			Address:     customer.Address,
 			Memo:        customer.Memo,
-			Pic: &staffv1.Staff{
-				Id:   customer.PicID.String(),
-				Name: customer.PicName,
-				Sex:  customer.PicSex,
-			},
-			Leader: &staffv1.Staff{
-				Id:   customer.LeaderID.String(),
-				Name: customer.LeaderName,
-				Sex:  customer.LeaderSex,
-			},
-			Calls: calls,
+			Calls:       calls,
 		},
 	}), nil
 }

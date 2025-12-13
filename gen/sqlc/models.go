@@ -66,7 +66,7 @@ type Book struct {
 type Call struct {
 	ID         uuid.UUID `json:"id"`
 	CustomerID uuid.UUID `json:"customer_id"`
-	ContactID  uuid.UUID `json:"contact_id"`
+	Phone      string    `json:"phone"`
 	UserID     string    `json:"user_id"`
 	StatusID   uuid.UUID `json:"status_id"`
 	UpdatedAt  time.Time `json:"updated_at"`
@@ -83,7 +83,8 @@ type Company struct {
 type Contact struct {
 	ID         uuid.UUID `json:"id"`
 	CustomerID uuid.UUID `json:"customer_id"`
-	StaffID    uuid.UUID `json:"staff_id"`
+	Name       string    `json:"name"`
+	Sex        string    `json:"sex"`
 	Phone      string    `json:"phone"`
 	Mail       string    `json:"mail"`
 	Fax        string    `json:"fax"`
@@ -94,13 +95,12 @@ type Contact struct {
 type Customer struct {
 	ID          uuid.UUID `json:"id"`
 	BookID      uuid.UUID `json:"book_id"`
+	Phone       string    `json:"phone"`
 	Category    string    `json:"category"`
 	Name        string    `json:"name"`
 	Corporation string    `json:"corporation"`
 	Address     string    `json:"address"`
 	Memo        string    `json:"memo"`
-	Pic         uuid.UUID `json:"pic"`
-	Leader      uuid.UUID `json:"leader"`
 	UpdatedAt   time.Time `json:"updated_at"`
 	CreatedAt   time.Time `json:"created_at"`
 }
@@ -118,18 +118,11 @@ type Redial struct {
 	ID         string      `json:"id"`
 	CustomerID uuid.UUID   `json:"customer_id"`
 	UserID     string      `json:"user_id"`
+	Phone      string      `json:"phone"`
 	Date       pgtype.Date `json:"date"`
 	Time       pgtype.Time `json:"time"`
 	UpdatedAt  time.Time   `json:"updated_at"`
 	CreatedAt  time.Time   `json:"created_at"`
-}
-
-type Staff struct {
-	ID        uuid.UUID `json:"id"`
-	Name      string    `json:"name"`
-	Sex       string    `json:"sex"`
-	UpdatedAt time.Time `json:"updated_at"`
-	CreatedAt time.Time `json:"created_at"`
 }
 
 type Status struct {
@@ -149,6 +142,7 @@ type User struct {
 	ID        string    `json:"id"`
 	CompanyID uuid.UUID `json:"company_id"`
 	Name      string    `json:"name"`
+	Role      Role      `json:"role"`
 	UpdatedAt time.Time `json:"updated_at"`
 	CreatedAt time.Time `json:"created_at"`
 }

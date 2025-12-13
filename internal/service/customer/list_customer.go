@@ -4,10 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	customerv1 "github.com/0utl1er-tech/phox-customer/gen/pb/customer/v1"
-	staffv1 "github.com/0utl1er-tech/phox-customer/gen/pb/staff/v1"
-	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
 	"connectrpc.com/connect"
+	customerv1 "github.com/0utl1er-tech/phox-customer/gen/pb/customer/v1"
+	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
 	"github.com/google/uuid"
 )
 
@@ -38,27 +37,18 @@ func (s *CustomerService) ListCustomer(
 	}
 
 	// レスポンス用のcustomer一覧を作成
-	customerList := make([]*customerv1.Customer, len(customers))
+	customerList := make([]*customerv1.Customer, 0, len(customers))
 
 	for _, customer := range customers {
 		customerList = append(customerList, &customerv1.Customer{
 			Id:          customer.ID.String(),
 			BookId:      customer.BookID.String(),
+			Phone:       customer.Phone,
 			Category:    customer.Category,
 			Name:        customer.Name,
 			Corporation: customer.Corporation,
 			Address:     customer.Address,
 			Memo:        customer.Memo,
-			Pic: &staffv1.Staff{
-				Id:   customer.PicID.String(),
-				Name: customer.PicName,
-				Sex:  customer.PicSex,
-			},
-			Leader: &staffv1.Staff{
-				Id:   customer.LeaderID.String(),
-				Name: customer.LeaderName,
-				Sex:  customer.LeaderSex,
-			},
 		})
 	}
 

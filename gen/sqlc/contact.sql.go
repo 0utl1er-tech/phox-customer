@@ -13,17 +13,18 @@ import (
 )
 
 const createContact = `-- name: CreateContact :one
-INSERT INTO "Contact" (id, customer_id, staff_id, mail, phone, fax)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, customer_id, staff_id, phone, mail, fax, updated_at, created_at
+INSERT INTO "Contact" (id, customer_id, name, sex, phone, mail, fax)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, customer_id, name, sex, phone, mail, fax, updated_at, created_at
 `
 
 type CreateContactParams struct {
 	ID         uuid.UUID `json:"id"`
 	CustomerID uuid.UUID `json:"customer_id"`
-	StaffID    uuid.UUID `json:"staff_id"`
-	Mail       string    `json:"mail"`
+	Name       string    `json:"name"`
+	Sex        string    `json:"sex"`
 	Phone      string    `json:"phone"`
+	Mail       string    `json:"mail"`
 	Fax        string    `json:"fax"`
 }
 
@@ -31,16 +32,18 @@ func (q *Queries) CreateContact(ctx context.Context, arg CreateContactParams) (C
 	row := q.db.QueryRow(ctx, createContact,
 		arg.ID,
 		arg.CustomerID,
-		arg.StaffID,
-		arg.Mail,
+		arg.Name,
+		arg.Sex,
 		arg.Phone,
+		arg.Mail,
 		arg.Fax,
 	)
 	var i Contact
 	err := row.Scan(
 		&i.ID,
 		&i.CustomerID,
-		&i.StaffID,
+		&i.Name,
+		&i.Sex,
 		&i.Phone,
 		&i.Mail,
 		&i.Fax,
@@ -61,7 +64,7 @@ func (q *Queries) DeleteContact(ctx context.Context, id uuid.UUID) error {
 }
 
 const getContact = `-- name: GetContact :one
-SELECT id, customer_id, staff_id, phone, mail, fax, updated_at, created_at FROM "Contact" 
+SELECT id, customer_id, name, sex, phone, mail, fax, updated_at, created_at FROM "Contact" 
 WHERE id = $1
 `
 
@@ -71,7 +74,8 @@ func (q *Queries) GetContact(ctx context.Context, id uuid.UUID) (Contact, error)
 	err := row.Scan(
 		&i.ID,
 		&i.CustomerID,
-		&i.StaffID,
+		&i.Name,
+		&i.Sex,
 		&i.Phone,
 		&i.Mail,
 		&i.Fax,
@@ -81,49 +85,94 @@ func (q *Queries) GetContact(ctx context.Context, id uuid.UUID) (Contact, error)
 	return i, err
 }
 
-const listContacts = `-- name: ListContacts :many
-SELECT "Contact".id, 
+const listAllContacts = `-- name: ListAllContacts :many
+SELECT 
+  "Contact".id, 
   "Contact".customer_id,
-  "Contact".staff_id,
-  "Contact".mail,
+  "Contact".name,
+  "Contact".sex,
   "Contact".phone,
+  "Contact".mail,
   "Contact".fax,
-  staff.name as staff_name,
-  staff.sex as staff_sex
+  "Customer".name as customer_name,
+  "Customer".corporation as customer_corporation
 FROM "Contact" 
-JOIN "Staff" AS staff ON "Contact".staff_id = "Staff".id
+JOIN "Customer" ON "Contact".customer_id = "Customer".id
+ORDER BY "Contact".created_at DESC
+LIMIT $1 OFFSET $2
+`
+
+type ListAllContactsParams struct {
+	Limit  int32 `json:"limit"`
+	Offset int32 `json:"offset"`
+}
+
+type ListAllContactsRow struct {
+	ID                  uuid.UUID `json:"id"`
+	CustomerID          uuid.UUID `json:"customer_id"`
+	Name                string    `json:"name"`
+	Sex                 string    `json:"sex"`
+	Phone               string    `json:"phone"`
+	Mail                string    `json:"mail"`
+	Fax                 string    `json:"fax"`
+	CustomerName        string    `json:"customer_name"`
+	CustomerCorporation string    `json:"customer_corporation"`
+}
+
+func (q *Queries) ListAllContacts(ctx context.Context, arg ListAllContactsParams) ([]ListAllContactsRow, error) {
+	rows, err := q.db.Query(ctx, listAllContacts, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAllContactsRow{}
+	for rows.Next() {
+		var i ListAllContactsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CustomerID,
+			&i.Name,
+			&i.Sex,
+			&i.Phone,
+			&i.Mail,
+			&i.Fax,
+			&i.CustomerName,
+			&i.CustomerCorporation,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listContacts = `-- name: ListContacts :many
+SELECT id, customer_id, name, sex, phone, mail, fax, updated_at, created_at FROM "Contact" 
 WHERE customer_id = $1
 `
 
-type ListContactsRow struct {
-	ID         uuid.UUID `json:"id"`
-	CustomerID uuid.UUID `json:"customer_id"`
-	StaffID    uuid.UUID `json:"staff_id"`
-	Mail       string    `json:"mail"`
-	Phone      string    `json:"phone"`
-	Fax        string    `json:"fax"`
-	StaffName  string    `json:"staff_name"`
-	StaffSex   string    `json:"staff_sex"`
-}
-
-func (q *Queries) ListContacts(ctx context.Context, customerID uuid.UUID) ([]ListContactsRow, error) {
+func (q *Queries) ListContacts(ctx context.Context, customerID uuid.UUID) ([]Contact, error) {
 	rows, err := q.db.Query(ctx, listContacts, customerID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListContactsRow{}
+	items := []Contact{}
 	for rows.Next() {
-		var i ListContactsRow
+		var i Contact
 		if err := rows.Scan(
 			&i.ID,
 			&i.CustomerID,
-			&i.StaffID,
-			&i.Mail,
+			&i.Name,
+			&i.Sex,
 			&i.Phone,
+			&i.Mail,
 			&i.Fax,
-			&i.StaffName,
-			&i.StaffSex,
+			&i.UpdatedAt,
+			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -138,27 +187,31 @@ func (q *Queries) ListContacts(ctx context.Context, customerID uuid.UUID) ([]Lis
 const updateContact = `-- name: UpdateContact :one
 UPDATE "Contact" 
 SET 
-  staff_id = COALESCE($1, staff_id),
-  mail = COALESCE($2, mail),
+  name = COALESCE($1, name),
+  sex = COALESCE($2, sex),
   phone = COALESCE($3, phone),
-  fax = COALESCE($4, fax)
-WHERE id = $5
-RETURNING id, customer_id, staff_id, phone, mail, fax, updated_at, created_at
+  mail = COALESCE($4, mail),
+  fax = COALESCE($5, fax),
+  updated_at = now()
+WHERE id = $6
+RETURNING id, customer_id, name, sex, phone, mail, fax, updated_at, created_at
 `
 
 type UpdateContactParams struct {
-	StaffID pgtype.UUID `json:"staff_id"`
-	Mail    pgtype.Text `json:"mail"`
-	Phone   pgtype.Text `json:"phone"`
-	Fax     pgtype.Text `json:"fax"`
-	ID      uuid.UUID   `json:"id"`
+	Name  pgtype.Text `json:"name"`
+	Sex   pgtype.Text `json:"sex"`
+	Phone pgtype.Text `json:"phone"`
+	Mail  pgtype.Text `json:"mail"`
+	Fax   pgtype.Text `json:"fax"`
+	ID    uuid.UUID   `json:"id"`
 }
 
 func (q *Queries) UpdateContact(ctx context.Context, arg UpdateContactParams) (Contact, error) {
 	row := q.db.QueryRow(ctx, updateContact,
-		arg.StaffID,
-		arg.Mail,
+		arg.Name,
+		arg.Sex,
 		arg.Phone,
+		arg.Mail,
 		arg.Fax,
 		arg.ID,
 	)
@@ -166,7 +219,8 @@ func (q *Queries) UpdateContact(ctx context.Context, arg UpdateContactParams) (C
 	err := row.Scan(
 		&i.ID,
 		&i.CustomerID,
-		&i.StaffID,
+		&i.Name,
+		&i.Sex,
 		&i.Phone,
 		&i.Mail,
 		&i.Fax,

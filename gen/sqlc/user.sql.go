@@ -15,7 +15,7 @@ import (
 const createUser = `-- name: CreateUser :one
 INSERT INTO "User" (id, company_id, name)
 VALUES ($1, $2, $3)
-RETURNING id, company_id, name, updated_at, created_at
+RETURNING id, company_id, name, role, updated_at, created_at
 `
 
 type CreateUserParams struct {
@@ -31,6 +31,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.ID,
 		&i.CompanyID,
 		&i.Name,
+		&i.Role,
 		&i.UpdatedAt,
 		&i.CreatedAt,
 	)
@@ -40,7 +41,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 const deleteUser = `-- name: DeleteUser :one
 DELETE FROM "User"
 WHERE id = $1
-RETURNING id, company_id, name, updated_at, created_at
+RETURNING id, company_id, name, role, updated_at, created_at
 `
 
 func (q *Queries) DeleteUser(ctx context.Context, id string) (User, error) {
@@ -50,6 +51,7 @@ func (q *Queries) DeleteUser(ctx context.Context, id string) (User, error) {
 		&i.ID,
 		&i.CompanyID,
 		&i.Name,
+		&i.Role,
 		&i.UpdatedAt,
 		&i.CreatedAt,
 	)
@@ -57,7 +59,7 @@ func (q *Queries) DeleteUser(ctx context.Context, id string) (User, error) {
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, company_id, name, updated_at, created_at FROM "User"
+SELECT id, company_id, name, role, updated_at, created_at FROM "User"
 WHERE id = $1
 `
 
@@ -68,6 +70,7 @@ func (q *Queries) GetUser(ctx context.Context, id string) (User, error) {
 		&i.ID,
 		&i.CompanyID,
 		&i.Name,
+		&i.Role,
 		&i.UpdatedAt,
 		&i.CreatedAt,
 	)
@@ -75,7 +78,7 @@ func (q *Queries) GetUser(ctx context.Context, id string) (User, error) {
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, company_id, name, updated_at, created_at FROM "User"
+SELECT id, company_id, name, role, updated_at, created_at FROM "User"
 `
 
 func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
@@ -91,6 +94,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.ID,
 			&i.CompanyID,
 			&i.Name,
+			&i.Role,
 			&i.UpdatedAt,
 			&i.CreatedAt,
 		); err != nil {
@@ -111,7 +115,7 @@ SET
   name = COALESCE($2, name),
   updated_at = CURRENT_TIMESTAMP
 WHERE id = $3
-RETURNING id, company_id, name, updated_at, created_at
+RETURNING id, company_id, name, role, updated_at, created_at
 `
 
 type UpdateUserParams struct {
@@ -127,6 +131,7 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 		&i.ID,
 		&i.CompanyID,
 		&i.Name,
+		&i.Role,
 		&i.UpdatedAt,
 		&i.CreatedAt,
 	)

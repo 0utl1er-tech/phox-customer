@@ -25,6 +25,7 @@ Table User {
   id varchar [pk]
   company_id uuid [not null]
   name varchar [not null]
+  role role [not null]
 
   updated_at timestamptz [not null, default: `now()`]
   created_at timestamptz [not null, default: `now()`]  
@@ -34,6 +35,7 @@ Table Redial {
   id varchar [pk]
   customer_id uuid [not null, unique]
   user_id varchar [not null]
+  phone varchar [not null]
   date date [not null, default: `now()`]
   time time [not null, default: `now()`]
 
@@ -58,22 +60,12 @@ Table Permit {
 Table Customer {
   id uuid [pk]
   book_id uuid [not null]
+  phone varchar [not null, default: ""]
   category varchar [not null, default: ""]
   name varchar [not null, default: ""]
   corporation varchar [not null, default: ""]
   address varchar [not null, default: ""]
   memo text [not null, default: ""]
-  pic uuid [not null, unique]
-  leader uuid [not null, unique]
-
-  updated_at timestamptz [not null, default: `now()`]
-  created_at timestamptz [not null, default: `now()`]
-}
-
-Table Staff {
-  id uuid [pk]
-  name varchar [not null, default: ""]
-  sex varchar [not null, default: ""]
 
   updated_at timestamptz [not null, default: `now()`]
   created_at timestamptz [not null, default: `now()`]
@@ -82,7 +74,8 @@ Table Staff {
 Table Contact {
   id uuid [pk]
   customer_id uuid [not null]
-  staff_id uuid [not null]
+  name varchar [not null, default:""]
+  sex varchar [not null, default:""]
   phone varchar [not null, default:""]
   mail varchar [not null, default:""]
   fax varchar [not null, default:""]
@@ -94,7 +87,7 @@ Table Contact {
 Table Call {
   id uuid [pk]
   customer_id uuid [not null]
-  contact_id uuid [not null]
+  phone varchar [not null]
   user_id varchar [not null]
   status_id uuid [not null]
 
@@ -125,10 +118,6 @@ Ref: "Call"."status_id" > "Status"."id" [delete: no action, update: no action]
 
 Ref: "Customer"."id" < "Contact"."customer_id" [delete: cascade, update: no action]
 
-Ref: "Customer"."pic" - "Staff"."id" [delete: cascade, update: no action]
-
-Ref: "Customer"."leader" - "Staff"."id" [delete: cascade, update: no action]
-
 Ref: "User"."id" < "Permit"."user_id" [delete: cascade, update: no action]
 
 Ref: "Company"."id" < "User"."company_id" [delete: cascade, update: no action]
@@ -139,10 +128,6 @@ Ref: "User"."id" < "Redial"."user_id" [delete: cascade, update: no action]
 
 Ref: "Customer"."id" - "Redial"."customer_id" [delete: cascade, update: no action]
 
-Ref: "Contact"."id" < "Call"."contact_id" [delete: cascade, update: no action]
-
 Ref: "Book"."id" < "Status"."book_id" [delete: cascade, update: no action]
-
-Ref: "Staff"."id" - "Contact"."staff_id" [delete: cascade, update: no action]
 
 Ref: "Customer"."id" < "Call"."customer_id" [delete: cascade, update: no action]

@@ -7,21 +7,22 @@ package db
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createCall = `-- name: CreateCall :one
-INSERT INTO "Call" (id, customer_id, contact_id, user_id, status_id)
+INSERT INTO "Call" (id, customer_id, phone, user_id, status_id)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, customer_id, contact_id, user_id, status_id, updated_at, created_at
+RETURNING id, customer_id, phone, user_id, status_id, updated_at, created_at
 `
 
 type CreateCallParams struct {
 	ID         uuid.UUID `json:"id"`
 	CustomerID uuid.UUID `json:"customer_id"`
-	ContactID  uuid.UUID `json:"contact_id"`
+	Phone      string    `json:"phone"`
 	UserID     string    `json:"user_id"`
 	StatusID   uuid.UUID `json:"status_id"`
 }
@@ -30,7 +31,7 @@ func (q *Queries) CreateCall(ctx context.Context, arg CreateCallParams) (Call, e
 	row := q.db.QueryRow(ctx, createCall,
 		arg.ID,
 		arg.CustomerID,
-		arg.ContactID,
+		arg.Phone,
 		arg.UserID,
 		arg.StatusID,
 	)
@@ -38,7 +39,7 @@ func (q *Queries) CreateCall(ctx context.Context, arg CreateCallParams) (Call, e
 	err := row.Scan(
 		&i.ID,
 		&i.CustomerID,
-		&i.ContactID,
+		&i.Phone,
 		&i.UserID,
 		&i.StatusID,
 		&i.UpdatedAt,
@@ -57,7 +58,7 @@ func (q *Queries) DeleteCall(ctx context.Context, id uuid.UUID) error {
 }
 
 const getCall = `-- name: GetCall :one
-SELECT id, customer_id, contact_id, user_id, status_id, updated_at, created_at FROM "Call" 
+SELECT id, customer_id, phone, user_id, status_id, updated_at, created_at FROM "Call" 
 WHERE id = $1
 `
 
@@ -67,7 +68,7 @@ func (q *Queries) GetCall(ctx context.Context, id uuid.UUID) (Call, error) {
 	err := row.Scan(
 		&i.ID,
 		&i.CustomerID,
-		&i.ContactID,
+		&i.Phone,
 		&i.UserID,
 		&i.StatusID,
 		&i.UpdatedAt,
@@ -76,76 +77,129 @@ func (q *Queries) GetCall(ctx context.Context, id uuid.UUID) (Call, error) {
 	return i, err
 }
 
-const listCalls = `-- name: ListCalls :many
-SELECT "Call".id, 
+const listCallsByBookID = `-- name: ListCallsByBookID :many
+SELECT 
+  "Call".id,
   "Call".customer_id,
-  "Call".contact_id, 
-  "Call".user_id, 
+  "Call".phone,
+  "Call".user_id,
   "Call".status_id,
-  contact.id as contact_id,
-  contact.customer_id as contact_customer_id,
-  contact.phone as contact_phone,
-  contact.mail as contact_mail,
-  contact.fax as contact_fax,
-  "User".id as user_id, 
+  "Call".created_at,
+  "Call".updated_at,
   "User".name as user_name,
-  "Status".id as status_id,
-  "Status".priority as status_priority,
   "Status".name as status_name,
-  "Status".effective as status_effective,
-  "Status".ng as status_ng
+  "Customer".name as customer_name,
+  "Customer".corporation as customer_corporation
 FROM "Call" 
-JOIN "Contact" AS contact ON "Call".contact_id = contact.id
 JOIN "User" ON "Call".user_id = "User".id
 JOIN "Status" ON "Call".status_id = "Status".id
-WHERE "Call".customer_id = $1
+JOIN "Customer" ON "Call".customer_id = "Customer".id
+WHERE "Customer".book_id = $1
+ORDER BY "Call".created_at DESC
 `
 
-type ListCallsRow struct {
-	ID                uuid.UUID `json:"id"`
-	CustomerID        uuid.UUID `json:"customer_id"`
-	ContactID         uuid.UUID `json:"contact_id"`
-	UserID            string    `json:"user_id"`
-	StatusID          uuid.UUID `json:"status_id"`
-	ContactID_2       uuid.UUID `json:"contact_id_2"`
-	ContactCustomerID uuid.UUID `json:"contact_customer_id"`
-	ContactPhone      string    `json:"contact_phone"`
-	ContactMail       string    `json:"contact_mail"`
-	ContactFax        string    `json:"contact_fax"`
-	UserID_2          string    `json:"user_id_2"`
-	UserName          string    `json:"user_name"`
-	StatusID_2        uuid.UUID `json:"status_id_2"`
-	StatusPriority    int32     `json:"status_priority"`
-	StatusName        string    `json:"status_name"`
-	StatusEffective   bool      `json:"status_effective"`
-	StatusNg          bool      `json:"status_ng"`
+type ListCallsByBookIDRow struct {
+	ID                  uuid.UUID `json:"id"`
+	CustomerID          uuid.UUID `json:"customer_id"`
+	Phone               string    `json:"phone"`
+	UserID              string    `json:"user_id"`
+	StatusID            uuid.UUID `json:"status_id"`
+	CreatedAt           time.Time `json:"created_at"`
+	UpdatedAt           time.Time `json:"updated_at"`
+	UserName            string    `json:"user_name"`
+	StatusName          string    `json:"status_name"`
+	CustomerName        string    `json:"customer_name"`
+	CustomerCorporation string    `json:"customer_corporation"`
 }
 
-func (q *Queries) ListCalls(ctx context.Context, customerID uuid.UUID) ([]ListCallsRow, error) {
-	rows, err := q.db.Query(ctx, listCalls, customerID)
+func (q *Queries) ListCallsByBookID(ctx context.Context, bookID uuid.UUID) ([]ListCallsByBookIDRow, error) {
+	rows, err := q.db.Query(ctx, listCallsByBookID, bookID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListCallsRow{}
+	items := []ListCallsByBookIDRow{}
 	for rows.Next() {
-		var i ListCallsRow
+		var i ListCallsByBookIDRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.CustomerID,
-			&i.ContactID,
+			&i.Phone,
 			&i.UserID,
 			&i.StatusID,
-			&i.ContactID_2,
-			&i.ContactCustomerID,
-			&i.ContactPhone,
-			&i.ContactMail,
-			&i.ContactFax,
-			&i.UserID_2,
+			&i.CreatedAt,
+			&i.UpdatedAt,
 			&i.UserName,
-			&i.StatusID_2,
-			&i.StatusPriority,
 			&i.StatusName,
+			&i.CustomerName,
+			&i.CustomerCorporation,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCallsByCustomerID = `-- name: ListCallsByCustomerID :many
+SELECT 
+  "Call".id,
+  "Call".customer_id,
+  "Call".phone,
+  "Call".user_id,
+  "Call".status_id,
+  "Call".created_at,
+  "Call".updated_at,
+  "User".name as user_name,
+  "Status".name as status_name,
+  "Status".priority as status_priority,
+  "Status".effective as status_effective,
+  "Status".ng as status_ng
+FROM "Call" 
+JOIN "User" ON "Call".user_id = "User".id
+JOIN "Status" ON "Call".status_id = "Status".id
+WHERE "Call".customer_id = $1
+ORDER BY "Call".created_at DESC
+`
+
+type ListCallsByCustomerIDRow struct {
+	ID              uuid.UUID `json:"id"`
+	CustomerID      uuid.UUID `json:"customer_id"`
+	Phone           string    `json:"phone"`
+	UserID          string    `json:"user_id"`
+	StatusID        uuid.UUID `json:"status_id"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+	UserName        string    `json:"user_name"`
+	StatusName      string    `json:"status_name"`
+	StatusPriority  int32     `json:"status_priority"`
+	StatusEffective bool      `json:"status_effective"`
+	StatusNg        bool      `json:"status_ng"`
+}
+
+func (q *Queries) ListCallsByCustomerID(ctx context.Context, customerID uuid.UUID) ([]ListCallsByCustomerIDRow, error) {
+	rows, err := q.db.Query(ctx, listCallsByCustomerID, customerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCallsByCustomerIDRow{}
+	for rows.Next() {
+		var i ListCallsByCustomerIDRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CustomerID,
+			&i.Phone,
+			&i.UserID,
+			&i.StatusID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.UserName,
+			&i.StatusName,
+			&i.StatusPriority,
 			&i.StatusEffective,
 			&i.StatusNg,
 		); err != nil {
@@ -165,7 +219,7 @@ SET
   status_id = COALESCE($1, status_id),
   user_id = COALESCE($2, user_id)
 WHERE id = $3
-RETURNING id, customer_id, contact_id, user_id, status_id, updated_at, created_at
+RETURNING id, customer_id, phone, user_id, status_id, updated_at, created_at
 `
 
 type UpdateCallParams struct {
@@ -180,7 +234,7 @@ func (q *Queries) UpdateCall(ctx context.Context, arg UpdateCallParams) (Call, e
 	err := row.Scan(
 		&i.ID,
 		&i.CustomerID,
-		&i.ContactID,
+		&i.Phone,
 		&i.UserID,
 		&i.StatusID,
 		&i.UpdatedAt,

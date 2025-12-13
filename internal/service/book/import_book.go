@@ -56,12 +56,16 @@ func (s *BookService) ImportBook(ctx context.Context, req *connect.Request[bookv
 		columnMap[strings.ToLower(strings.TrimSpace(col))] = i
 	}
 
-	// Expected columns (ignoring pic and leader for now due to schema complexity)
+	// Expected columns
 	// The user can provide an 'id' column, otherwise it will be auto-generated.
 	// Other columns are optional and will default to empty string if not present.
 	idCol := -1
 	if idx, ok := columnMap["id"]; ok {
 		idCol = idx
+	}
+	phoneCol := -1
+	if idx, ok := columnMap["phone"]; ok {
+		phoneCol = idx
 	}
 	categoryCol := -1
 	if idx, ok := columnMap["category"]; ok {
@@ -123,6 +127,7 @@ func (s *BookService) ImportBook(ctx context.Context, req *connect.Request[bookv
 		customer := db.CreateCustomerParams{
 			ID:          customerID,
 			BookID:      bookID,
+			Phone:       getStringValue(record, phoneCol),
 			Category:    getStringValue(record, categoryCol),
 			Name:        getStringValue(record, nameCol),
 			Corporation: getStringValue(record, corporationCol),
@@ -138,6 +143,7 @@ func (s *BookService) ImportBook(ctx context.Context, req *connect.Request[bookv
 			_, err := s.queries.CreateCustomer(ctx, db.CreateCustomerParams{
 				ID:          customer.ID,
 				BookID:      customer.BookID,
+				Phone:       customer.Phone,
 				Category:    customer.Category,
 				Name:        customer.Name,
 				Corporation: customer.Corporation,

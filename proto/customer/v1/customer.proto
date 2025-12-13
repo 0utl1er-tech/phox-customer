@@ -5,19 +5,17 @@ package customer.v1;
 import "buf/validate/validate.proto";
 import "call/v1/call.proto";
 import "contact/v1/contact.proto";
-import "staff/v1/staff.proto";
 
 option go_package = "github.com/0utl1er-tech/phox-customer/gen/pb/customer/v1;customerv1";
 
 message CreateCustomerRequest {
   string book_id = 1 [(buf.validate.field).string.uuid = true];
-  string category = 2 [(buf.validate.field).string.max_len = 128];
-  string name = 3 [(buf.validate.field).string.max_len = 128];
-  string corporation = 4 [(buf.validate.field).string.max_len = 128];
-  string address = 5 [(buf.validate.field).string.max_len = 128];
-  string memo = 6 [(buf.validate.field).string.max_len = 1024];
-  staff.v1.Staff pic = 7;
-  staff.v1.Staff leader = 8;
+  string phone = 2 [(buf.validate.field).string.max_len = 64];
+  string category = 3 [(buf.validate.field).string.max_len = 128];
+  string name = 4 [(buf.validate.field).string.max_len = 128];
+  string corporation = 5 [(buf.validate.field).string.max_len = 128];
+  string address = 6 [(buf.validate.field).string.max_len = 128];
+  string memo = 7 [(buf.validate.field).string.max_len = 1024];
 }
 
 message CreateCustomerResponse {
@@ -45,24 +43,24 @@ message GetCustomerResponse {
 message Customer {
   string id = 1;
   string book_id = 2;
-  string category = 3;
-  string name = 4;
-  string corporation = 5;
-  string address = 6;
-  string memo = 7;
-  staff.v1.Staff pic = 8;
-  staff.v1.Staff leader = 9;
-  repeated contact.v1.Contact contacts = 10;
-  repeated call.v1.Call calls = 11;
+  string phone = 3;
+  string category = 4;
+  string name = 5;
+  string corporation = 6;
+  string address = 7;
+  string memo = 8;
+  repeated contact.v1.Contact contacts = 9;
+  repeated call.v1.Call calls = 10;
 }
 
 message UpdateCustomerRequest {
   string id = 1 [(buf.validate.field).string.uuid = true];
-  optional string category = 2 [(buf.validate.field).string.max_len = 128];
-  optional string name = 3 [(buf.validate.field).string.max_len = 128];
-  optional string corporation = 4 [(buf.validate.field).string.max_len = 128];
-  optional string address = 5 [(buf.validate.field).string.max_len = 128];
-  optional string memo = 6 [(buf.validate.field).string.max_len = 1024];
+  optional string phone = 2 [(buf.validate.field).string.max_len = 64];
+  optional string category = 3 [(buf.validate.field).string.max_len = 128];
+  optional string name = 4 [(buf.validate.field).string.max_len = 128];
+  optional string corporation = 5 [(buf.validate.field).string.max_len = 128];
+  optional string address = 6 [(buf.validate.field).string.max_len = 128];
+  optional string memo = 7 [(buf.validate.field).string.max_len = 1024];
 }
 
 message UpdateCustomerResponse {

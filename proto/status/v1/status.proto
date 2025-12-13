@@ -7,22 +7,22 @@ import "buf/validate/validate.proto";
 option go_package = "github.com/0utl1er-tech/phox-customer/gen/pb/status/v1;statusv1";
 
 service StatusService {
-  rpc GetStatus(GetStatusRequest) returns (GetStatusResponse);
+  rpc ListStatuses(ListStatusesRequest) returns (ListStatusesResponse);
   rpc CreateStatus(CreateStatusRequest) returns (CreateStatusResponse);
   rpc UpdateStatus(UpdateStatusRequest) returns (UpdateStatusResponse);
   rpc DeleteStatus(DeleteStatusRequest) returns (DeleteStatusResponse);
 }
 
-message GetStatusRequest {
-  string company_id = 1 [(buf.validate.field).string.uuid = true];
+message ListStatusesRequest {
+  string book_id = 1 [(buf.validate.field).string.uuid = true];
 }
 
-message GetStatusResponse {
+message ListStatusesResponse {
   repeated Status statuses = 1;
 }
 
 message CreateStatusRequest {
-  string company_id = 1 [(buf.validate.field).string.uuid = true];
+  string book_id = 1 [(buf.validate.field).string.uuid = true];
   string name = 2 [(buf.validate.field).string.min_len = 1];
   bool effective = 3;
   bool ng = 4;
@@ -34,9 +34,10 @@ message CreateStatusResponse {
 
 message UpdateStatusRequest {
   string id = 1 [(buf.validate.field).string.uuid = true];
-  optional string name = 2 [(buf.validate.field).string.min_len = 1];
-  optional bool effective = 3;
-  optional bool ng = 4;
+  optional string name = 2;
+  optional int32 priority = 3;
+  optional bool effective = 4;
+  optional bool ng = 5;
 }
 
 message UpdateStatusResponse {
@@ -53,7 +54,9 @@ message DeleteStatusResponse {
 
 message Status {
   string id = 1;
-  string name = 2;
-  bool effective = 3;
-  bool ng = 4;
+  string book_id = 2;
+  int32 priority = 3;
+  string name = 4;
+  bool effective = 5;
+  bool ng = 6;
 }

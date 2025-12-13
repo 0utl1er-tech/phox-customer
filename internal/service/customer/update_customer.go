@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	"connectrpc.com/connect"
 	customerv1 "github.com/0utl1er-tech/phox-customer/gen/pb/customer/v1"
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
-	"connectrpc.com/connect"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -40,6 +40,7 @@ func (s *CustomerService) UpdateCustomer(
 
 	result, err := s.queries.UpdateCustomer(ctx, db.UpdateCustomerParams{
 		ID:          customer.ID,
+		Phone:       pgtype.Text{String: *req.Msg.Phone, Valid: req.Msg.Phone != nil},
 		Category:    pgtype.Text{String: *req.Msg.Category, Valid: req.Msg.Category != nil},
 		Name:        pgtype.Text{String: *req.Msg.Name, Valid: req.Msg.Name != nil},
 		Corporation: pgtype.Text{String: *req.Msg.Corporation, Valid: req.Msg.Corporation != nil},
@@ -54,6 +55,7 @@ func (s *CustomerService) UpdateCustomer(
 		UpdatedCustomer: &customerv1.Customer{
 			Id:          result.ID.String(),
 			BookId:      result.BookID.String(),
+			Phone:       result.Phone,
 			Category:    result.Category,
 			Name:        result.Name,
 			Corporation: result.Corporation,

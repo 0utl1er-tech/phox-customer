@@ -1,5 +1,5 @@
 -- name: CreateCall :one
-INSERT INTO "Call" (id, customer_id, contact_id, user_id, status_id)
+INSERT INTO "Call" (id, customer_id, phone, user_id, status_id)
 VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
 
@@ -7,29 +7,45 @@ RETURNING *;
 SELECT * FROM "Call" 
 WHERE id = $1;
 
--- name: ListCalls :many
-SELECT "Call".id, 
+-- name: ListCallsByCustomerID :many
+SELECT 
+  "Call".id,
   "Call".customer_id,
-  "Call".contact_id, 
-  "Call".user_id, 
+  "Call".phone,
+  "Call".user_id,
   "Call".status_id,
-  contact.id as contact_id,
-  contact.customer_id as contact_customer_id,
-  contact.phone as contact_phone,
-  contact.mail as contact_mail,
-  contact.fax as contact_fax,
-  "User".id as user_id, 
+  "Call".created_at,
+  "Call".updated_at,
   "User".name as user_name,
-  "Status".id as status_id,
-  "Status".priority as status_priority,
   "Status".name as status_name,
+  "Status".priority as status_priority,
   "Status".effective as status_effective,
   "Status".ng as status_ng
 FROM "Call" 
-JOIN "Contact" AS contact ON "Call".contact_id = contact.id
 JOIN "User" ON "Call".user_id = "User".id
 JOIN "Status" ON "Call".status_id = "Status".id
-WHERE "Call".customer_id = $1;
+WHERE "Call".customer_id = $1
+ORDER BY "Call".created_at DESC;
+
+-- name: ListCallsByBookID :many
+SELECT 
+  "Call".id,
+  "Call".customer_id,
+  "Call".phone,
+  "Call".user_id,
+  "Call".status_id,
+  "Call".created_at,
+  "Call".updated_at,
+  "User".name as user_name,
+  "Status".name as status_name,
+  "Customer".name as customer_name,
+  "Customer".corporation as customer_corporation
+FROM "Call" 
+JOIN "User" ON "Call".user_id = "User".id
+JOIN "Status" ON "Call".status_id = "Status".id
+JOIN "Customer" ON "Call".customer_id = "Customer".id
+WHERE "Customer".book_id = $1
+ORDER BY "Call".created_at DESC;
 
 -- name: UpdateCall :one
 UPDATE "Call" 

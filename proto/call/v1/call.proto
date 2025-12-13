@@ -3,37 +3,43 @@ syntax = "proto3";
 package call.v1;
 
 import "buf/validate/validate.proto";
-import "contact/v1/contact.proto";
-import "status/v1/status.proto";
-import "user/v1/user.proto";
+import "google/protobuf/timestamp.proto";
 
 option go_package = "github.com/0utl1er-tech/phox-customer/gen/pb/call/v1;callv1";
 
 service CallService {
+  rpc ListCallsByCustomerID(ListCallsByCustomerIDRequest) returns (ListCallsByCustomerIDResponse);
   rpc CreateCall(CreateCallRequest) returns (CreateCallResponse);
 }
 
+message ListCallsByCustomerIDRequest {
+  string customer_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message ListCallsByCustomerIDResponse {
+  repeated Call calls = 1;
+}
+
 message CreateCallRequest {
-  string contact_id = 1 [(buf.validate.field).string.uuid = true];
-  string user_id = 2 [(buf.validate.field).string.min_len = 1];
+  string customer_id = 1 [(buf.validate.field).string.uuid = true];
+  string phone = 2;
   string status_id = 3 [(buf.validate.field).string.uuid = true];
 }
 
 message CreateCallResponse {
-  string id = 1;
-}
-
-message GetCallRequest {
-  string contact_id = 1 [(buf.validate.field).string.uuid = true];
-}
-
-message GetCallResponse {
-  string id = 1;
+  Call call = 1;
 }
 
 message Call {
   string id = 1;
-  contact.v1.Contact contact = 2;
-  user.v1.User user = 3;
-  status.v1.Status status = 4;
+  string customer_id = 2;
+  string phone = 3;
+  string user_id = 4;
+  string user_name = 5;
+  string status_id = 6;
+  string status_name = 7;
+  int32 status_priority = 8;
+  bool status_effective = 9;
+  bool status_ng = 10;
+  google.protobuf.Timestamp created_at = 11;
 }
