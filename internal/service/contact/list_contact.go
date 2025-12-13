@@ -6,6 +6,7 @@ import (
 
 	"connectrpc.com/connect"
 	contactv1 "github.com/0utl1er-tech/phox-customer/gen/pb/contact/v1"
+	"github.com/0utl1er-tech/phox-customer/internal/service/auth"
 	"github.com/google/uuid"
 )
 
@@ -13,9 +14,9 @@ func (s *ContactService) ListContact(
 	ctx context.Context,
 	req *connect.Request[contactv1.ListContactRequest],
 ) (*connect.Response[contactv1.ListContactResponse], error) {
-	userID := req.Header().Get("X-User-ID")
-	if userID == "" {
-		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("X-User-IDがヘッダーに見つかりません"))
+	_, err := auth.AuthorizeUser(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	customerID, err := uuid.Parse(req.Msg.CustomerId)

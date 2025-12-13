@@ -7,6 +7,7 @@ import (
 	"connectrpc.com/connect"
 	customerv1 "github.com/0utl1er-tech/phox-customer/gen/pb/customer/v1"
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
+	"github.com/0utl1er-tech/phox-customer/internal/service/auth"
 	"github.com/google/uuid"
 )
 
@@ -14,12 +15,13 @@ func (s *CustomerService) ListCustomer(
 	ctx context.Context,
 	req *connect.Request[customerv1.ListCustomerRequest],
 ) (*connect.Response[customerv1.ListCustomerResponse], error) {
-	userID := req.Header().Get("X-User-ID")
-	if userID == "" {
-		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("X-User-IDがヘッダーに見つかりません"))
+	token, err := auth.AuthorizeUser(ctx)
+	if err != nil {
+		return nil, err
 	}
+	userID := token.Subject()
 
-	_, err := s.queries.GetBookByIDAndUserID(ctx, db.GetBookByIDAndUserIDParams{
+	_, err = s.queries.GetBookByIDAndUserID(ctx, db.GetBookByIDAndUserIDParams{
 		ID:     uuid.MustParse(req.Msg.BookId),
 		UserID: userID,
 	})

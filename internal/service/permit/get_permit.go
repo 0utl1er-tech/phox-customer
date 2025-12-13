@@ -4,24 +4,25 @@ import (
 	"context"
 	"fmt"
 
+	"connectrpc.com/connect"
 	permitv1 "github.com/0utl1er-tech/phox-customer/gen/pb/permit/v1"
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
+	"github.com/0utl1er-tech/phox-customer/internal/service/auth"
 	"github.com/0utl1er-tech/phox-customer/internal/util"
-	"connectrpc.com/connect"
 	"github.com/google/uuid"
 )
 
 func (server *PermitService) GetPermit(ctx context.Context, req *connect.Request[permitv1.GetPermitRequest]) (*connect.Response[permitv1.GetPermitResponse], error) {
-	// Connect-GoのヘッダーからX-User-IDを取得
-	userID := req.Header().Get("X-User-ID")
-	if userID == "" {
-		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("x-user-idがヘッダーに見つかりません"))
+	token, err := auth.AuthorizeUser(ctx)
+	if err != nil {
+		return nil, err
 	}
+	userID := token.Subject()
 
 	bookID := uuid.MustParse(req.Msg.BookId)
 
 	// ユーザーがbookに権限を持っているかチェック
-	_, err := server.queries.GetBookByIDAndUserID(ctx, db.GetBookByIDAndUserIDParams{
+	_, err = server.queries.GetBookByIDAndUserID(ctx, db.GetBookByIDAndUserIDParams{
 		ID:     bookID,
 		UserID: userID,
 	})

@@ -4,19 +4,20 @@ import (
 	"context"
 	"fmt"
 
+	"connectrpc.com/connect"
 	permitv1 "github.com/0utl1er-tech/phox-customer/gen/pb/permit/v1"
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
+	"github.com/0utl1er-tech/phox-customer/internal/service/auth"
 	util "github.com/0utl1er-tech/phox-customer/internal/util"
-	"connectrpc.com/connect"
 	"github.com/google/uuid"
 )
 
 func (server *PermitService) CreatePermit(ctx context.Context, req *connect.Request[permitv1.CreatePermitRequest]) (*connect.Response[permitv1.CreatePermitResponse], error) {
-	// Connect-GoのヘッダーからX-User-IDを取得
-	userID := req.Header().Get("X-User-ID")
-	if userID == "" {
-		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("x-user-idがヘッダーに見つかりません"))
+	token, err := auth.AuthorizeUser(ctx)
+	if err != nil {
+		return nil, err
 	}
+	userID := token.Subject()
 
 	permitId := uuid.New()
 

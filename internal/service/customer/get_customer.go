@@ -8,6 +8,7 @@ import (
 	callv1 "github.com/0utl1er-tech/phox-customer/gen/pb/call/v1"
 	customerv1 "github.com/0utl1er-tech/phox-customer/gen/pb/customer/v1"
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
+	"github.com/0utl1er-tech/phox-customer/internal/service/auth"
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -16,10 +17,12 @@ func (s *CustomerService) GetCustomer(
 	ctx context.Context,
 	req *connect.Request[customerv1.GetCustomerRequest],
 ) (*connect.Response[customerv1.GetCustomerResponse], error) {
-	userID := req.Header().Get("X-User-ID")
-	if userID == "" {
-		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("X-User-IDがヘッダーに見つかりません"))
+	token, err := auth.AuthorizeUser(ctx)
+	if err != nil {
+		return nil, err
 	}
+	userID := token.Subject()
+
 	customer, err := s.queries.GetCustomer(ctx, uuid.MustParse(req.Msg.Id))
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("customerの取得に失敗しました: %w", err))

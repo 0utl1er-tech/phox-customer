@@ -7,6 +7,7 @@ import (
 	"connectrpc.com/connect"
 	customerv1 "github.com/0utl1er-tech/phox-customer/gen/pb/customer/v1"
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
+	"github.com/0utl1er-tech/phox-customer/internal/service/auth"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -16,10 +17,11 @@ func (s *CustomerService) UpdateCustomer(
 	ctx context.Context,
 	req *connect.Request[customerv1.UpdateCustomerRequest],
 ) (*connect.Response[customerv1.UpdateCustomerResponse], error) {
-	userID := req.Header().Get("X-User-ID")
-	if userID == "" {
-		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("X-User-IDがヘッダーに見つかりません"))
+	token, err := auth.AuthorizeUser(ctx)
+	if err != nil {
+		return nil, err
 	}
+	userID := token.Subject()
 
 	customer, err := s.queries.GetCustomer(ctx, uuid.MustParse(req.Msg.Id))
 	if err != nil {
