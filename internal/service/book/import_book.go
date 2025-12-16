@@ -138,24 +138,13 @@ func (s *BookService) ImportBook(ctx context.Context, req *connect.Request[bookv
 	}
 
 	// Insert customers one by one
-	if len(customersToInsert) > 0 {
-		for i, customer := range customersToInsert {
-			_, err := s.queries.CreateCustomer(ctx, db.CreateCustomerParams{
-				ID:          customer.ID,
-				BookID:      customer.BookID,
-				Phone:       customer.Phone,
-				Category:    customer.Category,
-				Name:        customer.Name,
-				Corporation: customer.Corporation,
-				Address:     customer.Address,
-				Memo:        customer.Memo,
+	for i, customer := range customersToInsert {
+		_, err := s.queries.CreateCustomer(ctx, customer)
+		if err != nil {
+			importErrors = append(importErrors, &bookv1.ImportError{
+				LineNumber:   int32(i + 2),
+				ErrorMessage: fmt.Sprintf("failed to insert customer (index %d): %v", i, err),
 			})
-			if err != nil {
-				importErrors = append(importErrors, &bookv1.ImportError{
-					LineNumber:   int32(i + 2),
-					ErrorMessage: fmt.Sprintf("failed to insert customer (index %d): %v", i, err),
-				})
-			}
 		}
 	}
 
