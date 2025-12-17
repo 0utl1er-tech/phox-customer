@@ -31,6 +31,17 @@ service UserService {
       get: "/v1/users/me"
     };
   }
+  rpc AddCompanyUser(AddCompanyUserRequest) returns (AddCompanyUserResponse) {
+    option (google.api.http) = {
+      post: "/v1/company/users"
+      body: "*"
+    };
+  }
+  rpc ListCompanyUsers(ListCompanyUsersRequest) returns (ListCompanyUsersResponse) {
+    option (google.api.http) = {
+      get: "/v1/company/users"
+    };
+  }
 }
 
 message User {
@@ -69,4 +80,19 @@ message GetMeRequest {}
 
 message GetMeResponse {
   User user = 1;
+}
+
+message AddCompanyUserRequest {
+  string user_id = 1 [(buf.validate.field).string.min_len = 1];
+  string name = 2 [(buf.validate.field).string.max_len = 128];
+}
+
+message AddCompanyUserResponse {
+  User user = 1;
+}
+
+message ListCompanyUsersRequest {}
+
+message ListCompanyUsersResponse {
+  repeated User users = 1;
 }

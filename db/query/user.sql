@@ -23,3 +23,7 @@ RETURNING *;
 DELETE FROM "User"
 WHERE id = $1
 RETURNING *;
+
+-- name: ListUsersByCompany :many
+SELECT * FROM "User"
+WHERE company_id = $1;
