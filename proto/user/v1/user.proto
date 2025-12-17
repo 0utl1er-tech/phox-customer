@@ -4,8 +4,34 @@ package user.v1;
 
 import "buf/validate/validate.proto";
 import "company/v1/company.proto";
+import "google/api/annotations.proto";
 
 option go_package = "github.com/0utl1er-tech/phox-customer/gen/pb/user/v1;userv1";
+
+service UserService {
+  rpc CreateUser(CreateUserRequest) returns (CreateUserResponse) {
+    option (google.api.http) = {
+      post: "/v1/users"
+      body: "*"
+    };
+  }
+  rpc UpdateUser(UpdateUserRequest) returns (UpdateUserResponse) {
+    option (google.api.http) = {
+      put: "/v1/users/me"
+      body: "*"
+    };
+  }
+  rpc GetUser(GetUserRequest) returns (GetUserResponse) {
+    option (google.api.http) = {
+      get: "/v1/users/{id}"
+    };
+  }
+  rpc GetMe(GetMeRequest) returns (GetMeResponse) {
+    option (google.api.http) = {
+      get: "/v1/users/me"
+    };
+  }
+}
 
 message User {
   string id = 1;
@@ -13,10 +39,34 @@ message User {
   company.v1.Company company = 3;
 }
 
+message CreateUserRequest {
+  string name = 1 [(buf.validate.field).string.max_len = 128];
+  string company_id = 2 [(buf.validate.field).string.uuid = true];
+}
+
+message CreateUserResponse {
+  User user = 1;
+}
+
+message UpdateUserRequest {
+  optional string name = 1 [(buf.validate.field).string.max_len = 128];
+  optional string company_id = 2;
+}
+
+message UpdateUserResponse {
+  User user = 1;
+}
+
 message GetUserRequest {
-  string id = 1 [(buf.validate.field).string.uuid = true];
+  string id = 1;
 }
 
 message GetUserResponse {
+  User user = 1;
+}
+
+message GetMeRequest {}
+
+message GetMeResponse {
   User user = 1;
 }
