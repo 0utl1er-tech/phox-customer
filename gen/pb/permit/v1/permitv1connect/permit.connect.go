@@ -44,6 +44,12 @@ const (
 	// PermitServiceDeletePermitProcedure is the fully-qualified name of the PermitService's
 	// DeletePermit RPC.
 	PermitServiceDeletePermitProcedure = "/permit.v1.PermitService/DeletePermit"
+	// PermitServiceAddBookUserProcedure is the fully-qualified name of the PermitService's AddBookUser
+	// RPC.
+	PermitServiceAddBookUserProcedure = "/permit.v1.PermitService/AddBookUser"
+	// PermitServiceListBookUsersProcedure is the fully-qualified name of the PermitService's
+	// ListBookUsers RPC.
+	PermitServiceListBookUsersProcedure = "/permit.v1.PermitService/ListBookUsers"
 )
 
 // PermitServiceClient is a client for the permit.v1.PermitService service.
@@ -52,6 +58,8 @@ type PermitServiceClient interface {
 	CreatePermit(context.Context, *connect.Request[v1.CreatePermitRequest]) (*connect.Response[v1.CreatePermitResponse], error)
 	UpdatePermit(context.Context, *connect.Request[v1.UpdatePermitRequest]) (*connect.Response[v1.UpdatePermitResponse], error)
 	DeletePermit(context.Context, *connect.Request[v1.DeletePermitRequest]) (*connect.Response[v1.DeletePermitResponse], error)
+	AddBookUser(context.Context, *connect.Request[v1.AddBookUserRequest]) (*connect.Response[v1.AddBookUserResponse], error)
+	ListBookUsers(context.Context, *connect.Request[v1.ListBookUsersRequest]) (*connect.Response[v1.ListBookUsersResponse], error)
 }
 
 // NewPermitServiceClient constructs a client for the permit.v1.PermitService service. By default,
@@ -89,15 +97,29 @@ func NewPermitServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(permitServiceMethods.ByName("DeletePermit")),
 			connect.WithClientOptions(opts...),
 		),
+		addBookUser: connect.NewClient[v1.AddBookUserRequest, v1.AddBookUserResponse](
+			httpClient,
+			baseURL+PermitServiceAddBookUserProcedure,
+			connect.WithSchema(permitServiceMethods.ByName("AddBookUser")),
+			connect.WithClientOptions(opts...),
+		),
+		listBookUsers: connect.NewClient[v1.ListBookUsersRequest, v1.ListBookUsersResponse](
+			httpClient,
+			baseURL+PermitServiceListBookUsersProcedure,
+			connect.WithSchema(permitServiceMethods.ByName("ListBookUsers")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // permitServiceClient implements PermitServiceClient.
 type permitServiceClient struct {
-	getPermit    *connect.Client[v1.GetPermitRequest, v1.GetPermitResponse]
-	createPermit *connect.Client[v1.CreatePermitRequest, v1.CreatePermitResponse]
-	updatePermit *connect.Client[v1.UpdatePermitRequest, v1.UpdatePermitResponse]
-	deletePermit *connect.Client[v1.DeletePermitRequest, v1.DeletePermitResponse]
+	getPermit     *connect.Client[v1.GetPermitRequest, v1.GetPermitResponse]
+	createPermit  *connect.Client[v1.CreatePermitRequest, v1.CreatePermitResponse]
+	updatePermit  *connect.Client[v1.UpdatePermitRequest, v1.UpdatePermitResponse]
+	deletePermit  *connect.Client[v1.DeletePermitRequest, v1.DeletePermitResponse]
+	addBookUser   *connect.Client[v1.AddBookUserRequest, v1.AddBookUserResponse]
+	listBookUsers *connect.Client[v1.ListBookUsersRequest, v1.ListBookUsersResponse]
 }
 
 // GetPermit calls permit.v1.PermitService.GetPermit.
@@ -120,12 +142,24 @@ func (c *permitServiceClient) DeletePermit(ctx context.Context, req *connect.Req
 	return c.deletePermit.CallUnary(ctx, req)
 }
 
+// AddBookUser calls permit.v1.PermitService.AddBookUser.
+func (c *permitServiceClient) AddBookUser(ctx context.Context, req *connect.Request[v1.AddBookUserRequest]) (*connect.Response[v1.AddBookUserResponse], error) {
+	return c.addBookUser.CallUnary(ctx, req)
+}
+
+// ListBookUsers calls permit.v1.PermitService.ListBookUsers.
+func (c *permitServiceClient) ListBookUsers(ctx context.Context, req *connect.Request[v1.ListBookUsersRequest]) (*connect.Response[v1.ListBookUsersResponse], error) {
+	return c.listBookUsers.CallUnary(ctx, req)
+}
+
 // PermitServiceHandler is an implementation of the permit.v1.PermitService service.
 type PermitServiceHandler interface {
 	GetPermit(context.Context, *connect.Request[v1.GetPermitRequest]) (*connect.Response[v1.GetPermitResponse], error)
 	CreatePermit(context.Context, *connect.Request[v1.CreatePermitRequest]) (*connect.Response[v1.CreatePermitResponse], error)
 	UpdatePermit(context.Context, *connect.Request[v1.UpdatePermitRequest]) (*connect.Response[v1.UpdatePermitResponse], error)
 	DeletePermit(context.Context, *connect.Request[v1.DeletePermitRequest]) (*connect.Response[v1.DeletePermitResponse], error)
+	AddBookUser(context.Context, *connect.Request[v1.AddBookUserRequest]) (*connect.Response[v1.AddBookUserResponse], error)
+	ListBookUsers(context.Context, *connect.Request[v1.ListBookUsersRequest]) (*connect.Response[v1.ListBookUsersResponse], error)
 }
 
 // NewPermitServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -159,6 +193,18 @@ func NewPermitServiceHandler(svc PermitServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(permitServiceMethods.ByName("DeletePermit")),
 		connect.WithHandlerOptions(opts...),
 	)
+	permitServiceAddBookUserHandler := connect.NewUnaryHandler(
+		PermitServiceAddBookUserProcedure,
+		svc.AddBookUser,
+		connect.WithSchema(permitServiceMethods.ByName("AddBookUser")),
+		connect.WithHandlerOptions(opts...),
+	)
+	permitServiceListBookUsersHandler := connect.NewUnaryHandler(
+		PermitServiceListBookUsersProcedure,
+		svc.ListBookUsers,
+		connect.WithSchema(permitServiceMethods.ByName("ListBookUsers")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/permit.v1.PermitService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case PermitServiceGetPermitProcedure:
@@ -169,6 +215,10 @@ func NewPermitServiceHandler(svc PermitServiceHandler, opts ...connect.HandlerOp
 			permitServiceUpdatePermitHandler.ServeHTTP(w, r)
 		case PermitServiceDeletePermitProcedure:
 			permitServiceDeletePermitHandler.ServeHTTP(w, r)
+		case PermitServiceAddBookUserProcedure:
+			permitServiceAddBookUserHandler.ServeHTTP(w, r)
+		case PermitServiceListBookUsersProcedure:
+			permitServiceListBookUsersHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -192,4 +242,12 @@ func (UnimplementedPermitServiceHandler) UpdatePermit(context.Context, *connect.
 
 func (UnimplementedPermitServiceHandler) DeletePermit(context.Context, *connect.Request[v1.DeletePermitRequest]) (*connect.Response[v1.DeletePermitResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("permit.v1.PermitService.DeletePermit is not implemented"))
+}
+
+func (UnimplementedPermitServiceHandler) AddBookUser(context.Context, *connect.Request[v1.AddBookUserRequest]) (*connect.Response[v1.AddBookUserResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("permit.v1.PermitService.AddBookUser is not implemented"))
+}
+
+func (UnimplementedPermitServiceHandler) ListBookUsers(context.Context, *connect.Request[v1.ListBookUsersRequest]) (*connect.Response[v1.ListBookUsersResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("permit.v1.PermitService.ListBookUsers is not implemented"))
 }

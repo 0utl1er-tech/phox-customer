@@ -201,6 +201,48 @@ func (q *Queries) ListPermits(ctx context.Context, bookID uuid.UUID) ([]Permit, 
 	return items, nil
 }
 
+const listPermitsWithUserInfo = `-- name: ListPermitsWithUserInfo :many
+SELECT p.id, p.book_id, p.user_id, p.role, u.name as user_name
+FROM "Permit" p
+JOIN "User" u ON p.user_id = u.id
+WHERE p.book_id = $1
+ORDER BY p.created_at DESC
+`
+
+type ListPermitsWithUserInfoRow struct {
+	ID       uuid.UUID `json:"id"`
+	BookID   uuid.UUID `json:"book_id"`
+	UserID   string    `json:"user_id"`
+	Role     Role      `json:"role"`
+	UserName string    `json:"user_name"`
+}
+
+func (q *Queries) ListPermitsWithUserInfo(ctx context.Context, bookID uuid.UUID) ([]ListPermitsWithUserInfoRow, error) {
+	rows, err := q.db.Query(ctx, listPermitsWithUserInfo, bookID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPermitsWithUserInfoRow{}
+	for rows.Next() {
+		var i ListPermitsWithUserInfoRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.BookID,
+			&i.UserID,
+			&i.Role,
+			&i.UserName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updatePermit = `-- name: UpdatePermit :one
 UPDATE "Permit" 
 SET 
