@@ -1,0 +1,53 @@
+# Git
+.git
+.gitignore
+
+# Documentation
+*.md
+docs/
+EFFICIENCY_REPORT.md
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Test files
+*_test.go
+test_*.csv
+**/*_test.go
+
+# Build artifacts
+tmp/
+bin/
+
+# Local configuration (use environment variables in production)
+# app.env is copied separately in Dockerfile
+
+# Proto source files (generated code is already in gen/)
+proto/
+
+# Database migration source (not needed at runtime)
+# db/migration/ - keep if you want to run migrations from container
+
+# Buf configuration
+buf.yaml
+buf.gen.yaml
+buf.lock
+
+# SQLC configuration
+sqlc.yaml
+
+# Makefile (not needed at runtime)
+Makefile
+
+# Log files
+*.log
+dbml-error.log
+
+# Docker files (avoid recursive copy)
+Dockerfile
+docker-compose*.yml
+.dockerignore
