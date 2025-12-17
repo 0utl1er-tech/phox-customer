@@ -44,6 +44,9 @@ const (
 	// UserServiceAddCompanyUserProcedure is the fully-qualified name of the UserService's
 	// AddCompanyUser RPC.
 	UserServiceAddCompanyUserProcedure = "/user.v1.UserService/AddCompanyUser"
+	// UserServiceCreateCompanyUserProcedure is the fully-qualified name of the UserService's
+	// CreateCompanyUser RPC.
+	UserServiceCreateCompanyUserProcedure = "/user.v1.UserService/CreateCompanyUser"
 	// UserServiceListCompanyUsersProcedure is the fully-qualified name of the UserService's
 	// ListCompanyUsers RPC.
 	UserServiceListCompanyUsersProcedure = "/user.v1.UserService/ListCompanyUsers"
@@ -56,6 +59,7 @@ type UserServiceClient interface {
 	GetUser(context.Context, *connect.Request[v1.GetUserRequest]) (*connect.Response[v1.GetUserResponse], error)
 	GetMe(context.Context, *connect.Request[v1.GetMeRequest]) (*connect.Response[v1.GetMeResponse], error)
 	AddCompanyUser(context.Context, *connect.Request[v1.AddCompanyUserRequest]) (*connect.Response[v1.AddCompanyUserResponse], error)
+	CreateCompanyUser(context.Context, *connect.Request[v1.CreateCompanyUserRequest]) (*connect.Response[v1.CreateCompanyUserResponse], error)
 	ListCompanyUsers(context.Context, *connect.Request[v1.ListCompanyUsersRequest]) (*connect.Response[v1.ListCompanyUsersResponse], error)
 }
 
@@ -100,6 +104,12 @@ func NewUserServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(userServiceMethods.ByName("AddCompanyUser")),
 			connect.WithClientOptions(opts...),
 		),
+		createCompanyUser: connect.NewClient[v1.CreateCompanyUserRequest, v1.CreateCompanyUserResponse](
+			httpClient,
+			baseURL+UserServiceCreateCompanyUserProcedure,
+			connect.WithSchema(userServiceMethods.ByName("CreateCompanyUser")),
+			connect.WithClientOptions(opts...),
+		),
 		listCompanyUsers: connect.NewClient[v1.ListCompanyUsersRequest, v1.ListCompanyUsersResponse](
 			httpClient,
 			baseURL+UserServiceListCompanyUsersProcedure,
@@ -111,12 +121,13 @@ func NewUserServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 
 // userServiceClient implements UserServiceClient.
 type userServiceClient struct {
-	createUser       *connect.Client[v1.CreateUserRequest, v1.CreateUserResponse]
-	updateUser       *connect.Client[v1.UpdateUserRequest, v1.UpdateUserResponse]
-	getUser          *connect.Client[v1.GetUserRequest, v1.GetUserResponse]
-	getMe            *connect.Client[v1.GetMeRequest, v1.GetMeResponse]
-	addCompanyUser   *connect.Client[v1.AddCompanyUserRequest, v1.AddCompanyUserResponse]
-	listCompanyUsers *connect.Client[v1.ListCompanyUsersRequest, v1.ListCompanyUsersResponse]
+	createUser        *connect.Client[v1.CreateUserRequest, v1.CreateUserResponse]
+	updateUser        *connect.Client[v1.UpdateUserRequest, v1.UpdateUserResponse]
+	getUser           *connect.Client[v1.GetUserRequest, v1.GetUserResponse]
+	getMe             *connect.Client[v1.GetMeRequest, v1.GetMeResponse]
+	addCompanyUser    *connect.Client[v1.AddCompanyUserRequest, v1.AddCompanyUserResponse]
+	createCompanyUser *connect.Client[v1.CreateCompanyUserRequest, v1.CreateCompanyUserResponse]
+	listCompanyUsers  *connect.Client[v1.ListCompanyUsersRequest, v1.ListCompanyUsersResponse]
 }
 
 // CreateUser calls user.v1.UserService.CreateUser.
@@ -144,6 +155,11 @@ func (c *userServiceClient) AddCompanyUser(ctx context.Context, req *connect.Req
 	return c.addCompanyUser.CallUnary(ctx, req)
 }
 
+// CreateCompanyUser calls user.v1.UserService.CreateCompanyUser.
+func (c *userServiceClient) CreateCompanyUser(ctx context.Context, req *connect.Request[v1.CreateCompanyUserRequest]) (*connect.Response[v1.CreateCompanyUserResponse], error) {
+	return c.createCompanyUser.CallUnary(ctx, req)
+}
+
 // ListCompanyUsers calls user.v1.UserService.ListCompanyUsers.
 func (c *userServiceClient) ListCompanyUsers(ctx context.Context, req *connect.Request[v1.ListCompanyUsersRequest]) (*connect.Response[v1.ListCompanyUsersResponse], error) {
 	return c.listCompanyUsers.CallUnary(ctx, req)
@@ -156,6 +172,7 @@ type UserServiceHandler interface {
 	GetUser(context.Context, *connect.Request[v1.GetUserRequest]) (*connect.Response[v1.GetUserResponse], error)
 	GetMe(context.Context, *connect.Request[v1.GetMeRequest]) (*connect.Response[v1.GetMeResponse], error)
 	AddCompanyUser(context.Context, *connect.Request[v1.AddCompanyUserRequest]) (*connect.Response[v1.AddCompanyUserResponse], error)
+	CreateCompanyUser(context.Context, *connect.Request[v1.CreateCompanyUserRequest]) (*connect.Response[v1.CreateCompanyUserResponse], error)
 	ListCompanyUsers(context.Context, *connect.Request[v1.ListCompanyUsersRequest]) (*connect.Response[v1.ListCompanyUsersResponse], error)
 }
 
@@ -196,6 +213,12 @@ func NewUserServiceHandler(svc UserServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(userServiceMethods.ByName("AddCompanyUser")),
 		connect.WithHandlerOptions(opts...),
 	)
+	userServiceCreateCompanyUserHandler := connect.NewUnaryHandler(
+		UserServiceCreateCompanyUserProcedure,
+		svc.CreateCompanyUser,
+		connect.WithSchema(userServiceMethods.ByName("CreateCompanyUser")),
+		connect.WithHandlerOptions(opts...),
+	)
 	userServiceListCompanyUsersHandler := connect.NewUnaryHandler(
 		UserServiceListCompanyUsersProcedure,
 		svc.ListCompanyUsers,
@@ -214,6 +237,8 @@ func NewUserServiceHandler(svc UserServiceHandler, opts ...connect.HandlerOption
 			userServiceGetMeHandler.ServeHTTP(w, r)
 		case UserServiceAddCompanyUserProcedure:
 			userServiceAddCompanyUserHandler.ServeHTTP(w, r)
+		case UserServiceCreateCompanyUserProcedure:
+			userServiceCreateCompanyUserHandler.ServeHTTP(w, r)
 		case UserServiceListCompanyUsersProcedure:
 			userServiceListCompanyUsersHandler.ServeHTTP(w, r)
 		default:
@@ -243,6 +268,10 @@ func (UnimplementedUserServiceHandler) GetMe(context.Context, *connect.Request[v
 
 func (UnimplementedUserServiceHandler) AddCompanyUser(context.Context, *connect.Request[v1.AddCompanyUserRequest]) (*connect.Response[v1.AddCompanyUserResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("user.v1.UserService.AddCompanyUser is not implemented"))
+}
+
+func (UnimplementedUserServiceHandler) CreateCompanyUser(context.Context, *connect.Request[v1.CreateCompanyUserRequest]) (*connect.Response[v1.CreateCompanyUserResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("user.v1.UserService.CreateCompanyUser is not implemented"))
 }
 
 func (UnimplementedUserServiceHandler) ListCompanyUsers(context.Context, *connect.Request[v1.ListCompanyUsersRequest]) (*connect.Response[v1.ListCompanyUsersResponse], error) {

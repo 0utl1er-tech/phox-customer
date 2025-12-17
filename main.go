@@ -13,6 +13,7 @@ import (
 	statusv1connect "github.com/0utl1er-tech/phox-customer/gen/pb/status/v1/statusv1connect"
 	userv1connect "github.com/0utl1er-tech/phox-customer/gen/pb/user/v1/userv1connect"
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
+	"github.com/0utl1er-tech/phox-customer/internal/firebaseadmin"
 	"github.com/0utl1er-tech/phox-customer/internal/service/auth"
 	"github.com/0utl1er-tech/phox-customer/internal/service/book"
 	"github.com/0utl1er-tech/phox-customer/internal/service/call"
@@ -66,6 +67,20 @@ func main() {
 
 	queries := db.New(connPool)
 
+	// Initialize Firebase Admin client (optional - if credentials file is configured)
+	var firebaseClient *firebaseadmin.Client
+	if cfg.FirebaseAdminCredentials != "" {
+		var err error
+		firebaseClient, err = firebaseadmin.NewClient(context.Background(), cfg.FirebaseAdminCredentials)
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to initialize Firebase Admin client - CreateCompanyUser will not work")
+		} else {
+			log.Info().Msg("Firebase Admin client initialized successfully")
+		}
+	} else {
+		log.Warn().Msg("Firebase Admin credentials not configured - CreateCompanyUser will not work")
+	}
+
 	// Create interceptor
 	authInterceptor := auth.NewAuthInterceptor(context.Background(), queries, cfg)
 	interceptors := connect.WithInterceptors(authInterceptor)
@@ -77,7 +92,7 @@ func main() {
 	contactService := contact.NewContactService(queries)
 	statusService := status.NewStatusService(queries)
 	callService := call.NewCallService(queries)
-	userService := user.NewUserService(queries)
+	userService := user.NewUserService(queries, firebaseClient, connPool)
 
 	// HTTPサーバーの設定
 	mux := http.NewServeMux()

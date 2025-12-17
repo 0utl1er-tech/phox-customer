@@ -33,6 +33,12 @@ service UserService {
   }
   rpc AddCompanyUser(AddCompanyUserRequest) returns (AddCompanyUserResponse) {
     option (google.api.http) = {
+      post: "/v1/company/users/by-uid"
+      body: "*"
+    };
+  }
+  rpc CreateCompanyUser(CreateCompanyUserRequest) returns (CreateCompanyUserResponse) {
+    option (google.api.http) = {
       post: "/v1/company/users"
       body: "*"
     };
@@ -95,4 +101,14 @@ message ListCompanyUsersRequest {}
 
 message ListCompanyUsersResponse {
   repeated User users = 1;
+}
+
+message CreateCompanyUserRequest {
+  string email = 1 [(buf.validate.field).string.email = true];
+  string password = 2 [(buf.validate.field).string.min_len = 6];
+  string name = 3 [(buf.validate.field).string.max_len = 128];
+}
+
+message CreateCompanyUserResponse {
+  User user = 1;
 }
