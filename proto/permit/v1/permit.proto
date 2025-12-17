@@ -11,6 +11,8 @@ service PermitService {
   rpc CreatePermit(CreatePermitRequest) returns (CreatePermitResponse);
   rpc UpdatePermit(UpdatePermitRequest) returns (UpdatePermitResponse);
   rpc DeletePermit(DeletePermitRequest) returns (DeletePermitResponse);
+  rpc AddBookUser(AddBookUserRequest) returns (AddBookUserResponse);
+  rpc ListBookUsers(ListBookUsersRequest) returns (ListBookUsersResponse);
 }
 
 enum Role {
@@ -59,4 +61,29 @@ message UpdatePermitRequest {
 
 message UpdatePermitResponse {
   Permit updated_permit = 1;
+}
+
+message AddBookUserRequest {
+  string book_id = 1 [(buf.validate.field).string.uuid = true];
+  string user_id = 2 [(buf.validate.field).string.min_len = 1];
+  Role role = 3;
+}
+
+message AddBookUserResponse {
+  Permit permit = 1;
+}
+
+message ListBookUsersRequest {
+  string book_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message BookUser {
+  string permit_id = 1;
+  string user_id = 2;
+  string user_name = 3;
+  Role role = 4;
+}
+
+message ListBookUsersResponse {
+  repeated BookUser users = 1;
 }

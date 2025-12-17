@@ -58,6 +58,7 @@ type Querier interface {
 	ListContacts(ctx context.Context, customerID uuid.UUID) ([]Contact, error)
 	ListCustomers(ctx context.Context, arg ListCustomersParams) ([]Customer, error)
 	ListPermits(ctx context.Context, bookID uuid.UUID) ([]Permit, error)
+	ListPermitsWithUserInfo(ctx context.Context, bookID uuid.UUID) ([]ListPermitsWithUserInfoRow, error)
 	ListStatusesByBookID(ctx context.Context, bookID uuid.UUID) ([]Status, error)
 	ListUsers(ctx context.Context) ([]User, error)
 	ListUsersByCompany(ctx context.Context, companyID uuid.UUID) ([]User, error)

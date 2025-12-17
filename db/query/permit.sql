@@ -44,3 +44,10 @@ SELECT EXISTS(
 -- name: CheckUserRoleForBook :one
 SELECT role FROM "Permit" 
 WHERE book_id = $1 AND user_id = $2;
+
+-- name: ListPermitsWithUserInfo :many
+SELECT p.id, p.book_id, p.user_id, p.role, u.name as user_name
+FROM "Permit" p
+JOIN "User" u ON p.user_id = u.id
+WHERE p.book_id = $1
+ORDER BY p.created_at DESC;
