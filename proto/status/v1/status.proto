@@ -8,6 +8,7 @@ option go_package = "github.com/0utl1er-tech/phox-customer/gen/pb/status/v1;stat
 
 service StatusService {
   rpc ListStatuses(ListStatusesRequest) returns (ListStatusesResponse);
+  rpc GetDefaultStatus(GetDefaultStatusRequest) returns (GetDefaultStatusResponse);
   rpc CreateStatus(CreateStatusRequest) returns (CreateStatusResponse);
   rpc UpdateStatus(UpdateStatusRequest) returns (UpdateStatusResponse);
   rpc DeleteStatus(DeleteStatusRequest) returns (DeleteStatusResponse);
@@ -19,6 +20,14 @@ message ListStatusesRequest {
 
 message ListStatusesResponse {
   repeated Status statuses = 1;
+}
+
+message GetDefaultStatusRequest {
+  string book_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message GetDefaultStatusResponse {
+  Status status = 1;
 }
 
 message CreateStatusRequest {

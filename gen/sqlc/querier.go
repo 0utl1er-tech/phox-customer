@@ -43,6 +43,7 @@ type Querier interface {
 	GetCustomerCountByCategory(ctx context.Context, arg GetCustomerCountByCategoryParams) (int64, error)
 	GetCustomerCountByCorporation(ctx context.Context, arg GetCustomerCountByCorporationParams) (int64, error)
 	GetCustomerCountByDate(ctx context.Context, arg GetCustomerCountByDateParams) (int64, error)
+	GetDefaultStatusByBookID(ctx context.Context, bookID uuid.UUID) (Status, error)
 	GetMaxStatusPriority(ctx context.Context, bookID uuid.UUID) (interface{}, error)
 	GetPermit(ctx context.Context, id uuid.UUID) (Permit, error)
 	GetPermitByBookIDAndUserID(ctx context.Context, arg GetPermitByBookIDAndUserIDParams) (Permit, error)

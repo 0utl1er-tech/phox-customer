@@ -38,12 +38,15 @@ const (
 	CallServiceListCallsByCustomerIDProcedure = "/call.v1.CallService/ListCallsByCustomerID"
 	// CallServiceCreateCallProcedure is the fully-qualified name of the CallService's CreateCall RPC.
 	CallServiceCreateCallProcedure = "/call.v1.CallService/CreateCall"
+	// CallServiceUpdateCallProcedure is the fully-qualified name of the CallService's UpdateCall RPC.
+	CallServiceUpdateCallProcedure = "/call.v1.CallService/UpdateCall"
 )
 
 // CallServiceClient is a client for the call.v1.CallService service.
 type CallServiceClient interface {
 	ListCallsByCustomerID(context.Context, *connect.Request[v1.ListCallsByCustomerIDRequest]) (*connect.Response[v1.ListCallsByCustomerIDResponse], error)
 	CreateCall(context.Context, *connect.Request[v1.CreateCallRequest]) (*connect.Response[v1.CreateCallResponse], error)
+	UpdateCall(context.Context, *connect.Request[v1.UpdateCallRequest]) (*connect.Response[v1.UpdateCallResponse], error)
 }
 
 // NewCallServiceClient constructs a client for the call.v1.CallService service. By default, it uses
@@ -69,6 +72,12 @@ func NewCallServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(callServiceMethods.ByName("CreateCall")),
 			connect.WithClientOptions(opts...),
 		),
+		updateCall: connect.NewClient[v1.UpdateCallRequest, v1.UpdateCallResponse](
+			httpClient,
+			baseURL+CallServiceUpdateCallProcedure,
+			connect.WithSchema(callServiceMethods.ByName("UpdateCall")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -76,6 +85,7 @@ func NewCallServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 type callServiceClient struct {
 	listCallsByCustomerID *connect.Client[v1.ListCallsByCustomerIDRequest, v1.ListCallsByCustomerIDResponse]
 	createCall            *connect.Client[v1.CreateCallRequest, v1.CreateCallResponse]
+	updateCall            *connect.Client[v1.UpdateCallRequest, v1.UpdateCallResponse]
 }
 
 // ListCallsByCustomerID calls call.v1.CallService.ListCallsByCustomerID.
@@ -88,10 +98,16 @@ func (c *callServiceClient) CreateCall(ctx context.Context, req *connect.Request
 	return c.createCall.CallUnary(ctx, req)
 }
 
+// UpdateCall calls call.v1.CallService.UpdateCall.
+func (c *callServiceClient) UpdateCall(ctx context.Context, req *connect.Request[v1.UpdateCallRequest]) (*connect.Response[v1.UpdateCallResponse], error) {
+	return c.updateCall.CallUnary(ctx, req)
+}
+
 // CallServiceHandler is an implementation of the call.v1.CallService service.
 type CallServiceHandler interface {
 	ListCallsByCustomerID(context.Context, *connect.Request[v1.ListCallsByCustomerIDRequest]) (*connect.Response[v1.ListCallsByCustomerIDResponse], error)
 	CreateCall(context.Context, *connect.Request[v1.CreateCallRequest]) (*connect.Response[v1.CreateCallResponse], error)
+	UpdateCall(context.Context, *connect.Request[v1.UpdateCallRequest]) (*connect.Response[v1.UpdateCallResponse], error)
 }
 
 // NewCallServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -113,12 +129,20 @@ func NewCallServiceHandler(svc CallServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(callServiceMethods.ByName("CreateCall")),
 		connect.WithHandlerOptions(opts...),
 	)
+	callServiceUpdateCallHandler := connect.NewUnaryHandler(
+		CallServiceUpdateCallProcedure,
+		svc.UpdateCall,
+		connect.WithSchema(callServiceMethods.ByName("UpdateCall")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/call.v1.CallService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case CallServiceListCallsByCustomerIDProcedure:
 			callServiceListCallsByCustomerIDHandler.ServeHTTP(w, r)
 		case CallServiceCreateCallProcedure:
 			callServiceCreateCallHandler.ServeHTTP(w, r)
+		case CallServiceUpdateCallProcedure:
+			callServiceUpdateCallHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -134,4 +158,8 @@ func (UnimplementedCallServiceHandler) ListCallsByCustomerID(context.Context, *c
 
 func (UnimplementedCallServiceHandler) CreateCall(context.Context, *connect.Request[v1.CreateCallRequest]) (*connect.Response[v1.CreateCallResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("call.v1.CallService.CreateCall is not implemented"))
+}
+
+func (UnimplementedCallServiceHandler) UpdateCall(context.Context, *connect.Request[v1.UpdateCallRequest]) (*connect.Response[v1.UpdateCallResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("call.v1.CallService.UpdateCall is not implemented"))
 }

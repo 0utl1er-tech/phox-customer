@@ -40,14 +40,40 @@ func (s *CustomerService) UpdateCustomer(
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("customerの更新にはowner権限またはeditor権限が必要です"))
 	}
 
+	// nil安全にポインタの値を取得
+	phoneText := pgtype.Text{Valid: false}
+	if req.Msg.Phone != nil {
+		phoneText = pgtype.Text{String: *req.Msg.Phone, Valid: true}
+	}
+	categoryText := pgtype.Text{Valid: false}
+	if req.Msg.Category != nil {
+		categoryText = pgtype.Text{String: *req.Msg.Category, Valid: true}
+	}
+	nameText := pgtype.Text{Valid: false}
+	if req.Msg.Name != nil {
+		nameText = pgtype.Text{String: *req.Msg.Name, Valid: true}
+	}
+	corporationText := pgtype.Text{Valid: false}
+	if req.Msg.Corporation != nil {
+		corporationText = pgtype.Text{String: *req.Msg.Corporation, Valid: true}
+	}
+	addressText := pgtype.Text{Valid: false}
+	if req.Msg.Address != nil {
+		addressText = pgtype.Text{String: *req.Msg.Address, Valid: true}
+	}
+	memoText := pgtype.Text{Valid: false}
+	if req.Msg.Memo != nil {
+		memoText = pgtype.Text{String: *req.Msg.Memo, Valid: true}
+	}
+
 	result, err := s.queries.UpdateCustomer(ctx, db.UpdateCustomerParams{
 		ID:          customer.ID,
-		Phone:       pgtype.Text{String: *req.Msg.Phone, Valid: req.Msg.Phone != nil},
-		Category:    pgtype.Text{String: *req.Msg.Category, Valid: req.Msg.Category != nil},
-		Name:        pgtype.Text{String: *req.Msg.Name, Valid: req.Msg.Name != nil},
-		Corporation: pgtype.Text{String: *req.Msg.Corporation, Valid: req.Msg.Corporation != nil},
-		Address:     pgtype.Text{String: *req.Msg.Address, Valid: req.Msg.Address != nil},
-		Memo:        pgtype.Text{String: *req.Msg.Memo, Valid: req.Msg.Memo != nil},
+		Phone:       phoneText,
+		Category:    categoryText,
+		Name:        nameText,
+		Corporation: corporationText,
+		Address:     addressText,
+		Memo:        memoText,
 	})
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("customerの更新に失敗しました: %w", err))

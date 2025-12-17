@@ -36,6 +36,9 @@ const (
 	// StatusServiceListStatusesProcedure is the fully-qualified name of the StatusService's
 	// ListStatuses RPC.
 	StatusServiceListStatusesProcedure = "/status.v1.StatusService/ListStatuses"
+	// StatusServiceGetDefaultStatusProcedure is the fully-qualified name of the StatusService's
+	// GetDefaultStatus RPC.
+	StatusServiceGetDefaultStatusProcedure = "/status.v1.StatusService/GetDefaultStatus"
 	// StatusServiceCreateStatusProcedure is the fully-qualified name of the StatusService's
 	// CreateStatus RPC.
 	StatusServiceCreateStatusProcedure = "/status.v1.StatusService/CreateStatus"
@@ -50,6 +53,7 @@ const (
 // StatusServiceClient is a client for the status.v1.StatusService service.
 type StatusServiceClient interface {
 	ListStatuses(context.Context, *connect.Request[v1.ListStatusesRequest]) (*connect.Response[v1.ListStatusesResponse], error)
+	GetDefaultStatus(context.Context, *connect.Request[v1.GetDefaultStatusRequest]) (*connect.Response[v1.GetDefaultStatusResponse], error)
 	CreateStatus(context.Context, *connect.Request[v1.CreateStatusRequest]) (*connect.Response[v1.CreateStatusResponse], error)
 	UpdateStatus(context.Context, *connect.Request[v1.UpdateStatusRequest]) (*connect.Response[v1.UpdateStatusResponse], error)
 	DeleteStatus(context.Context, *connect.Request[v1.DeleteStatusRequest]) (*connect.Response[v1.DeleteStatusResponse], error)
@@ -70,6 +74,12 @@ func NewStatusServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			httpClient,
 			baseURL+StatusServiceListStatusesProcedure,
 			connect.WithSchema(statusServiceMethods.ByName("ListStatuses")),
+			connect.WithClientOptions(opts...),
+		),
+		getDefaultStatus: connect.NewClient[v1.GetDefaultStatusRequest, v1.GetDefaultStatusResponse](
+			httpClient,
+			baseURL+StatusServiceGetDefaultStatusProcedure,
+			connect.WithSchema(statusServiceMethods.ByName("GetDefaultStatus")),
 			connect.WithClientOptions(opts...),
 		),
 		createStatus: connect.NewClient[v1.CreateStatusRequest, v1.CreateStatusResponse](
@@ -95,15 +105,21 @@ func NewStatusServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 
 // statusServiceClient implements StatusServiceClient.
 type statusServiceClient struct {
-	listStatuses *connect.Client[v1.ListStatusesRequest, v1.ListStatusesResponse]
-	createStatus *connect.Client[v1.CreateStatusRequest, v1.CreateStatusResponse]
-	updateStatus *connect.Client[v1.UpdateStatusRequest, v1.UpdateStatusResponse]
-	deleteStatus *connect.Client[v1.DeleteStatusRequest, v1.DeleteStatusResponse]
+	listStatuses     *connect.Client[v1.ListStatusesRequest, v1.ListStatusesResponse]
+	getDefaultStatus *connect.Client[v1.GetDefaultStatusRequest, v1.GetDefaultStatusResponse]
+	createStatus     *connect.Client[v1.CreateStatusRequest, v1.CreateStatusResponse]
+	updateStatus     *connect.Client[v1.UpdateStatusRequest, v1.UpdateStatusResponse]
+	deleteStatus     *connect.Client[v1.DeleteStatusRequest, v1.DeleteStatusResponse]
 }
 
 // ListStatuses calls status.v1.StatusService.ListStatuses.
 func (c *statusServiceClient) ListStatuses(ctx context.Context, req *connect.Request[v1.ListStatusesRequest]) (*connect.Response[v1.ListStatusesResponse], error) {
 	return c.listStatuses.CallUnary(ctx, req)
+}
+
+// GetDefaultStatus calls status.v1.StatusService.GetDefaultStatus.
+func (c *statusServiceClient) GetDefaultStatus(ctx context.Context, req *connect.Request[v1.GetDefaultStatusRequest]) (*connect.Response[v1.GetDefaultStatusResponse], error) {
+	return c.getDefaultStatus.CallUnary(ctx, req)
 }
 
 // CreateStatus calls status.v1.StatusService.CreateStatus.
@@ -124,6 +140,7 @@ func (c *statusServiceClient) DeleteStatus(ctx context.Context, req *connect.Req
 // StatusServiceHandler is an implementation of the status.v1.StatusService service.
 type StatusServiceHandler interface {
 	ListStatuses(context.Context, *connect.Request[v1.ListStatusesRequest]) (*connect.Response[v1.ListStatusesResponse], error)
+	GetDefaultStatus(context.Context, *connect.Request[v1.GetDefaultStatusRequest]) (*connect.Response[v1.GetDefaultStatusResponse], error)
 	CreateStatus(context.Context, *connect.Request[v1.CreateStatusRequest]) (*connect.Response[v1.CreateStatusResponse], error)
 	UpdateStatus(context.Context, *connect.Request[v1.UpdateStatusRequest]) (*connect.Response[v1.UpdateStatusResponse], error)
 	DeleteStatus(context.Context, *connect.Request[v1.DeleteStatusRequest]) (*connect.Response[v1.DeleteStatusResponse], error)
@@ -140,6 +157,12 @@ func NewStatusServiceHandler(svc StatusServiceHandler, opts ...connect.HandlerOp
 		StatusServiceListStatusesProcedure,
 		svc.ListStatuses,
 		connect.WithSchema(statusServiceMethods.ByName("ListStatuses")),
+		connect.WithHandlerOptions(opts...),
+	)
+	statusServiceGetDefaultStatusHandler := connect.NewUnaryHandler(
+		StatusServiceGetDefaultStatusProcedure,
+		svc.GetDefaultStatus,
+		connect.WithSchema(statusServiceMethods.ByName("GetDefaultStatus")),
 		connect.WithHandlerOptions(opts...),
 	)
 	statusServiceCreateStatusHandler := connect.NewUnaryHandler(
@@ -164,6 +187,8 @@ func NewStatusServiceHandler(svc StatusServiceHandler, opts ...connect.HandlerOp
 		switch r.URL.Path {
 		case StatusServiceListStatusesProcedure:
 			statusServiceListStatusesHandler.ServeHTTP(w, r)
+		case StatusServiceGetDefaultStatusProcedure:
+			statusServiceGetDefaultStatusHandler.ServeHTTP(w, r)
 		case StatusServiceCreateStatusProcedure:
 			statusServiceCreateStatusHandler.ServeHTTP(w, r)
 		case StatusServiceUpdateStatusProcedure:
@@ -181,6 +206,10 @@ type UnimplementedStatusServiceHandler struct{}
 
 func (UnimplementedStatusServiceHandler) ListStatuses(context.Context, *connect.Request[v1.ListStatusesRequest]) (*connect.Response[v1.ListStatusesResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("status.v1.StatusService.ListStatuses is not implemented"))
+}
+
+func (UnimplementedStatusServiceHandler) GetDefaultStatus(context.Context, *connect.Request[v1.GetDefaultStatusRequest]) (*connect.Response[v1.GetDefaultStatusResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("status.v1.StatusService.GetDefaultStatus is not implemented"))
 }
 
 func (UnimplementedStatusServiceHandler) CreateStatus(context.Context, *connect.Request[v1.CreateStatusRequest]) (*connect.Response[v1.CreateStatusResponse], error) {

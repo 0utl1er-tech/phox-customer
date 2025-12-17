@@ -60,6 +60,29 @@ func (q *Queries) DeleteStatus(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+const getDefaultStatusByBookID = `-- name: GetDefaultStatusByBookID :one
+SELECT id, book_id, priority, name, effective, ng, updated_at, created_at FROM "Status"
+WHERE book_id = $1
+ORDER BY priority ASC
+LIMIT 1
+`
+
+func (q *Queries) GetDefaultStatusByBookID(ctx context.Context, bookID uuid.UUID) (Status, error) {
+	row := q.db.QueryRow(ctx, getDefaultStatusByBookID, bookID)
+	var i Status
+	err := row.Scan(
+		&i.ID,
+		&i.BookID,
+		&i.Priority,
+		&i.Name,
+		&i.Effective,
+		&i.Ng,
+		&i.UpdatedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getMaxStatusPriority = `-- name: GetMaxStatusPriority :one
 SELECT COALESCE(MAX(priority), 0) as max_priority FROM "Status"
 WHERE book_id = $1

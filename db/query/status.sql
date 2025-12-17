@@ -29,3 +29,9 @@ WHERE id = $1;
 -- name: GetMaxStatusPriority :one
 SELECT COALESCE(MAX(priority), 0) as max_priority FROM "Status"
 WHERE book_id = $1;
+
+-- name: GetDefaultStatusByBookID :one
+SELECT * FROM "Status"
+WHERE book_id = $1
+ORDER BY priority ASC
+LIMIT 1;

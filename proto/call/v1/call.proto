@@ -10,6 +10,7 @@ option go_package = "github.com/0utl1er-tech/phox-customer/gen/pb/call/v1;callv1
 service CallService {
   rpc ListCallsByCustomerID(ListCallsByCustomerIDRequest) returns (ListCallsByCustomerIDResponse);
   rpc CreateCall(CreateCallRequest) returns (CreateCallResponse);
+  rpc UpdateCall(UpdateCallRequest) returns (UpdateCallResponse);
 }
 
 message ListCallsByCustomerIDRequest {
@@ -27,6 +28,15 @@ message CreateCallRequest {
 }
 
 message CreateCallResponse {
+  Call call = 1;
+}
+
+message UpdateCallRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+  string status_id = 2 [(buf.validate.field).string.uuid = true];
+}
+
+message UpdateCallResponse {
   Call call = 1;
 }
 
