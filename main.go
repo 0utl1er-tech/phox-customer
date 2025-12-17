@@ -11,6 +11,7 @@ import (
 	customerv1connect "github.com/0utl1er-tech/phox-customer/gen/pb/customer/v1/customerv1connect"
 	permitv1connect "github.com/0utl1er-tech/phox-customer/gen/pb/permit/v1/permitv1connect"
 	statusv1connect "github.com/0utl1er-tech/phox-customer/gen/pb/status/v1/statusv1connect"
+	userv1connect "github.com/0utl1er-tech/phox-customer/gen/pb/user/v1/userv1connect"
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
 	"github.com/0utl1er-tech/phox-customer/internal/service/auth"
 	"github.com/0utl1er-tech/phox-customer/internal/service/book"
@@ -19,6 +20,7 @@ import (
 	"github.com/0utl1er-tech/phox-customer/internal/service/customer"
 	"github.com/0utl1er-tech/phox-customer/internal/service/permit"
 	"github.com/0utl1er-tech/phox-customer/internal/service/status"
+	"github.com/0utl1er-tech/phox-customer/internal/service/user"
 	"github.com/0utl1er-tech/phox-customer/internal/util"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog/log"
@@ -75,6 +77,7 @@ func main() {
 	contactService := contact.NewContactService(queries)
 	statusService := status.NewStatusService(queries)
 	callService := call.NewCallService(queries)
+	userService := user.NewUserService(queries)
 
 	// HTTPサーバーの設定
 	mux := http.NewServeMux()
@@ -86,6 +89,7 @@ func main() {
 	contactPath, contactHandler := contactv1connect.NewContactServiceHandler(contactService, interceptors)
 	statusPath, statusHandler := statusv1connect.NewStatusServiceHandler(statusService, interceptors)
 	callPath, callHandler := callv1connect.NewCallServiceHandler(callService, interceptors)
+	userPath, userHandler := userv1connect.NewUserServiceHandler(userService, interceptors)
 
 	mux.Handle(customerPath, customerHandler)
 	mux.Handle(bookPath, bookHandler)
@@ -93,6 +97,7 @@ func main() {
 	mux.Handle(contactPath, contactHandler)
 	mux.Handle(statusPath, statusHandler)
 	mux.Handle(callPath, callHandler)
+	mux.Handle(userPath, userHandler)
 
 	// CORSミドルウェアを適用
 	corsHandler := corsMiddleware(mux)
