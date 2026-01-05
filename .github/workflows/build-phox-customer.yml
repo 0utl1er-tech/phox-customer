@@ -4,9 +4,6 @@ on:
   push:
     branches:
       - main
-    paths:
-      - 'phox-customer/**'
-      - '.github/workflows/build-phox-customer.yml'
 
 env:
   PROJECT_ID: phoxtrot
@@ -39,7 +36,6 @@ jobs:
           gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
 
       - name: Build Docker image
-        working-directory: ./phox-customer
         run: |
           docker build -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE }}:${{ github.sha }} .
           docker tag ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE }}:${{ github.sha }} \
