@@ -8,14 +8,14 @@ import (
 // Config stores all configuration of the application.
 // The values are read by viper from a config file or environment variable.
 type Config struct {
-	Environment               string `mapstructure:"ENV"`
-	DBSource                  string `mapstructure:"DB_SOURCE"`
-	ConnectServerAddress      string `mapstructure:"CONNECT_SERVER_ADDRESS"`
-	JWTEnabled                bool   `mapstructure:"JWT_ENABLED"`
-	JWTProjectID              string `mapstructure:"JWT_PROJECT_ID"`
-	JWTIssuerURL              string `mapstructure:"JWT_ISSUER_URL"`
-	JWTJwksURL                string `mapstructure:"JWT_JWKS_URL"`
-	FirebaseAdminCredentials  string `mapstructure:"FIREBASE_ADMIN_CREDENTIALS_FILE"`
+	Environment              string `mapstructure:"ENV"`
+	DBSource                 string `mapstructure:"DB_SOURCE"`
+	ConnectServerAddress     string `mapstructure:"CONNECT_SERVER_ADDRESS"`
+	JWTEnabled               bool   `mapstructure:"JWT_ENABLED"`
+	JWTProjectID             string `mapstructure:"JWT_PROJECT_ID"`
+	JWTIssuerURL             string `mapstructure:"JWT_ISSUER_URL"`
+	JWTJwksURL               string `mapstructure:"JWT_JWKS_URL"`
+	FirebaseAdminCredentials string `mapstructure:"FIREBASE_ADMIN_CREDENTIALS_FILE"`
 }
 
 // LoadConfig reads configuration from file or environment variables.

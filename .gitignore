@@ -26,6 +26,10 @@ go.work.sum
 
 # env file
 .env
+app.env
+
+# Firebase credentials
+firebase-service-account.json
 
 # Editor/IDE
 # .idea/

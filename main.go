@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"connectrpc.com/connect"
 	"github.com/0utl1er-tech/phox-customer/gen/pb/book/v1/bookv1connect"
@@ -64,6 +65,17 @@ func main() {
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to create connection pool")
 	}
+	defer connPool.Close()
+
+	// Test database connection
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := connPool.Ping(ctx); err != nil {
+		log.Fatal().Err(err).Msg("Failed to ping database - connection not established")
+	}
+
+	log.Info().Msg("Database connection established successfully")
 
 	queries := db.New(connPool)
 

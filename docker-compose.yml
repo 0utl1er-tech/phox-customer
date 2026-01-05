@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  # Cloud SQL Proxyで本番DBに接続
+  cloudsql-proxy:
+    image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:latest
+    container_name: phox-cloudsql-proxy
+    command:
+      - "--address=0.0.0.0"
+      - "--port=5432"
+      - "phoxtrot:asia-northeast1:phox-customer-db"
+    ports:
+      - "5432:5432"
+    volumes:
+      - ~/.config/gcloud/application_default_credentials.json:/root/.config/gcloud/application_default_credentials.json:ro
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: /root/.config/gcloud/application_default_credentials.json
+    healthcheck:
+      test: ["CMD", "/cloud-sql-proxy", "--version"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: phox-customer-app
+    ports:
+      - "8082:8080"
+    environment:
+      ENV: DEVELOPMENT
+      CONNECT_SERVER_ADDRESS: 0.0.0.0:8080
+      DB_SOURCE: postgresql://postgres:phox-secure-password-2024@cloudsql-proxy:5432/phox-customer?sslmode=disable
+      JWT_ENABLED: "true"
+      JWT_PROJECT_ID: phoxtrot
+      JWT_ISSUER_URL: https://securetoken.google.com/phoxtrot
+      JWT_JWKS_URL: https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com
+      FIREBASE_ADMIN_CREDENTIALS_FILE: ""
+    depends_on:
+      cloudsql-proxy:
+        condition: service_healthy
+    restart: unless-stopped
+

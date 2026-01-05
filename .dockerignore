@@ -1,0 +1,35 @@
+# Git
+.git
+.gitignore
+
+# Docker
+docker-compose.yml
+Dockerfile
+.dockerignore
+
+# Documentation
+*.md
+docs/
+
+# Test files
+*_test.go
+test_*.csv
+
+# Development tools
+.vscode
+.idea
+
+# Build artifacts
+tmp/
+/tmp
+
+# Environment
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Generated files (keep these for build)
+# gen/

@@ -26,40 +26,48 @@ type Interceptor struct {
 	Queries  *db.Queries
 	Config   util.Config
 	jwkCache *jwk.Cache
+	bgCtx    context.Context
 }
 
 // NewAuthInterceptor creates a new AuthInterceptor.
 func NewAuthInterceptor(ctx context.Context, queries *db.Queries, config util.Config) *Interceptor {
-	// Set up a background context for the JWK cache
-	bgCtx, cancel := context.WithCancel(ctx)
+	// Use context.Background() for the JWK cache to ensure it persists
+	bgCtx := context.Background()
 
 	// Create a new JWK cache
 	cache := jwk.NewCache(bgCtx)
 
-	// Register the JWKS URL for caching
-	err := cache.Register(config.JWTJwksURL, jwk.WithMinRefreshInterval(15*time.Minute))
+	// Register the JWKS URL for caching with refresh options
+	err := cache.Register(config.JWTJwksURL,
+		jwk.WithMinRefreshInterval(15*time.Minute),
+		jwk.WithRefreshInterval(60*time.Minute),
+	)
 	if err != nil {
-		cancel()
 		log.Fatal().Err(err).Msg("Failed to register JWKS URL")
 	}
 
-	// Trigger initial fetch
-	_, err = cache.Refresh(bgCtx, config.JWTJwksURL)
-	if err != nil {
-		// Log as a warning instead of fatal, as it might recover
-		log.Warn().Err(err).Msg("Failed to perform initial JWKS refresh")
+	// Trigger initial fetch - retry if it fails
+	maxRetries := 3
+	var refreshErr error
+	for i := 0; i < maxRetries; i++ {
+		_, refreshErr = cache.Refresh(bgCtx, config.JWTJwksURL)
+		if refreshErr == nil {
+			log.Info().Msg("Successfully fetched JWK keyset")
+			break
+		}
+		log.Warn().Err(refreshErr).Int("attempt", i+1).Msg("Failed to fetch JWK keyset, retrying...")
+		time.Sleep(time.Second * time.Duration(i+1))
 	}
 
-	// Ensure the cache is cleaned up when the context is done
-	go func() {
-		<-bgCtx.Done()
-		cancel()
-	}()
+	if refreshErr != nil {
+		log.Fatal().Err(refreshErr).Msg("Failed to perform initial JWKS refresh after retries")
+	}
 
 	return &Interceptor{
 		Queries:  queries,
 		Config:   config,
 		jwkCache: cache,
+		bgCtx:    bgCtx,
 	}
 }
 
@@ -87,11 +95,26 @@ func (i *Interceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 			return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("invalid access token: %w", err))
 		}
 
+		// Log token subject for debugging
+		log.Debug().
+			Str("subject", token.Subject()).
+			Str("issuer", token.Issuer()).
+			Msg("Token verified successfully")
+
 		// Check if user exists in the database
-		_, err = i.Queries.GetUser(ctx, token.Subject())
+		user, err := i.Queries.GetUser(ctx, token.Subject())
 		if err != nil {
+			log.Warn().
+				Err(err).
+				Str("token_subject", token.Subject()).
+				Msg("Failed to get user from database")
 			return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("user not found in database"))
 		}
+
+		log.Debug().
+			Str("user_id", user.ID).
+			Str("name", user.Name).
+			Msg("User found in database")
 
 		ctx = context.WithValue(ctx, AuthorizationPayloadKey, token)
 		return next(ctx, req)
@@ -116,9 +139,21 @@ func (i *Interceptor) WrapStreamingHandler(next connect.StreamingHandlerFunc) co
 
 // verifyToken verifies the access token using the JWKS cache.
 func (i *Interceptor) verifyToken(ctx context.Context, tokenString string) (jwt.Token, error) {
-	keySet, err := i.jwkCache.Get(ctx, i.Config.JWTJwksURL)
+	// Use the background context for cache operations to ensure persistence
+	keySet, err := i.jwkCache.Get(i.bgCtx, i.Config.JWTJwksURL)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get JWK keyset: %w", err)
+		// If cache is empty, try to refresh it
+		log.Warn().Err(err).Msg("Failed to get JWK keyset from cache, attempting refresh")
+		_, refreshErr := i.jwkCache.Refresh(i.bgCtx, i.Config.JWTJwksURL)
+		if refreshErr != nil {
+			return nil, fmt.Errorf("failed to get JWK keyset: %w (refresh error: %v)", err, refreshErr)
+		}
+
+		// Retry getting the keyset after refresh
+		keySet, err = i.jwkCache.Get(i.bgCtx, i.Config.JWTJwksURL)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get JWK keyset after refresh: %w", err)
+		}
 	}
 
 	token, err := jwt.Parse([]byte(tokenString),
