@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package icalfeed.v1;
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/0utl1er-tech/phox-customer/gen/pb/icalfeed/v1;icalfeedv1";
+
+// ICalFeedService は各 CRM ユーザーの iCalendar 購読 URL を管理する。
+// 実際の feed 配信 (.ics を返す HTTP endpoint) は別の plain HTTP handler
+// `GET /ical/{filename}` が担当する。このサービスはトークンの CRUD のみ。
+service ICalFeedService {
+  // 現在の feed 情報を返す (未生成なら feed=unset)。
+  rpc GetICalFeed(GetICalFeedRequest) returns (GetICalFeedResponse);
+  // 既存トークンを再利用して feed を返す。無ければ新規生成。
+  rpc GenerateICalFeed(GenerateICalFeedRequest) returns (GenerateICalFeedResponse);
+  // 強制的に新トークンに差し替える (古い URL は無効化される)。
+  rpc RegenerateICalFeed(RegenerateICalFeedRequest) returns (RegenerateICalFeedResponse);
+  // feed 行を削除 = 購読 URL を無効化。
+  rpc RevokeICalFeed(RevokeICalFeedRequest) returns (google.protobuf.Empty);
+}
+
+message ICalFeedInfo {
+  string url = 1;
+  google.protobuf.Timestamp created_at = 2;
+  google.protobuf.Timestamp updated_at = 3;
+}
+
+message GetICalFeedRequest {}
+message GetICalFeedResponse {
+  // 未生成のときは nil。プロトコル的には optional で NotFound より扱いが素直。
+  optional ICalFeedInfo feed = 1;
+}
+
+message GenerateICalFeedRequest {}
+message GenerateICalFeedResponse {
+  ICalFeedInfo feed = 1;
+}
+
+message RegenerateICalFeedRequest {}
+message RegenerateICalFeedResponse {
+  ICalFeedInfo feed = 1;
+}
+
+message RevokeICalFeedRequest {}

@@ -2,16 +2,20 @@ package customer
 
 import (
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
+	"github.com/0utl1er-tech/phox-customer/internal/search"
 )
 
-// ServiceImpl customerサービスの実装
+// CustomerService customerサービスの実装
 type CustomerService struct {
 	queries *db.Queries
+	indexer *search.Indexer
 }
 
-// NewService customerサービスの新しいインスタンスを作成
-func NewCustomerService(queries *db.Queries) *CustomerService {
+// NewCustomerService creates a new customer service. `indexer` may have a
+// nil ES client; in that case indexing is silently skipped (degraded mode).
+func NewCustomerService(queries *db.Queries, indexer *search.Indexer) *CustomerService {
 	return &CustomerService{
 		queries: queries,
+		indexer: indexer,
 	}
 }

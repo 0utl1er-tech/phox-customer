@@ -1,0 +1,43 @@
+name: Test
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ─── Unit Tests (全ブランチで実行) ─────────────────────────────
+  unit-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: root
+          POSTGRES_PASSWORD: secret
+          POSTGRES_DB: phox-customer
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U root"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Install migrate CLI
+        run: go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
+
+      - name: Run migrations
+        run: migrate -path db/migration -database "postgresql://root:secret@localhost:5432/phox-customer?sslmode=disable" up
+
+      - name: Run unit tests
+        run: go test -v -cover -count=1 ./...

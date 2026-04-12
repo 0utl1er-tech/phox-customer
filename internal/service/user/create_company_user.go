@@ -2,13 +2,14 @@ package user
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
 	"connectrpc.com/connect"
 	userv1 "github.com/0utl1er-tech/phox-customer/gen/pb/user/v1"
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
-	"github.com/0utl1er-tech/phox-customer/internal/firebaseadmin"
+	"github.com/0utl1er-tech/phox-customer/internal/keycloakadmin"
 	"github.com/0utl1er-tech/phox-customer/internal/service/auth"
 	"github.com/rs/zerolog/log"
 )
@@ -17,8 +18,8 @@ func (s *UserService) CreateCompanyUser(
 	ctx context.Context,
 	req *connect.Request[userv1.CreateCompanyUserRequest],
 ) (*connect.Response[userv1.CreateCompanyUserResponse], error) {
-	if s.firebaseAuth == nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("firebase admin client not configured"))
+	if s.keycloakAdmin == nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("keycloak admin client not configured"))
 	}
 
 	token, err := auth.AuthorizeUser(ctx)
@@ -45,29 +46,30 @@ func (s *UserService) CreateCompanyUser(
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("name is required"))
 	}
 
-	firebaseUID, err := s.firebaseAuth.CreateUser(ctx, firebaseadmin.CreateUserParams{
+	keycloakUID, err := s.keycloakAdmin.CreateUser(ctx, keycloakadmin.CreateUserParams{
 		Email:       email,
 		Password:    password,
 		DisplayName: name,
 	})
 	if err != nil {
-		errStr := err.Error()
-		if strings.Contains(errStr, "EMAIL_EXISTS") || strings.Contains(errStr, "email-already-exists") {
+		switch {
+		case errors.Is(err, keycloakadmin.ErrEmailExists):
 			return nil, connect.NewError(connect.CodeAlreadyExists, fmt.Errorf("email already exists"))
-		}
-		if strings.Contains(errStr, "INVALID_EMAIL") || strings.Contains(errStr, "invalid-email") {
+		case errors.Is(err, keycloakadmin.ErrInvalidEmail):
 			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid email format"))
-		}
-		if strings.Contains(errStr, "WEAK_PASSWORD") || strings.Contains(errStr, "weak-password") {
+		case errors.Is(err, keycloakadmin.ErrWeakPassword):
 			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("password is too weak"))
+		case errors.Is(err, keycloakadmin.ErrUnauthorized):
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("keycloak admin credentials rejected: %w", err))
+		default:
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create keycloak user: %w", err))
 		}
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create firebase user: %w", err))
 	}
 
 	tx, err := s.dbPool.Begin(ctx)
 	if err != nil {
-		if deleteErr := s.firebaseAuth.DeleteUser(ctx, firebaseUID); deleteErr != nil {
-			log.Error().Err(deleteErr).Str("firebase_uid", firebaseUID).Msg("failed to rollback firebase user after db transaction start failure")
+		if deleteErr := s.keycloakAdmin.DeleteUser(ctx, keycloakUID); deleteErr != nil {
+			log.Error().Err(deleteErr).Str("keycloak_uid", keycloakUID).Msg("failed to rollback keycloak user after db transaction start failure")
 		}
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to start transaction: %w", err))
 	}
@@ -76,13 +78,13 @@ func (s *UserService) CreateCompanyUser(
 	txQueries := s.queries.WithTx(tx)
 
 	dbUser, err := txQueries.CreateUser(ctx, db.CreateUserParams{
-		ID:        firebaseUID,
+		ID:        keycloakUID,
 		CompanyID: callerUser.CompanyID,
 		Name:      name,
 	})
 	if err != nil {
-		if deleteErr := s.firebaseAuth.DeleteUser(ctx, firebaseUID); deleteErr != nil {
-			log.Error().Err(deleteErr).Str("firebase_uid", firebaseUID).Msg("failed to rollback firebase user after db insert failure")
+		if deleteErr := s.keycloakAdmin.DeleteUser(ctx, keycloakUID); deleteErr != nil {
+			log.Error().Err(deleteErr).Str("keycloak_uid", keycloakUID).Msg("failed to rollback keycloak user after db insert failure")
 		}
 		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "unique constraint") {
 			return nil, connect.NewError(connect.CodeAlreadyExists, fmt.Errorf("user already exists in database"))
@@ -91,8 +93,8 @@ func (s *UserService) CreateCompanyUser(
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		if deleteErr := s.firebaseAuth.DeleteUser(ctx, firebaseUID); deleteErr != nil {
-			log.Error().Err(deleteErr).Str("firebase_uid", firebaseUID).Msg("failed to rollback firebase user after db commit failure")
+		if deleteErr := s.keycloakAdmin.DeleteUser(ctx, keycloakUID); deleteErr != nil {
+			log.Error().Err(deleteErr).Str("keycloak_uid", keycloakUID).Msg("failed to rollback keycloak user after db commit failure")
 		}
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to commit transaction: %w", err))
 	}

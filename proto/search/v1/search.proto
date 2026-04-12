@@ -1,0 +1,58 @@
+syntax = "proto3";
+
+package search.v1;
+
+import "buf/validate/validate.proto";
+
+option go_package = "github.com/0utl1er-tech/phox-customer/gen/pb/search/v1;searchv1";
+
+// SearchService provides full-text and faceted search over Customer records
+// backed by Elasticsearch. Results are always filtered to the books the
+// calling user has a Permit on — callers cannot request arbitrary book_ids
+// to leak data.
+service SearchService {
+  // SearchCustomers returns scored hits matching the query and optional
+  // filters. `query` is tokenized against name/corporation/address/memo via
+  // the kuromoji analyzer; `prefecture` is a keyword filter on the extracted
+  // prefecture field.
+  rpc SearchCustomers(SearchCustomersRequest) returns (SearchCustomersResponse);
+}
+
+message SearchCustomersRequest {
+  // Free-text query. Empty string means "no text constraint" (filter-only
+  // search is allowed, e.g. browse all customers in 東京都).
+  string query = 1 [(buf.validate.field).string.max_len = 256];
+
+  // Restrict to a subset of books the caller has access to. Empty list means
+  // "all books the caller has a Permit on" (computed server-side).
+  repeated string book_ids = 2;
+
+  // Prefecture keyword filter. Empty string means no prefecture filter.
+  string prefecture = 3 [(buf.validate.field).string.max_len = 32];
+
+  // Pagination. Server clamps `limit` to max 100.
+  int32 limit = 4;
+  int32 offset = 5;
+}
+
+message SearchHit {
+  string customer_id = 1;
+  string book_id = 2;
+  string name = 3;
+  string corporation = 4;
+  string address = 5;
+  string phone = 6;
+  string prefecture = 7;
+  double score = 8;
+}
+
+message PrefectureFacet {
+  string prefecture = 1;
+  int64 count = 2;
+}
+
+message SearchCustomersResponse {
+  repeated SearchHit hits = 1;
+  int64 total = 2;
+  repeated PrefectureFacet prefecture_facets = 3;
+}

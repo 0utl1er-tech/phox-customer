@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package googleoauth.v1;
+
+import "google/protobuf/empty.proto";
+
+option go_package = "github.com/0utl1er-tech/phox-customer/gen/pb/googleoauth/v1;googleoauthv1";
+
+// GoogleOAuthService は CRM ユーザーの Google Calendar 連携ステータスを扱う。
+// OAuth フロー自体は /oauth/google/start + /oauth/google/callback の HTTP
+// エンドポイント (Connect ではない) が担当する。この Connect サービスは
+// 「連携しているか?」の問い合わせと、連携解除のみを担う。
+service GoogleOAuthService {
+  rpc GetGoogleConnectionStatus(GetGoogleConnectionStatusRequest) returns (GetGoogleConnectionStatusResponse);
+  rpc DisconnectGoogle(DisconnectGoogleRequest) returns (google.protobuf.Empty);
+}
+
+message GetGoogleConnectionStatusRequest {}
+message GetGoogleConnectionStatusResponse {
+  bool connected = 1;
+  string google_email = 2;
+  string scopes = 3;
+}
+
+message DisconnectGoogleRequest {}

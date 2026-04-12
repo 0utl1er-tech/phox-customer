@@ -3,27 +3,84 @@ syntax = "proto3";
 package redial.v1;
 
 import "buf/validate/validate.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
 
 option go_package = "github.com/0utl1er-tech/phox-customer/gen/pb/redial/v1;redialv1";
 
+// RedialService は「掛け直し予定」の CRUD を扱う。
+// Phase 20 で再設計され、customer_id 複数件 OK + Google Calendar 連携を持つ。
 service RedialService {
+  rpc ListRedialsByCustomer(ListRedialsByCustomerRequest) returns (ListRedialsByCustomerResponse);
   rpc CreateRedial(CreateRedialRequest) returns (CreateRedialResponse);
+  rpc UpdateRedial(UpdateRedialRequest) returns (UpdateRedialResponse);
+  rpc DeleteRedial(DeleteRedialRequest) returns (google.protobuf.Empty);
+  rpc ResyncRedial(ResyncRedialRequest) returns (ResyncRedialResponse);
 }
 
-message CreateRedialRequest {
-  string customer_id = 1 [(buf.validate.field).string.uuid = true];
-  string date = 2;
-  string time = 3;
-}
-
-message CreateRedialResponse {
-  Redial redial = 1;
+// Google Calendar との同期ステータス。
+// - synced:        gcal_event_id 有り、同期済
+// - unsynced:      連携はしているが何らかの理由で同期失敗/未同期
+// - not_connected: そのユーザーが Google 未連携
+enum SyncStatus {
+  SYNC_STATUS_UNSPECIFIED = 0;
+  SYNC_STATUS_SYNCED = 1;
+  SYNC_STATUS_UNSYNCED = 2;
+  SYNC_STATUS_NOT_CONNECTED = 3;
 }
 
 message Redial {
   string id = 1;
-  string customer_id = 2 [(buf.validate.field).string.uuid = true];
-  string user_id = 3 [(buf.validate.field).string.min_len = 1];
-  string date = 4;
-  string time = 5;
+  string customer_id = 2;
+  string user_id = 3;
+  string user_name = 4;
+  string phone = 5;
+  google.protobuf.Timestamp start_at = 6;
+  google.protobuf.Timestamp end_at = 7;
+  string note = 8;
+  optional string gcal_event_id = 9;
+  optional google.protobuf.Timestamp gcal_synced_at = 10;
+  SyncStatus sync_status = 11;
+  google.protobuf.Timestamp created_at = 12;
+  google.protobuf.Timestamp updated_at = 13;
+}
+
+message ListRedialsByCustomerRequest {
+  string customer_id = 1 [(buf.validate.field).string.uuid = true];
+}
+message ListRedialsByCustomerResponse {
+  repeated Redial redials = 1;
+}
+
+message CreateRedialRequest {
+  string customer_id = 1 [(buf.validate.field).string.uuid = true];
+  string phone = 2;
+  google.protobuf.Timestamp start_at = 3;
+  google.protobuf.Timestamp end_at = 4;
+  string note = 5;
+}
+message CreateRedialResponse {
+  Redial redial = 1;
+}
+
+message UpdateRedialRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+  string phone = 2;
+  google.protobuf.Timestamp start_at = 3;
+  google.protobuf.Timestamp end_at = 4;
+  string note = 5;
+}
+message UpdateRedialResponse {
+  Redial redial = 1;
+}
+
+message DeleteRedialRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message ResyncRedialRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+message ResyncRedialResponse {
+  Redial redial = 1;
 }

@@ -44,6 +44,13 @@ func (s *BookService) CreateBook(
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create permit: %w", err))
 	}
 
+	// Seed default Status ("未対応") — PhoneInput の saveCallHistory が
+	// GetDefaultStatus で参照する。これが無いと CreateActivityCall が status_id を
+	// 解決できずコール履歴が記録できない。
+	if err := SeedDefaultStatus(ctx, s.queries, bookId); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to seed default status: %w", err))
+	}
+
 	return connect.NewResponse(&bookv1.CreateBookResponse{
 		Book: &bookv1.Book{
 			Id:        result.ID.String(),

@@ -3,7 +3,6 @@ syntax = "proto3";
 package customer.v1;
 
 import "buf/validate/validate.proto";
-import "call/v1/call.proto";
 import "contact/v1/contact.proto";
 
 option go_package = "github.com/0utl1er-tech/phox-customer/gen/pb/customer/v1;customerv1";
@@ -16,6 +15,7 @@ message CreateCustomerRequest {
   string corporation = 5 [(buf.validate.field).string.max_len = 128];
   string address = 6 [(buf.validate.field).string.max_len = 128];
   string memo = 7 [(buf.validate.field).string.max_len = 1024];
+  string mail = 8 [(buf.validate.field).string.max_len = 256];
 }
 
 message CreateCustomerResponse {
@@ -50,7 +50,11 @@ message Customer {
   string address = 7;
   string memo = 8;
   repeated contact.v1.Contact contacts = 9;
-  repeated call.v1.Call calls = 10;
+  // フィールド番号 10 は廃止された `calls` (旧 CallService 依存) 用。
+  // Phase 12 で Activity に移行済。再利用は禁止 (後方互換のため reserved)。
+  reserved 10;
+  reserved "calls";
+  string mail = 11;
 }
 
 message UpdateCustomerRequest {
@@ -61,6 +65,7 @@ message UpdateCustomerRequest {
   optional string corporation = 5 [(buf.validate.field).string.max_len = 128];
   optional string address = 6 [(buf.validate.field).string.max_len = 128];
   optional string memo = 7 [(buf.validate.field).string.max_len = 1024];
+  optional string mail = 8 [(buf.validate.field).string.max_len = 256];
 }
 
 message UpdateCustomerResponse {

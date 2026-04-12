@@ -1,0 +1,107 @@
+name: E2E Tests (main only)
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: root
+          POSTGRES_PASSWORD: secret
+          POSTGRES_DB: phox-customer
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U root"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+      mailhog:
+        image: mailhog/mailhog:v1.0.1
+        ports:
+          - "1025:1025"
+          - "8025:8025"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install migrate + run migrations
+        run: |
+          go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
+          migrate -path db/migration -database "postgresql://root:secret@localhost:5432/phox-customer?sslmode=disable" up
+
+      - name: Start phox-customer
+        run: |
+          cat > app.env << 'EOF'
+          ENV=CI
+          DB_SOURCE=postgresql://root:secret@localhost:5432/phox-customer?sslmode=disable
+          CONNECT_SERVER_ADDRESS=localhost:8082
+          JWT_ENABLED=false
+          SMTP_HOST=localhost
+          SMTP_PORT=1025
+          SMTP_TLS_MODE=none
+          SMTP_DEFAULT_FROM=noreply@phox.local
+          GCAL_MODE=mock
+          GCAL_TOKEN_KEY=ZGV2LW9ubHktMzJieXRlLWtleS1mb3ItZGV2LWdjYWw=
+          GOOGLE_OAUTH_CLIENT_ID=dummy-for-dev
+          GOOGLE_OAUTH_CLIENT_SECRET=dummy-for-dev
+          GOOGLE_OAUTH_REDIRECT_URL=http://localhost:8082/oauth/google/callback
+          PHOX_BASE_URL=http://localhost:3000
+          ICAL_FEED_BASE_URL=http://localhost:8082
+          EOF
+          go run main.go reindex.go &
+          for i in $(seq 1 30); do curl -sf http://localhost:8082/ > /dev/null 2>&1 && break; sleep 1; done
+
+      # phox-ui と phox-e2e は別 repo なので checkout が必要
+      # 同じ GitHub org なら actions/checkout で path 指定で並列チェックアウト可能
+      # ここでは monorepo 外の場合を想定して sparse checkout
+      - name: Checkout phox-ui
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/phox-ui
+          path: ../phox-ui
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Checkout phox-e2e
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/phox-e2e
+          path: ../phox-e2e
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Start phox-ui
+        working-directory: ../phox-ui
+        run: |
+          npm ci
+          npm run dev &
+          for i in $(seq 1 30); do curl -sf http://localhost:3000/ > /dev/null 2>&1 && break; sleep 1; done
+
+      - name: Run E2E
+        working-directory: ../phox-e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          npx playwright test --reporter=line
+
+      - name: Upload results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results
+          path: ../phox-e2e/test-results/
+          retention-days: 7

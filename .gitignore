@@ -27,6 +27,8 @@ go.work.sum
 # env file
 .env
 app.env
+# developer-specific overrides (real Google OAuth creds, etc.) — never commit
+app.env.local
 
 # Firebase credentials
 firebase-service-account.json
@@ -34,3 +36,4 @@ firebase-service-account.json
 # Editor/IDE
 # .idea/
 # .vscode/
+gcp-sa-key.json

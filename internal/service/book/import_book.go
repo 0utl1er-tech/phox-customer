@@ -6,11 +6,14 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"connectrpc.com/connect"
 	bookv1 "github.com/0utl1er-tech/phox-customer/gen/pb/book/v1"
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
+	"github.com/0utl1er-tech/phox-customer/internal/search"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 )
 
 func (s *BookService) ImportBook(ctx context.Context, req *connect.Request[bookv1.ImportBookRequest]) (*connect.Response[bookv1.ImportBookResponse], error) {
@@ -41,6 +44,11 @@ func (s *BookService) ImportBook(ctx context.Context, req *connect.Request[bookv
 	_, err = s.queries.CreatePermit(ctx, createPermitArgs)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create permit for owner: %v", err))
+	}
+
+	// Seed default Status ("未対応") — 詳細は create_book.go と同じ。
+	if err := SeedDefaultStatus(ctx, s.queries, bookID); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to seed default status: %v", err))
 	}
 
 	// Parse CSV content
@@ -86,6 +94,13 @@ func (s *BookService) ImportBook(ctx context.Context, req *connect.Request[bookv
 	memoCol := -1
 	if idx, ok := columnMap["memo"]; ok {
 		memoCol = idx
+	}
+	// mail / email どちらの列名でも受ける
+	mailCol := -1
+	if idx, ok := columnMap["mail"]; ok {
+		mailCol = idx
+	} else if idx, ok := columnMap["email"]; ok {
+		mailCol = idx
 	}
 
 	var customersToInsert []db.CreateCustomerParams
@@ -133,11 +148,15 @@ func (s *BookService) ImportBook(ctx context.Context, req *connect.Request[bookv
 			Corporation: getStringValue(record, corporationCol),
 			Address:     getStringValue(record, addressCol),
 			Memo:        getStringValue(record, memoCol),
+			Mail:        getStringValue(record, mailCol),
 		}
 		customersToInsert = append(customersToInsert, customer)
 	}
 
-	// Insert customers one by one
+	// Insert customers one by one and collect successfully inserted ones for
+	// a single ES bulk index call at the end.
+	now := time.Now()
+	docsToIndex := make([]search.CustomerDoc, 0, len(customersToInsert))
 	for i, customer := range customersToInsert {
 		_, err := s.queries.CreateCustomer(ctx, customer)
 		if err != nil {
@@ -145,7 +164,25 @@ func (s *BookService) ImportBook(ctx context.Context, req *connect.Request[bookv
 				LineNumber:   int32(i + 2),
 				ErrorMessage: fmt.Sprintf("failed to insert customer (index %d): %v", i, err),
 			})
+			continue
 		}
+		docsToIndex = append(docsToIndex, search.NewCustomerDoc(
+			customer.ID,
+			customer.BookID,
+			customer.Name,
+			customer.Corporation,
+			customer.Address,
+			customer.Memo,
+			customer.Phone,
+			customer.Category,
+			now,
+		))
+	}
+
+	// Bulk index the newly inserted customers. Degraded mode: warn and continue
+	// on failure so CSV import never fails due to ES unavailability.
+	if idxErr := s.indexer.BulkIndex(ctx, docsToIndex); idxErr != nil {
+		log.Warn().Err(idxErr).Int("count", len(docsToIndex)).Msg("failed to bulk index imported customers")
 	}
 
 	// Calculate imported count

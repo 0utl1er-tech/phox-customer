@@ -1,0 +1,91 @@
+syntax = "proto3";
+
+package activity.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/0utl1er-tech/phox-customer/gen/pb/activity/v1;activityv1";
+
+// ActivityService は顧客との各種やりとり (通話・メール送信・メール受信) を
+// 同一のテーブル "Activity" に書き込む抽象化された RPC を提供する。
+// 既存の CallService は Phase 12 で撤去され、このサービスに置き換わる。
+service ActivityService {
+  rpc ListActivitiesByCustomerID(ListActivitiesByCustomerIDRequest)
+      returns (ListActivitiesByCustomerIDResponse);
+  rpc CreateActivityCall(CreateActivityCallRequest)
+      returns (CreateActivityCallResponse);
+  rpc CreateActivityEmailSent(CreateActivityEmailSentRequest)
+      returns (CreateActivityEmailSentResponse);
+  rpc UpdateActivityStatus(UpdateActivityStatusRequest)
+      returns (UpdateActivityStatusResponse);
+}
+
+enum ActivityType {
+  ACTIVITY_TYPE_UNSPECIFIED = 0;
+  ACTIVITY_TYPE_CALL = 1;
+  ACTIVITY_TYPE_EMAIL_SENT = 2;
+  ACTIVITY_TYPE_EMAIL_RECEIVED = 3;
+}
+
+message Activity {
+  string id = 1;
+  string customer_id = 2;
+  optional string contact_id = 3;
+  ActivityType type = 4;
+  string user_id = 5;
+  string user_name = 6;
+  optional string status_id = 7;
+  optional string status_name = 8;
+  optional int32 status_priority = 9;
+  optional bool status_effective = 10;
+  optional bool status_ng = 11;
+  optional string phone = 12;
+  optional string mail_from = 13;
+  optional string mail_to = 14;
+  optional string mail_cc = 15;
+  optional string subject = 16;
+  optional string body = 17;
+  optional string message_id = 18;
+  google.protobuf.Timestamp occurred_at = 19;
+  google.protobuf.Timestamp created_at = 20;
+}
+
+message ListActivitiesByCustomerIDRequest {
+  string customer_id = 1 [(buf.validate.field).string.uuid = true];
+  // 空配列なら全 type を返す
+  repeated ActivityType types = 2;
+}
+message ListActivitiesByCustomerIDResponse {
+  repeated Activity activities = 1;
+}
+
+message CreateActivityCallRequest {
+  string customer_id = 1 [(buf.validate.field).string.uuid = true];
+  string phone = 2 [(buf.validate.field).string.min_len = 1];
+  string status_id = 3 [(buf.validate.field).string.uuid = true];
+  optional string contact_id = 4;
+}
+message CreateActivityCallResponse {
+  Activity activity = 1;
+}
+
+message CreateActivityEmailSentRequest {
+  string customer_id = 1 [(buf.validate.field).string.uuid = true];
+  string mail_to = 2 [(buf.validate.field).string.min_len = 3];
+  optional string mail_cc = 3;
+  string subject = 4 [(buf.validate.field).string.min_len = 1];
+  string body = 5;
+  optional string contact_id = 6;
+}
+message CreateActivityEmailSentResponse {
+  Activity activity = 1;
+}
+
+message UpdateActivityStatusRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+  string status_id = 2 [(buf.validate.field).string.uuid = true];
+}
+message UpdateActivityStatusResponse {
+  Activity activity = 1;
+}

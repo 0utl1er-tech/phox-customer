@@ -5,14 +5,15 @@ import (
 	"fmt"
 
 	"connectrpc.com/connect"
-	callv1 "github.com/0utl1er-tech/phox-customer/gen/pb/call/v1"
 	customerv1 "github.com/0utl1er-tech/phox-customer/gen/pb/customer/v1"
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
 	"github.com/0utl1er-tech/phox-customer/internal/service/auth"
 	"github.com/google/uuid"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// GetCustomer returns a single customer by ID. Activity history (call / email)
+// is fetched separately by the frontend via ActivityService, so this handler
+// no longer embeds a `calls` list in the response.
 func (s *CustomerService) GetCustomer(
 	ctx context.Context,
 	req *connect.Request[customerv1.GetCustomerRequest],
@@ -36,28 +37,6 @@ func (s *CustomerService) GetCustomer(
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("このbookにアクセスする権限がありません: %w", err))
 	}
 
-	callRows, err := s.queries.ListCallsByCustomerID(ctx, customer.ID)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("callsの取得に失敗しました: %w", err))
-	}
-
-	calls := make([]*callv1.Call, len(callRows))
-	for i, call := range callRows {
-		calls[i] = &callv1.Call{
-			Id:              call.ID.String(),
-			CustomerId:      call.CustomerID.String(),
-			Phone:           call.Phone,
-			UserId:          call.UserID,
-			UserName:        call.UserName,
-			StatusId:        call.StatusID.String(),
-			StatusName:      call.StatusName,
-			StatusPriority:  call.StatusPriority,
-			StatusEffective: call.StatusEffective,
-			StatusNg:        call.StatusNg,
-			CreatedAt:       timestamppb.New(call.CreatedAt),
-		}
-	}
-
 	return connect.NewResponse(&customerv1.GetCustomerResponse{
 		Customer: &customerv1.Customer{
 			Id:          customer.ID.String(),
@@ -68,7 +47,7 @@ func (s *CustomerService) GetCustomer(
 			Corporation: customer.Corporation,
 			Address:     customer.Address,
 			Memo:        customer.Memo,
-			Calls:       calls,
+			Mail:        customer.Mail,
 		},
 	}), nil
 }

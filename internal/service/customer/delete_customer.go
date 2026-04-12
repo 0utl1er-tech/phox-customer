@@ -9,6 +9,7 @@ import (
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
 	"github.com/0utl1er-tech/phox-customer/internal/service/auth"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 )
 
 // DeleteCustomer customerを削除
@@ -48,6 +49,11 @@ func (s *CustomerService) DeleteCustomer(
 	err = s.queries.DeleteCustomer(ctx, customerID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("customerの削除に失敗しました: %w", err))
+	}
+
+	// Write-after-commit ES unindex。失敗しても DB 成功は返す (degraded mode)。
+	if idxErr := s.indexer.DeleteFromIndex(ctx, customerID.String()); idxErr != nil {
+		log.Warn().Err(idxErr).Str("customer_id", customerID.String()).Msg("failed to delete customer from index")
 	}
 
 	return connect.NewResponse(&customerv1.DeleteCustomerResponse{

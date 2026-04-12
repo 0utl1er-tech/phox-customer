@@ -7,9 +7,11 @@ import (
 	"connectrpc.com/connect"
 	customerv1 "github.com/0utl1er-tech/phox-customer/gen/pb/customer/v1"
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
+	"github.com/0utl1er-tech/phox-customer/internal/search"
 	"github.com/0utl1er-tech/phox-customer/internal/service/auth"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/rs/zerolog/log"
 )
 
 // UpdateCustomer customerを更新
@@ -65,6 +67,10 @@ func (s *CustomerService) UpdateCustomer(
 	if req.Msg.Memo != nil {
 		memoText = pgtype.Text{String: *req.Msg.Memo, Valid: true}
 	}
+	mailText := pgtype.Text{Valid: false}
+	if req.Msg.Mail != nil {
+		mailText = pgtype.Text{String: *req.Msg.Mail, Valid: true}
+	}
 
 	result, err := s.queries.UpdateCustomer(ctx, db.UpdateCustomerParams{
 		ID:          customer.ID,
@@ -74,9 +80,25 @@ func (s *CustomerService) UpdateCustomer(
 		Corporation: corporationText,
 		Address:     addressText,
 		Memo:        memoText,
+		Mail:        mailText,
 	})
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("customerの更新に失敗しました: %w", err))
+	}
+
+	// Write-after-commit ES index (idempotent: 同じ id に re-index するだけ)。
+	if idxErr := s.indexer.IndexCustomer(ctx, search.NewCustomerDoc(
+		result.ID,
+		result.BookID,
+		result.Name,
+		result.Corporation,
+		result.Address,
+		result.Memo,
+		result.Phone,
+		result.Category,
+		result.UpdatedAt,
+	)); idxErr != nil {
+		log.Warn().Err(idxErr).Str("customer_id", result.ID.String()).Msg("failed to reindex updated customer")
 	}
 
 	return connect.NewResponse(&customerv1.UpdateCustomerResponse{
@@ -89,6 +111,7 @@ func (s *CustomerService) UpdateCustomer(
 			Corporation: result.Corporation,
 			Address:     result.Address,
 			Memo:        result.Memo,
+			Mail:        result.Mail,
 		},
 	}), nil
 }

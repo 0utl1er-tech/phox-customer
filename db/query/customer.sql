@@ -1,8 +1,8 @@
 -- name: CreateCustomer :one
 INSERT INTO "Customer" (
-    id, book_id, phone, category, name, corporation, address, memo
+    id, book_id, phone, category, name, corporation, address, memo, mail
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8
+    $1, $2, $3, $4, $5, $6, $7, $8, $9
 ) RETURNING *;
 
 -- name: GetCustomer :one
@@ -15,6 +15,7 @@ SELECT
     corporation,
     address,
     memo,
+    mail,
     updated_at,
     created_at
 FROM "Customer"
@@ -30,6 +31,7 @@ SELECT
     corporation,
     address,
     memo,
+    mail,
     updated_at,
     created_at
 FROM "Customer"
@@ -45,6 +47,7 @@ SELECT
     corporation,
     address,
     memo,
+    mail,
     updated_at,
     created_at
 FROM "Customer"
@@ -52,6 +55,22 @@ WHERE book_id = $1
 ORDER BY updated_at DESC
 LIMIT $2
 OFFSET $3;
+
+-- name: ListAllCustomers :many
+SELECT
+    id,
+    book_id,
+    phone,
+    category,
+    name,
+    corporation,
+    address,
+    memo,
+    mail,
+    updated_at,
+    created_at
+FROM "Customer"
+ORDER BY created_at ASC;
 
 -- name: UpdateCustomer :one
 UPDATE "Customer"
@@ -62,6 +81,7 @@ SET
     corporation = COALESCE(sqlc.narg(corporation), corporation),
     address = COALESCE(sqlc.narg(address), address),
     memo = COALESCE(sqlc.narg(memo), memo),
+    mail = COALESCE(sqlc.narg(mail), mail),
     updated_at = now()
 WHERE id = sqlc.arg(id)
 RETURNING *;

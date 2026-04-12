@@ -1,0 +1,64 @@
+syntax = "proto3";
+
+package mailtemplate.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+option go_package = "github.com/0utl1er-tech/phox-customer/gen/pb/mailtemplate/v1;mailtemplatev1";
+
+// MailTemplateService は Book に紐づくメールテンプレの CRUD を提供する。
+// テンプレ本文にはフロント側で `{{customer_name}}` 等のプレースホルダを挿入
+// できるが、backend はその置換には関与せずテンプレ文字列をそのまま保存する。
+service MailTemplateService {
+  rpc ListMailTemplatesByBook(ListMailTemplatesByBookRequest)
+      returns (ListMailTemplatesByBookResponse);
+  rpc CreateMailTemplate(CreateMailTemplateRequest)
+      returns (CreateMailTemplateResponse);
+  rpc UpdateMailTemplate(UpdateMailTemplateRequest)
+      returns (UpdateMailTemplateResponse);
+  rpc DeleteMailTemplate(DeleteMailTemplateRequest)
+      returns (google.protobuf.Empty);
+}
+
+message MailTemplate {
+  string id = 1;
+  string book_id = 2;
+  string name = 3;
+  string subject = 4;
+  string body = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp updated_at = 7;
+}
+
+message ListMailTemplatesByBookRequest {
+  string book_id = 1 [(buf.validate.field).string.uuid = true];
+}
+message ListMailTemplatesByBookResponse {
+  repeated MailTemplate templates = 1;
+}
+
+message CreateMailTemplateRequest {
+  string book_id = 1 [(buf.validate.field).string.uuid = true];
+  string name = 2 [(buf.validate.field).string.min_len = 1];
+  string subject = 3;
+  string body = 4;
+}
+message CreateMailTemplateResponse {
+  MailTemplate template = 1;
+}
+
+message UpdateMailTemplateRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+  string name = 2 [(buf.validate.field).string.min_len = 1];
+  string subject = 3;
+  string body = 4;
+}
+message UpdateMailTemplateResponse {
+  MailTemplate template = 1;
+}
+
+message DeleteMailTemplateRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}

@@ -1,0 +1,85 @@
+// Package ical は RFC 5545 iCalendar 形式のフィード生成 + HTTP 配信を提供する。
+//
+// Phase 20e の目標: 各 CRM ユーザーが固有の購読 URL を持ち、その URL を Apple
+// Calendar / Google Calendar / Outlook などに登録すると、そのユーザーの Redial
+// (掛け直し予定) がカレンダーに自動反映される。
+package ical
+
+import (
+	"bytes"
+	"fmt"
+	"time"
+
+	ics "github.com/arran4/golang-ical"
+
+	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
+)
+
+// FeedInput は 1 ユーザー分の feed を組み立てるのに必要な値。
+type FeedInput struct {
+	UserID       string
+	UserName     string
+	PhoxBaseURL  string // 例: http://localhost:3000 — deep link の構築に使う
+	Redials      []db.ListRedialsByUserWithCustomerRow
+	GeneratedAt  time.Time // DTSTAMP に使う (テストで固定するため param 化)
+}
+
+// BuildFeed は iCalendar (text/calendar) を byte slice として返す。
+// 標準準拠:
+//   - PRODID は FPI 形式 `-//Owner//Product Version//EN`
+//   - DTSTART / DTEND は UTC Z 形式 (TZID と混在させない)
+//   - UID は `phox-redial-{uuid}@phox.local` で安定
+func BuildFeed(in FeedInput) []byte {
+	cal := ics.NewCalendar()
+	cal.SetProductId("-//Phox//Phox CRM iCal Feed 1.0//EN")
+	cal.SetVersion("2.0")
+	cal.SetMethod(ics.MethodPublish)
+	cal.SetXWRCalName(fmt.Sprintf("Phox — %s の掛け直し予定", in.UserName))
+	cal.SetXWRTimezone("Asia/Tokyo")
+	cal.SetXWRCalDesc("Phox CRM が管理する掛け直し予定 (過去 90 日 + 今後すべて)")
+
+	for _, r := range in.Redials {
+		ev := cal.AddEvent(fmt.Sprintf("phox-redial-%s@phox.local", r.ID.String()))
+		ev.SetDtStampTime(in.GeneratedAt.UTC())
+		ev.SetStartAt(r.StartAt.UTC())
+		ev.SetEndAt(r.EndAt.UTC())
+		ev.SetSummary(fmt.Sprintf("[Phox] %s へ掛け直し", r.CustomerName))
+		ev.SetDescription(buildDescription(r, in.PhoxBaseURL))
+		ev.SetStatus(ics.ObjectStatusConfirmed)
+		// 検索/色分け用カテゴリ
+		ev.AddProperty(ics.ComponentPropertyCategories, "Phox,Redial")
+		// カレンダーから Phox のページにジャンプできるように URL も付ける
+		if in.PhoxBaseURL != "" {
+			ev.SetURL(customerDeepLink(in.PhoxBaseURL, r.CustomerBookID.String(), r.CustomerID.String()))
+		}
+	}
+
+	var buf bytes.Buffer
+	_ = cal.SerializeTo(&buf)
+	return buf.Bytes()
+}
+
+func buildDescription(r db.ListRedialsByUserWithCustomerRow, phoxBaseURL string) string {
+	var b bytes.Buffer
+	if r.Note != "" {
+		b.WriteString(r.Note)
+	}
+	if r.Phone != "" {
+		if b.Len() > 0 {
+			b.WriteString("\n")
+		}
+		b.WriteString("電話: ")
+		b.WriteString(r.Phone)
+	}
+	if phoxBaseURL != "" {
+		if b.Len() > 0 {
+			b.WriteString("\n")
+		}
+		b.WriteString(customerDeepLink(phoxBaseURL, r.CustomerBookID.String(), r.CustomerID.String()))
+	}
+	return b.String()
+}
+
+func customerDeepLink(base, bookID, customerID string) string {
+	return fmt.Sprintf("%s/book/%s/customer/%s", base, bookID, customerID)
+}

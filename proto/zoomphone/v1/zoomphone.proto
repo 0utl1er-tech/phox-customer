@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package zoomphone.v1;
+
+import "buf/validate/validate.proto";
+
+option go_package = "github.com/0utl1er-tech/phox-customer/gen/pb/zoomphone/v1;zoomphonev1";
+
+// ZoomPhoneService は Zoom Phone API を介した通話制御を扱う。
+// 発信は Zoom Phone API 経由 (アプリが前面に出ない)。
+// 着信通知は Webhook → SSE で別途 push される (この service ではない)。
+service ZoomPhoneService {
+  // MakeCall は指定顧客の電話番号に Zoom Phone で発信する。
+  // 呼び出し元ユーザーの Keycloak email → Zoom Phone ユーザーを自動解決。
+  rpc MakeCall(MakeCallRequest) returns (MakeCallResponse);
+
+  // GetMyZoomPhoneStatus は現在のログインユーザーが Zoom Phone に紐付いているか確認。
+  rpc GetMyZoomPhoneStatus(GetMyZoomPhoneStatusRequest) returns (GetMyZoomPhoneStatusResponse);
+}
+
+message MakeCallRequest {
+  // 発信先の電話番号 (日本の番号をそのまま渡してよい — backend が E.164 に正規化)
+  string phone_number = 1 [(buf.validate.field).string.min_len = 1];
+  // Activity に紐付ける customer_id (任意)
+  string customer_id = 2;
+}
+
+message MakeCallResponse {
+  string call_id = 1;
+  string status = 2;
+}
+
+message GetMyZoomPhoneStatusRequest {}
+
+message GetMyZoomPhoneStatusResponse {
+  bool connected = 1;
+  string zoom_phone_number = 2;
+  string zoom_user_name = 3;
+  string extension = 4;
+}

@@ -9,6 +9,7 @@ import (
 	context "context"
 	errors "errors"
 	v1 "github.com/0utl1er-tech/phox-customer/gen/pb/redial/v1"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 	http "net/http"
 	strings "strings"
 )
@@ -33,14 +34,30 @@ const (
 // reflection-formatted method names, remove the leading slash and convert the remaining slash to a
 // period.
 const (
+	// RedialServiceListRedialsByCustomerProcedure is the fully-qualified name of the RedialService's
+	// ListRedialsByCustomer RPC.
+	RedialServiceListRedialsByCustomerProcedure = "/redial.v1.RedialService/ListRedialsByCustomer"
 	// RedialServiceCreateRedialProcedure is the fully-qualified name of the RedialService's
 	// CreateRedial RPC.
 	RedialServiceCreateRedialProcedure = "/redial.v1.RedialService/CreateRedial"
+	// RedialServiceUpdateRedialProcedure is the fully-qualified name of the RedialService's
+	// UpdateRedial RPC.
+	RedialServiceUpdateRedialProcedure = "/redial.v1.RedialService/UpdateRedial"
+	// RedialServiceDeleteRedialProcedure is the fully-qualified name of the RedialService's
+	// DeleteRedial RPC.
+	RedialServiceDeleteRedialProcedure = "/redial.v1.RedialService/DeleteRedial"
+	// RedialServiceResyncRedialProcedure is the fully-qualified name of the RedialService's
+	// ResyncRedial RPC.
+	RedialServiceResyncRedialProcedure = "/redial.v1.RedialService/ResyncRedial"
 )
 
 // RedialServiceClient is a client for the redial.v1.RedialService service.
 type RedialServiceClient interface {
+	ListRedialsByCustomer(context.Context, *connect.Request[v1.ListRedialsByCustomerRequest]) (*connect.Response[v1.ListRedialsByCustomerResponse], error)
 	CreateRedial(context.Context, *connect.Request[v1.CreateRedialRequest]) (*connect.Response[v1.CreateRedialResponse], error)
+	UpdateRedial(context.Context, *connect.Request[v1.UpdateRedialRequest]) (*connect.Response[v1.UpdateRedialResponse], error)
+	DeleteRedial(context.Context, *connect.Request[v1.DeleteRedialRequest]) (*connect.Response[emptypb.Empty], error)
+	ResyncRedial(context.Context, *connect.Request[v1.ResyncRedialRequest]) (*connect.Response[v1.ResyncRedialResponse], error)
 }
 
 // NewRedialServiceClient constructs a client for the redial.v1.RedialService service. By default,
@@ -54,10 +71,34 @@ func NewRedialServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 	baseURL = strings.TrimRight(baseURL, "/")
 	redialServiceMethods := v1.File_redial_v1_redial_proto.Services().ByName("RedialService").Methods()
 	return &redialServiceClient{
+		listRedialsByCustomer: connect.NewClient[v1.ListRedialsByCustomerRequest, v1.ListRedialsByCustomerResponse](
+			httpClient,
+			baseURL+RedialServiceListRedialsByCustomerProcedure,
+			connect.WithSchema(redialServiceMethods.ByName("ListRedialsByCustomer")),
+			connect.WithClientOptions(opts...),
+		),
 		createRedial: connect.NewClient[v1.CreateRedialRequest, v1.CreateRedialResponse](
 			httpClient,
 			baseURL+RedialServiceCreateRedialProcedure,
 			connect.WithSchema(redialServiceMethods.ByName("CreateRedial")),
+			connect.WithClientOptions(opts...),
+		),
+		updateRedial: connect.NewClient[v1.UpdateRedialRequest, v1.UpdateRedialResponse](
+			httpClient,
+			baseURL+RedialServiceUpdateRedialProcedure,
+			connect.WithSchema(redialServiceMethods.ByName("UpdateRedial")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteRedial: connect.NewClient[v1.DeleteRedialRequest, emptypb.Empty](
+			httpClient,
+			baseURL+RedialServiceDeleteRedialProcedure,
+			connect.WithSchema(redialServiceMethods.ByName("DeleteRedial")),
+			connect.WithClientOptions(opts...),
+		),
+		resyncRedial: connect.NewClient[v1.ResyncRedialRequest, v1.ResyncRedialResponse](
+			httpClient,
+			baseURL+RedialServiceResyncRedialProcedure,
+			connect.WithSchema(redialServiceMethods.ByName("ResyncRedial")),
 			connect.WithClientOptions(opts...),
 		),
 	}
@@ -65,7 +106,16 @@ func NewRedialServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 
 // redialServiceClient implements RedialServiceClient.
 type redialServiceClient struct {
-	createRedial *connect.Client[v1.CreateRedialRequest, v1.CreateRedialResponse]
+	listRedialsByCustomer *connect.Client[v1.ListRedialsByCustomerRequest, v1.ListRedialsByCustomerResponse]
+	createRedial          *connect.Client[v1.CreateRedialRequest, v1.CreateRedialResponse]
+	updateRedial          *connect.Client[v1.UpdateRedialRequest, v1.UpdateRedialResponse]
+	deleteRedial          *connect.Client[v1.DeleteRedialRequest, emptypb.Empty]
+	resyncRedial          *connect.Client[v1.ResyncRedialRequest, v1.ResyncRedialResponse]
+}
+
+// ListRedialsByCustomer calls redial.v1.RedialService.ListRedialsByCustomer.
+func (c *redialServiceClient) ListRedialsByCustomer(ctx context.Context, req *connect.Request[v1.ListRedialsByCustomerRequest]) (*connect.Response[v1.ListRedialsByCustomerResponse], error) {
+	return c.listRedialsByCustomer.CallUnary(ctx, req)
 }
 
 // CreateRedial calls redial.v1.RedialService.CreateRedial.
@@ -73,9 +123,28 @@ func (c *redialServiceClient) CreateRedial(ctx context.Context, req *connect.Req
 	return c.createRedial.CallUnary(ctx, req)
 }
 
+// UpdateRedial calls redial.v1.RedialService.UpdateRedial.
+func (c *redialServiceClient) UpdateRedial(ctx context.Context, req *connect.Request[v1.UpdateRedialRequest]) (*connect.Response[v1.UpdateRedialResponse], error) {
+	return c.updateRedial.CallUnary(ctx, req)
+}
+
+// DeleteRedial calls redial.v1.RedialService.DeleteRedial.
+func (c *redialServiceClient) DeleteRedial(ctx context.Context, req *connect.Request[v1.DeleteRedialRequest]) (*connect.Response[emptypb.Empty], error) {
+	return c.deleteRedial.CallUnary(ctx, req)
+}
+
+// ResyncRedial calls redial.v1.RedialService.ResyncRedial.
+func (c *redialServiceClient) ResyncRedial(ctx context.Context, req *connect.Request[v1.ResyncRedialRequest]) (*connect.Response[v1.ResyncRedialResponse], error) {
+	return c.resyncRedial.CallUnary(ctx, req)
+}
+
 // RedialServiceHandler is an implementation of the redial.v1.RedialService service.
 type RedialServiceHandler interface {
+	ListRedialsByCustomer(context.Context, *connect.Request[v1.ListRedialsByCustomerRequest]) (*connect.Response[v1.ListRedialsByCustomerResponse], error)
 	CreateRedial(context.Context, *connect.Request[v1.CreateRedialRequest]) (*connect.Response[v1.CreateRedialResponse], error)
+	UpdateRedial(context.Context, *connect.Request[v1.UpdateRedialRequest]) (*connect.Response[v1.UpdateRedialResponse], error)
+	DeleteRedial(context.Context, *connect.Request[v1.DeleteRedialRequest]) (*connect.Response[emptypb.Empty], error)
+	ResyncRedial(context.Context, *connect.Request[v1.ResyncRedialRequest]) (*connect.Response[v1.ResyncRedialResponse], error)
 }
 
 // NewRedialServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -85,16 +154,48 @@ type RedialServiceHandler interface {
 // and JSON codecs. They also support gzip compression.
 func NewRedialServiceHandler(svc RedialServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
 	redialServiceMethods := v1.File_redial_v1_redial_proto.Services().ByName("RedialService").Methods()
+	redialServiceListRedialsByCustomerHandler := connect.NewUnaryHandler(
+		RedialServiceListRedialsByCustomerProcedure,
+		svc.ListRedialsByCustomer,
+		connect.WithSchema(redialServiceMethods.ByName("ListRedialsByCustomer")),
+		connect.WithHandlerOptions(opts...),
+	)
 	redialServiceCreateRedialHandler := connect.NewUnaryHandler(
 		RedialServiceCreateRedialProcedure,
 		svc.CreateRedial,
 		connect.WithSchema(redialServiceMethods.ByName("CreateRedial")),
 		connect.WithHandlerOptions(opts...),
 	)
+	redialServiceUpdateRedialHandler := connect.NewUnaryHandler(
+		RedialServiceUpdateRedialProcedure,
+		svc.UpdateRedial,
+		connect.WithSchema(redialServiceMethods.ByName("UpdateRedial")),
+		connect.WithHandlerOptions(opts...),
+	)
+	redialServiceDeleteRedialHandler := connect.NewUnaryHandler(
+		RedialServiceDeleteRedialProcedure,
+		svc.DeleteRedial,
+		connect.WithSchema(redialServiceMethods.ByName("DeleteRedial")),
+		connect.WithHandlerOptions(opts...),
+	)
+	redialServiceResyncRedialHandler := connect.NewUnaryHandler(
+		RedialServiceResyncRedialProcedure,
+		svc.ResyncRedial,
+		connect.WithSchema(redialServiceMethods.ByName("ResyncRedial")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/redial.v1.RedialService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
+		case RedialServiceListRedialsByCustomerProcedure:
+			redialServiceListRedialsByCustomerHandler.ServeHTTP(w, r)
 		case RedialServiceCreateRedialProcedure:
 			redialServiceCreateRedialHandler.ServeHTTP(w, r)
+		case RedialServiceUpdateRedialProcedure:
+			redialServiceUpdateRedialHandler.ServeHTTP(w, r)
+		case RedialServiceDeleteRedialProcedure:
+			redialServiceDeleteRedialHandler.ServeHTTP(w, r)
+		case RedialServiceResyncRedialProcedure:
+			redialServiceResyncRedialHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -104,6 +205,22 @@ func NewRedialServiceHandler(svc RedialServiceHandler, opts ...connect.HandlerOp
 // UnimplementedRedialServiceHandler returns CodeUnimplemented from all methods.
 type UnimplementedRedialServiceHandler struct{}
 
+func (UnimplementedRedialServiceHandler) ListRedialsByCustomer(context.Context, *connect.Request[v1.ListRedialsByCustomerRequest]) (*connect.Response[v1.ListRedialsByCustomerResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("redial.v1.RedialService.ListRedialsByCustomer is not implemented"))
+}
+
 func (UnimplementedRedialServiceHandler) CreateRedial(context.Context, *connect.Request[v1.CreateRedialRequest]) (*connect.Response[v1.CreateRedialResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("redial.v1.RedialService.CreateRedial is not implemented"))
+}
+
+func (UnimplementedRedialServiceHandler) UpdateRedial(context.Context, *connect.Request[v1.UpdateRedialRequest]) (*connect.Response[v1.UpdateRedialResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("redial.v1.RedialService.UpdateRedial is not implemented"))
+}
+
+func (UnimplementedRedialServiceHandler) DeleteRedial(context.Context, *connect.Request[v1.DeleteRedialRequest]) (*connect.Response[emptypb.Empty], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("redial.v1.RedialService.DeleteRedial is not implemented"))
+}
+
+func (UnimplementedRedialServiceHandler) ResyncRedial(context.Context, *connect.Request[v1.ResyncRedialRequest]) (*connect.Response[v1.ResyncRedialResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("redial.v1.RedialService.ResyncRedial is not implemented"))
 }

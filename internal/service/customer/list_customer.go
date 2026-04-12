@@ -51,6 +51,7 @@ func (s *CustomerService) ListCustomer(
 			Corporation: customer.Corporation,
 			Address:     customer.Address,
 			Memo:        customer.Memo,
+			Mail:        customer.Mail,
 		})
 	}
 
