@@ -10,6 +10,7 @@ import (
 	"connectrpc.com/connect"
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
 	"github.com/0utl1er-tech/phox-customer/internal/util"
+	"github.com/google/uuid"
 	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/lestrrat-go/jwx/v2/jwt"
 	"github.com/rs/zerolog/log"
@@ -27,10 +28,21 @@ type Interceptor struct {
 	Config   util.Config
 	jwkCache *jwk.Cache
 	bgCtx    context.Context
+
+	// defaultCompanyID is used by JIT provisioning — when a valid JWT arrives
+	// for a Keycloak user that doesn't yet have a DB User row, we auto-create
+	// them under this company. Resolved at boot from the Company table
+	// (single-tenant deployments) via ListCompanies.
+	defaultCompanyID uuid.UUID
 }
 
 // NewAuthInterceptor creates a new AuthInterceptor.
-func NewAuthInterceptor(ctx context.Context, queries *db.Queries, config util.Config) *Interceptor {
+//
+// defaultCompanyID is used for just-in-time (JIT) user provisioning: when a
+// Keycloak-authenticated user hits a Phox endpoint for the first time and no
+// DB `User` row exists for them, one is created with role='viewer' under this
+// company. Pass the ID of the only Company row (single-tenant today).
+func NewAuthInterceptor(ctx context.Context, queries *db.Queries, config util.Config, defaultCompanyID uuid.UUID) *Interceptor {
 	// Use context.Background() for the JWK cache to ensure it persists
 	bgCtx := context.Background()
 
@@ -64,10 +76,11 @@ func NewAuthInterceptor(ctx context.Context, queries *db.Queries, config util.Co
 	}
 
 	return &Interceptor{
-		Queries:  queries,
-		Config:   config,
-		jwkCache: cache,
-		bgCtx:    bgCtx,
+		Queries:          queries,
+		Config:           config,
+		jwkCache:         cache,
+		bgCtx:            bgCtx,
+		defaultCompanyID: defaultCompanyID,
 	}
 }
 
@@ -101,14 +114,20 @@ func (i *Interceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 			Str("issuer", token.Issuer()).
 			Msg("Token verified successfully")
 
-		// Check if user exists in the database
+		// Check if user exists in the database. If not, Just-In-Time (JIT)
+		// provision them using claims from the verified JWT. The token is
+		// already audience/issuer/signature verified by this point, so we
+		// trust the sub as a stable identity from Keycloak.
 		user, err := i.Queries.GetUser(ctx, token.Subject())
 		if err != nil {
-			log.Warn().
-				Err(err).
-				Str("token_subject", token.Subject()).
-				Msg("Failed to get user from database")
-			return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("user not found in database"))
+			user, err = i.jitProvisionUser(ctx, token)
+			if err != nil {
+				log.Warn().
+					Err(err).
+					Str("token_subject", token.Subject()).
+					Msg("JIT user provisioning failed")
+				return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("user not found in database"))
+			}
 		}
 
 		log.Debug().
@@ -135,6 +154,67 @@ func (i *Interceptor) WrapStreamingHandler(next connect.StreamingHandlerFunc) co
 		// Note: Streaming handler authentication would need to be implemented here if needed
 		return next(ctx, conn)
 	}
+}
+
+// jitProvisionUser creates a phox `User` row for a Keycloak-authenticated
+// caller whose token verifies but who has no DB record yet. role defaults to
+// 'viewer' per db/query/user.sql. A concurrent request creating the same user
+// is retried as a GetUser — whichever request wins the INSERT, both end up
+// with the same row.
+func (i *Interceptor) jitProvisionUser(ctx context.Context, token jwt.Token) (db.User, error) {
+	sub := token.Subject()
+	name := extractNameClaim(token)
+
+	log.Info().
+		Str("sub", sub).
+		Str("name", name).
+		Str("company_id", i.defaultCompanyID.String()).
+		Msg("JIT provisioning user")
+
+	user, err := i.Queries.CreateUser(ctx, db.CreateUserParams{
+		ID:        sub,
+		CompanyID: i.defaultCompanyID,
+		Name:      name,
+	})
+	if err == nil {
+		return user, nil
+	}
+	// UNIQUE violation (23505): another request raced us and already inserted.
+	// GetUser will now succeed.
+	if isUniqueViolation(err) {
+		return i.Queries.GetUser(ctx, sub)
+	}
+	return db.User{}, fmt.Errorf("JIT CreateUser: %w", err)
+}
+
+// extractNameClaim picks a human-readable display name from a verified JWT.
+// Keycloak emits both `name` (firstName + " " + lastName) and
+// `preferred_username` with the default claim set. Fall back to `sub` so
+// we never create a User row with an empty name.
+func extractNameClaim(token jwt.Token) string {
+	priv := token.PrivateClaims()
+	for _, key := range []string{"name", "preferred_username", "email"} {
+		if v, ok := priv[key]; ok {
+			if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
+				return s
+			}
+		}
+	}
+	return token.Subject()
+}
+
+// isUniqueViolation mirrors the helper in internal/service/book so the auth
+// package stays self-contained (no new transitive imports of pgx errors).
+// pgx v5 surfaces unique violations as *pgconn.PgError with Code == "23505";
+// substring match is a pragmatic catch-all.
+func isUniqueViolation(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := err.Error()
+	return strings.Contains(s, "23505") ||
+		strings.Contains(s, "duplicate key") ||
+		strings.Contains(s, "unique constraint")
 }
 
 // verifyToken verifies the access token using the JWKS cache.

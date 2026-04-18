@@ -178,8 +178,25 @@ func main() {
 		IngestUserID:          cfg.IMAPIngestUserID,
 	}, queries)
 
+	// JIT user provisioning needs a Company UUID to stamp on auto-created
+	// User rows. Single-tenant deployments only have one row — take the
+	// first. If someone runs multi-tenant in the future this becomes a
+	// per-token decision (e.g., derived from a group / claim mapper).
+	companies, err := queries.ListCompanies(context.Background())
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to list companies for JIT provisioning bootstrap")
+	}
+	if len(companies) == 0 {
+		log.Fatal().Msg("No Company row present — cannot derive default company for JIT provisioning. Seed Company first.")
+	}
+	defaultCompanyID := companies[0].ID
+	log.Info().
+		Str("company_id", defaultCompanyID.String()).
+		Str("company_name", companies[0].Name).
+		Msg("Default company resolved for JIT provisioning")
+
 	// Create interceptor
-	authInterceptor := auth.NewAuthInterceptor(context.Background(), queries, cfg)
+	authInterceptor := auth.NewAuthInterceptor(context.Background(), queries, cfg, defaultCompanyID)
 	interceptors := connect.WithInterceptors(authInterceptor)
 
 	// Create services

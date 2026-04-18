@@ -145,6 +145,25 @@ func (c *Client) GetUserByEmail(ctx context.Context, email string) (*gocloak.Use
 	return users[0], nil
 }
 
+// ListUsers returns users in the realm, optionally filtered by a free-text
+// search term (matched against username/email/first/last name by Keycloak).
+// max is the upper bound on rows returned; it's clamped by the caller.
+func (c *Client) ListUsers(ctx context.Context, search string, max int) ([]*gocloak.User, error) {
+	token, err := c.adminToken(ctx)
+	if err != nil {
+		return nil, err
+	}
+	params := gocloak.GetUsersParams{Max: &max}
+	if s := strings.TrimSpace(search); s != "" {
+		params.Search = &s
+	}
+	users, err := c.gocloak.GetUsers(ctx, token, c.realm, params)
+	if err != nil {
+		return nil, fmt.Errorf("%w: list users: %v", ErrKeycloakError, err)
+	}
+	return users, nil
+}
+
 // mapCreateError translates gocloak's HTTP errors into our sentinels.
 func mapCreateError(err error) error {
 	apiErr, ok := err.(*gocloak.APIError)

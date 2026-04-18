@@ -48,6 +48,15 @@ service UserService {
       get: "/v1/company/users"
     };
   }
+  // ListKeycloakUsers returns every user in the configured Keycloak realm
+  // plus a flag indicating whether a Phox DB User row already exists. Used
+  // by the settings UI so admins can import Keycloak-registered users that
+  // aren't yet linked to Phox. Caller must have role=owner.
+  rpc ListKeycloakUsers(ListKeycloakUsersRequest) returns (ListKeycloakUsersResponse) {
+    option (google.api.http) = {
+      get: "/v1/keycloak/users"
+    };
+  }
 }
 
 message User {
@@ -111,4 +120,25 @@ message CreateCompanyUserRequest {
 
 message CreateCompanyUserResponse {
   User user = 1;
+}
+
+message ListKeycloakUsersRequest {
+  // Case-insensitive LIKE search on username or email; empty = return all.
+  string search = 1 [(buf.validate.field).string.max_len = 128];
+  // Upper bound on rows returned; defaults to 100, clamped to 500 server-side.
+  int32 max = 2;
+}
+
+message ListKeycloakUsersResponse {
+  repeated KeycloakUser users = 1;
+}
+
+message KeycloakUser {
+  string id = 1;          // Keycloak user UUID (the JWT `sub`)
+  string username = 2;
+  string email = 3;
+  string first_name = 4;
+  string last_name = 5;
+  // True when a Phox DB User row already exists for this id.
+  bool linked = 6;
 }

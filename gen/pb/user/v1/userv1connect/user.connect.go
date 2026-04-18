@@ -50,6 +50,9 @@ const (
 	// UserServiceListCompanyUsersProcedure is the fully-qualified name of the UserService's
 	// ListCompanyUsers RPC.
 	UserServiceListCompanyUsersProcedure = "/user.v1.UserService/ListCompanyUsers"
+	// UserServiceListKeycloakUsersProcedure is the fully-qualified name of the UserService's
+	// ListKeycloakUsers RPC.
+	UserServiceListKeycloakUsersProcedure = "/user.v1.UserService/ListKeycloakUsers"
 )
 
 // UserServiceClient is a client for the user.v1.UserService service.
@@ -61,6 +64,11 @@ type UserServiceClient interface {
 	AddCompanyUser(context.Context, *connect.Request[v1.AddCompanyUserRequest]) (*connect.Response[v1.AddCompanyUserResponse], error)
 	CreateCompanyUser(context.Context, *connect.Request[v1.CreateCompanyUserRequest]) (*connect.Response[v1.CreateCompanyUserResponse], error)
 	ListCompanyUsers(context.Context, *connect.Request[v1.ListCompanyUsersRequest]) (*connect.Response[v1.ListCompanyUsersResponse], error)
+	// ListKeycloakUsers returns every user in the configured Keycloak realm
+	// plus a flag indicating whether a Phox DB User row already exists. Used
+	// by the settings UI so admins can import Keycloak-registered users that
+	// aren't yet linked to Phox. Caller must have role=owner.
+	ListKeycloakUsers(context.Context, *connect.Request[v1.ListKeycloakUsersRequest]) (*connect.Response[v1.ListKeycloakUsersResponse], error)
 }
 
 // NewUserServiceClient constructs a client for the user.v1.UserService service. By default, it uses
@@ -116,6 +124,12 @@ func NewUserServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(userServiceMethods.ByName("ListCompanyUsers")),
 			connect.WithClientOptions(opts...),
 		),
+		listKeycloakUsers: connect.NewClient[v1.ListKeycloakUsersRequest, v1.ListKeycloakUsersResponse](
+			httpClient,
+			baseURL+UserServiceListKeycloakUsersProcedure,
+			connect.WithSchema(userServiceMethods.ByName("ListKeycloakUsers")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -128,6 +142,7 @@ type userServiceClient struct {
 	addCompanyUser    *connect.Client[v1.AddCompanyUserRequest, v1.AddCompanyUserResponse]
 	createCompanyUser *connect.Client[v1.CreateCompanyUserRequest, v1.CreateCompanyUserResponse]
 	listCompanyUsers  *connect.Client[v1.ListCompanyUsersRequest, v1.ListCompanyUsersResponse]
+	listKeycloakUsers *connect.Client[v1.ListKeycloakUsersRequest, v1.ListKeycloakUsersResponse]
 }
 
 // CreateUser calls user.v1.UserService.CreateUser.
@@ -165,6 +180,11 @@ func (c *userServiceClient) ListCompanyUsers(ctx context.Context, req *connect.R
 	return c.listCompanyUsers.CallUnary(ctx, req)
 }
 
+// ListKeycloakUsers calls user.v1.UserService.ListKeycloakUsers.
+func (c *userServiceClient) ListKeycloakUsers(ctx context.Context, req *connect.Request[v1.ListKeycloakUsersRequest]) (*connect.Response[v1.ListKeycloakUsersResponse], error) {
+	return c.listKeycloakUsers.CallUnary(ctx, req)
+}
+
 // UserServiceHandler is an implementation of the user.v1.UserService service.
 type UserServiceHandler interface {
 	CreateUser(context.Context, *connect.Request[v1.CreateUserRequest]) (*connect.Response[v1.CreateUserResponse], error)
@@ -174,6 +194,11 @@ type UserServiceHandler interface {
 	AddCompanyUser(context.Context, *connect.Request[v1.AddCompanyUserRequest]) (*connect.Response[v1.AddCompanyUserResponse], error)
 	CreateCompanyUser(context.Context, *connect.Request[v1.CreateCompanyUserRequest]) (*connect.Response[v1.CreateCompanyUserResponse], error)
 	ListCompanyUsers(context.Context, *connect.Request[v1.ListCompanyUsersRequest]) (*connect.Response[v1.ListCompanyUsersResponse], error)
+	// ListKeycloakUsers returns every user in the configured Keycloak realm
+	// plus a flag indicating whether a Phox DB User row already exists. Used
+	// by the settings UI so admins can import Keycloak-registered users that
+	// aren't yet linked to Phox. Caller must have role=owner.
+	ListKeycloakUsers(context.Context, *connect.Request[v1.ListKeycloakUsersRequest]) (*connect.Response[v1.ListKeycloakUsersResponse], error)
 }
 
 // NewUserServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -225,6 +250,12 @@ func NewUserServiceHandler(svc UserServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(userServiceMethods.ByName("ListCompanyUsers")),
 		connect.WithHandlerOptions(opts...),
 	)
+	userServiceListKeycloakUsersHandler := connect.NewUnaryHandler(
+		UserServiceListKeycloakUsersProcedure,
+		svc.ListKeycloakUsers,
+		connect.WithSchema(userServiceMethods.ByName("ListKeycloakUsers")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/user.v1.UserService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case UserServiceCreateUserProcedure:
@@ -241,6 +272,8 @@ func NewUserServiceHandler(svc UserServiceHandler, opts ...connect.HandlerOption
 			userServiceCreateCompanyUserHandler.ServeHTTP(w, r)
 		case UserServiceListCompanyUsersProcedure:
 			userServiceListCompanyUsersHandler.ServeHTTP(w, r)
+		case UserServiceListKeycloakUsersProcedure:
+			userServiceListKeycloakUsersHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -276,4 +309,8 @@ func (UnimplementedUserServiceHandler) CreateCompanyUser(context.Context, *conne
 
 func (UnimplementedUserServiceHandler) ListCompanyUsers(context.Context, *connect.Request[v1.ListCompanyUsersRequest]) (*connect.Response[v1.ListCompanyUsersResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("user.v1.UserService.ListCompanyUsers is not implemented"))
+}
+
+func (UnimplementedUserServiceHandler) ListKeycloakUsers(context.Context, *connect.Request[v1.ListKeycloakUsersRequest]) (*connect.Response[v1.ListKeycloakUsersResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("user.v1.UserService.ListKeycloakUsers is not implemented"))
 }
