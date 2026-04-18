@@ -161,6 +161,11 @@ func (i *Interceptor) WrapStreamingHandler(next connect.StreamingHandlerFunc) co
 // 'viewer' per db/query/user.sql. A concurrent request creating the same user
 // is retried as a GetUser — whichever request wins the INSERT, both end up
 // with the same row.
+//
+// Note: a deleted user whose Keycloak account is still enabled will be
+// re-created here on their next API call. That's intentional — the delete
+// button is for list cleanup, not for locking users out. For hard lockout,
+// disable / delete the account in Keycloak instead.
 func (i *Interceptor) jitProvisionUser(ctx context.Context, token jwt.Token) (db.User, error) {
 	sub := token.Subject()
 	name := extractNameClaim(token)

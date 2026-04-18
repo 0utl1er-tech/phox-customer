@@ -57,6 +57,17 @@ service UserService {
       get: "/v1/keycloak/users"
     };
   }
+  // DeleteCompanyUser removes a user from the caller's company. Caller must
+  // have role=owner and cannot delete themselves. The Phox DB row is
+  // deleted (Activity/Permit/Redial/Token/iCalFeed cascade) and the
+  // corresponding Keycloak account is disabled + all sessions logged out.
+  // KC account is not hard-deleted so the audit trail remains and admins
+  // can manually re-enable if deletion was a mistake.
+  rpc DeleteCompanyUser(DeleteCompanyUserRequest) returns (DeleteCompanyUserResponse) {
+    option (google.api.http) = {
+      delete: "/v1/company/users/{user_id}"
+    };
+  }
 }
 
 message User {
@@ -141,4 +152,14 @@ message KeycloakUser {
   string last_name = 5;
   // True when a Phox DB User row already exists for this id.
   bool linked = 6;
+}
+
+message DeleteCompanyUserRequest {
+  string user_id = 1 [(buf.validate.field).string.min_len = 1];
+}
+
+message DeleteCompanyUserResponse {
+  // ID of the deleted Phox User row (= Keycloak sub). Echoed back so
+  // the UI can update its list without a refetch.
+  string user_id = 1;
 }

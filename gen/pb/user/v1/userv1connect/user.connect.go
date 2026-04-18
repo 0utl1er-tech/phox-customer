@@ -53,6 +53,9 @@ const (
 	// UserServiceListKeycloakUsersProcedure is the fully-qualified name of the UserService's
 	// ListKeycloakUsers RPC.
 	UserServiceListKeycloakUsersProcedure = "/user.v1.UserService/ListKeycloakUsers"
+	// UserServiceDeleteCompanyUserProcedure is the fully-qualified name of the UserService's
+	// DeleteCompanyUser RPC.
+	UserServiceDeleteCompanyUserProcedure = "/user.v1.UserService/DeleteCompanyUser"
 )
 
 // UserServiceClient is a client for the user.v1.UserService service.
@@ -69,6 +72,13 @@ type UserServiceClient interface {
 	// by the settings UI so admins can import Keycloak-registered users that
 	// aren't yet linked to Phox. Caller must have role=owner.
 	ListKeycloakUsers(context.Context, *connect.Request[v1.ListKeycloakUsersRequest]) (*connect.Response[v1.ListKeycloakUsersResponse], error)
+	// DeleteCompanyUser removes a user from the caller's company. Caller must
+	// have role=owner and cannot delete themselves. The Phox DB row is
+	// deleted (Activity/Permit/Redial/Token/iCalFeed cascade) and the
+	// corresponding Keycloak account is disabled + all sessions logged out.
+	// KC account is not hard-deleted so the audit trail remains and admins
+	// can manually re-enable if deletion was a mistake.
+	DeleteCompanyUser(context.Context, *connect.Request[v1.DeleteCompanyUserRequest]) (*connect.Response[v1.DeleteCompanyUserResponse], error)
 }
 
 // NewUserServiceClient constructs a client for the user.v1.UserService service. By default, it uses
@@ -130,6 +140,12 @@ func NewUserServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(userServiceMethods.ByName("ListKeycloakUsers")),
 			connect.WithClientOptions(opts...),
 		),
+		deleteCompanyUser: connect.NewClient[v1.DeleteCompanyUserRequest, v1.DeleteCompanyUserResponse](
+			httpClient,
+			baseURL+UserServiceDeleteCompanyUserProcedure,
+			connect.WithSchema(userServiceMethods.ByName("DeleteCompanyUser")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -143,6 +159,7 @@ type userServiceClient struct {
 	createCompanyUser *connect.Client[v1.CreateCompanyUserRequest, v1.CreateCompanyUserResponse]
 	listCompanyUsers  *connect.Client[v1.ListCompanyUsersRequest, v1.ListCompanyUsersResponse]
 	listKeycloakUsers *connect.Client[v1.ListKeycloakUsersRequest, v1.ListKeycloakUsersResponse]
+	deleteCompanyUser *connect.Client[v1.DeleteCompanyUserRequest, v1.DeleteCompanyUserResponse]
 }
 
 // CreateUser calls user.v1.UserService.CreateUser.
@@ -185,6 +202,11 @@ func (c *userServiceClient) ListKeycloakUsers(ctx context.Context, req *connect.
 	return c.listKeycloakUsers.CallUnary(ctx, req)
 }
 
+// DeleteCompanyUser calls user.v1.UserService.DeleteCompanyUser.
+func (c *userServiceClient) DeleteCompanyUser(ctx context.Context, req *connect.Request[v1.DeleteCompanyUserRequest]) (*connect.Response[v1.DeleteCompanyUserResponse], error) {
+	return c.deleteCompanyUser.CallUnary(ctx, req)
+}
+
 // UserServiceHandler is an implementation of the user.v1.UserService service.
 type UserServiceHandler interface {
 	CreateUser(context.Context, *connect.Request[v1.CreateUserRequest]) (*connect.Response[v1.CreateUserResponse], error)
@@ -199,6 +221,13 @@ type UserServiceHandler interface {
 	// by the settings UI so admins can import Keycloak-registered users that
 	// aren't yet linked to Phox. Caller must have role=owner.
 	ListKeycloakUsers(context.Context, *connect.Request[v1.ListKeycloakUsersRequest]) (*connect.Response[v1.ListKeycloakUsersResponse], error)
+	// DeleteCompanyUser removes a user from the caller's company. Caller must
+	// have role=owner and cannot delete themselves. The Phox DB row is
+	// deleted (Activity/Permit/Redial/Token/iCalFeed cascade) and the
+	// corresponding Keycloak account is disabled + all sessions logged out.
+	// KC account is not hard-deleted so the audit trail remains and admins
+	// can manually re-enable if deletion was a mistake.
+	DeleteCompanyUser(context.Context, *connect.Request[v1.DeleteCompanyUserRequest]) (*connect.Response[v1.DeleteCompanyUserResponse], error)
 }
 
 // NewUserServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -256,6 +285,12 @@ func NewUserServiceHandler(svc UserServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(userServiceMethods.ByName("ListKeycloakUsers")),
 		connect.WithHandlerOptions(opts...),
 	)
+	userServiceDeleteCompanyUserHandler := connect.NewUnaryHandler(
+		UserServiceDeleteCompanyUserProcedure,
+		svc.DeleteCompanyUser,
+		connect.WithSchema(userServiceMethods.ByName("DeleteCompanyUser")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/user.v1.UserService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case UserServiceCreateUserProcedure:
@@ -274,6 +309,8 @@ func NewUserServiceHandler(svc UserServiceHandler, opts ...connect.HandlerOption
 			userServiceListCompanyUsersHandler.ServeHTTP(w, r)
 		case UserServiceListKeycloakUsersProcedure:
 			userServiceListKeycloakUsersHandler.ServeHTTP(w, r)
+		case UserServiceDeleteCompanyUserProcedure:
+			userServiceDeleteCompanyUserHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -313,4 +350,8 @@ func (UnimplementedUserServiceHandler) ListCompanyUsers(context.Context, *connec
 
 func (UnimplementedUserServiceHandler) ListKeycloakUsers(context.Context, *connect.Request[v1.ListKeycloakUsersRequest]) (*connect.Response[v1.ListKeycloakUsersResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("user.v1.UserService.ListKeycloakUsers is not implemented"))
+}
+
+func (UnimplementedUserServiceHandler) DeleteCompanyUser(context.Context, *connect.Request[v1.DeleteCompanyUserRequest]) (*connect.Response[v1.DeleteCompanyUserResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("user.v1.UserService.DeleteCompanyUser is not implemented"))
 }

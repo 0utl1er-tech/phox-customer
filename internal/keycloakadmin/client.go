@@ -164,6 +164,7 @@ func (c *Client) ListUsers(ctx context.Context, search string, max int) ([]*gocl
 	return users, nil
 }
 
+
 // mapCreateError translates gocloak's HTTP errors into our sentinels.
 func mapCreateError(err error) error {
 	apiErr, ok := err.(*gocloak.APIError)
