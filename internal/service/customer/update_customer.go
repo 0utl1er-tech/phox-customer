@@ -42,35 +42,30 @@ func (s *CustomerService) UpdateCustomer(
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("customerの更新にはowner権限またはeditor権限が必要です"))
 	}
 
-	// nil安全にポインタの値を取得
-	phoneText := pgtype.Text{Valid: false}
-	if req.Msg.Phone != nil {
-		phoneText = pgtype.Text{String: *req.Msg.Phone, Valid: true}
+	// BUG FIX (2026-04-21):
+	//   Previously `req.Msg.Phone != nil` was enough to mark Valid=true, so
+	//   an empty-string payload from the UI ({"phone":""}) passed through
+	//   as pgtype.Text{String:"", Valid:true}. The SQL uses COALESCE($1,
+	//   existing) which treats empty string as a legitimate value (not
+	//   NULL), so DB values were silently overwritten to "".
+	//
+	//   Treat empty strings as "unset" (Valid=false). UI sends only the
+	//   fields it actually wants to change. Explicit clearing of a field
+	//   would require a dedicated RPC / sentinel value, which we don't
+	//   support today and isn't in the product.
+	toText := func(p *string) pgtype.Text {
+		if p == nil || *p == "" {
+			return pgtype.Text{Valid: false}
+		}
+		return pgtype.Text{String: *p, Valid: true}
 	}
-	categoryText := pgtype.Text{Valid: false}
-	if req.Msg.Category != nil {
-		categoryText = pgtype.Text{String: *req.Msg.Category, Valid: true}
-	}
-	nameText := pgtype.Text{Valid: false}
-	if req.Msg.Name != nil {
-		nameText = pgtype.Text{String: *req.Msg.Name, Valid: true}
-	}
-	corporationText := pgtype.Text{Valid: false}
-	if req.Msg.Corporation != nil {
-		corporationText = pgtype.Text{String: *req.Msg.Corporation, Valid: true}
-	}
-	addressText := pgtype.Text{Valid: false}
-	if req.Msg.Address != nil {
-		addressText = pgtype.Text{String: *req.Msg.Address, Valid: true}
-	}
-	memoText := pgtype.Text{Valid: false}
-	if req.Msg.Memo != nil {
-		memoText = pgtype.Text{String: *req.Msg.Memo, Valid: true}
-	}
-	mailText := pgtype.Text{Valid: false}
-	if req.Msg.Mail != nil {
-		mailText = pgtype.Text{String: *req.Msg.Mail, Valid: true}
-	}
+	phoneText := toText(req.Msg.Phone)
+	categoryText := toText(req.Msg.Category)
+	nameText := toText(req.Msg.Name)
+	corporationText := toText(req.Msg.Corporation)
+	addressText := toText(req.Msg.Address)
+	memoText := toText(req.Msg.Memo)
+	mailText := toText(req.Msg.Mail)
 
 	result, err := s.queries.UpdateCustomer(ctx, db.UpdateCustomerParams{
 		ID:          customer.ID,
