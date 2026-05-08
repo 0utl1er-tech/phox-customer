@@ -4,15 +4,19 @@ on:
   push:
     branches: [main]
 
+# main 上での重複 push は前のを cancel して順次 1 件ずつ走らせる
+# (host port 衝突回避 + リソース節約)。
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   e2e:
     runs-on: ubuntu-latest
 
     # Job 自体は host で go + node プロセスを走らせる構造なので container 化
-    # しない (test.yml と方針が違う)。代わりに service ports を非デフォルトに
-    # ずらして並列 CI 同士の host port 衝突を避ける。
-    # 将来 phox-ui と phox-e2e も同じイメージに統合するなら container ベース
-    # に移行する。
+    # しない (test.yml と方針が違う)。host port は非デフォルトにずらして、
+    # 並列 push が cancel-in-progress を抜けて重なった時の保険とする。
     services:
       postgres:
         image: postgres:16

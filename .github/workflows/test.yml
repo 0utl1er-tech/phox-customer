@@ -6,16 +6,18 @@ on:
   pull_request:
     branches: [main]
 
+# 同じ branch の重複 push は前のを cancel して 1 並列に絞る。
+# Forgejo runner の DinD は共有なので、複数 job が同じ host port を bind
+# しようとすると `port is already allocated` で死ぬ (実証 2026-05)。
+# concurrency group で 1 並列に絞れば host port 衝突は構造的に発生しない。
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # ─── Unit Tests (全ブランチで実行) ─────────────────────────────
   unit-test:
     runs-on: ubuntu-latest
-    # Job 自体を container で動かす → service と同じ Docker network に乗る。
-    # これにより postgres へは service hostname `postgres:5432` で到達可能、
-    # host 側 :5432 を bind する必要が無い (= 並列 CI でのポート衝突を回避)。
-    # 旧: ports: ["5432:5432"] + localhost:5432 → forgejo runner が DinD 共有
-    # で 2 並列以上走ると "port is already allocated" で失敗していた。
-    container: catthehacker/ubuntu:act-latest
 
     services:
       postgres:
@@ -24,7 +26,7 @@ jobs:
           POSTGRES_USER: root
           POSTGRES_PASSWORD: secret
           POSTGRES_DB: phox-customer
-        # ports binding を削除 — service は内部 docker network 経由のみで OK
+        ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U root"
           --health-interval 5s
@@ -32,6 +34,15 @@ jobs:
           --health-retries 10
 
     steps:
+      # 異常終了した前回 job の orphan service container を掃除。
+      # concurrency:cancel-in-progress でキャンセルされた job は
+      # forgejo runner が service container を後始末しないことがあり、
+      # 次の job が host port bind に失敗する原因になる。
+      - name: Pre-flight orphan container cleanup
+        run: |
+          docker ps -aq --filter "publish=5432" | xargs -r docker rm -f
+          docker ps -aq --filter "ancestor=postgres:16" | xargs -r docker rm -f
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-go@v5
@@ -43,9 +54,7 @@ jobs:
         run: go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
 
       - name: Run migrations
-        run: migrate -path db/migration -database "postgresql://root:secret@postgres:5432/phox-customer?sslmode=disable" up
+        run: migrate -path db/migration -database "postgresql://root:secret@localhost:5432/phox-customer?sslmode=disable" up
 
       - name: Run unit tests
         run: go test -v -cover -count=1 ./...
-        env:
-          DB_SOURCE: postgresql://root:secret@postgres:5432/phox-customer?sslmode=disable
