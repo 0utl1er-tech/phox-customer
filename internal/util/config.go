@@ -78,6 +78,16 @@ type Config struct {
 	ZoomClientID     string `mapstructure:"ZOOM_CLIENT_ID"`
 	ZoomClientSecret string `mapstructure:"ZOOM_CLIENT_SECRET"`
 
+	// Phase 22: 通話録音アーカイブ用 S3 (Ceph RGW). OBC `phox-recordings-s3` 由来。
+	// 全空なら recording_archiver は disabled (= recording_url 未保存)。
+	// PHOX_RECORDING_S3_USE_TLS は cluster 内 Ceph RGW なら false (HTTP)。
+	RecordingS3Endpoint  string `mapstructure:"PHOX_RECORDING_S3_ENDPOINT"`
+	RecordingS3AccessKey string `mapstructure:"PHOX_RECORDING_S3_ACCESS_KEY"`
+	RecordingS3SecretKey string `mapstructure:"PHOX_RECORDING_S3_SECRET_KEY"`
+	RecordingS3Bucket    string `mapstructure:"PHOX_RECORDING_S3_BUCKET"`
+	RecordingS3Region    string `mapstructure:"PHOX_RECORDING_S3_REGION"`
+	RecordingS3UseTLS    bool   `mapstructure:"PHOX_RECORDING_S3_USE_TLS"`
+
 	// Phase 20e: iCalendar 購読 URL のベース。phox-customer 自身が listen する
 	// 外部到達 URL (ブラウザやカレンダークライアントから見える URL)。
 	// 例 dev: http://localhost:8082  /  prod: https://phox-api.example.com

@@ -293,6 +293,47 @@ func main() {
 	}
 	zoomPhoneService := zoomphoneservice.NewZoomPhoneService(queries, zoomClient)
 
+	// Phase 22: Recording archiver (Zoom 録音 → Ceph RGW 永続化)
+	// OBC `phox-recordings-s3` 由来の env vars。空なら archiver disabled。
+	recordingArchiver, recArchErr := zoom.NewRecordingArchiver(
+		zoomClient,
+		cfg.RecordingS3Endpoint,
+		cfg.RecordingS3AccessKey,
+		cfg.RecordingS3SecretKey,
+		cfg.RecordingS3Bucket,
+		cfg.RecordingS3Region,
+		cfg.RecordingS3UseTLS,
+	)
+	if recArchErr != nil {
+		log.Warn().Err(recArchErr).Msg("Recording archiver init failed — recordings will not be persisted")
+	} else if recordingArchiver != nil {
+		log.Info().
+			Str("endpoint", cfg.RecordingS3Endpoint).
+			Str("bucket", cfg.RecordingS3Bucket).
+			Msg("Recording archiver initialized")
+	} else {
+		log.Info().Msg("Recording archiver disabled (S3 config missing)")
+	}
+
+	// Phase 22: ActivityHandler — webhook event を Activity row に変換
+	zoomActivityHandler := zoom.NewActivityHandler(queries, recordingArchiver, "system")
+
+	// staff (phox 自社線) の Zoom Phone 番号を起動時にキャッシュ。
+	// Zoom 側でユーザー追加 / 番号変更があった場合は phox-customer 再起動で再取得。
+	if zoomClient != nil {
+		if users, lerr := zoomClient.ListPhoneUsers(); lerr == nil {
+			nums := make([]string, 0, len(users))
+			for _, u := range users {
+				if u.PhoneNumber != "" {
+					nums = append(nums, u.PhoneNumber)
+				}
+			}
+			zoomActivityHandler.SetStaffNumbers(nums)
+		} else {
+			log.Warn().Err(lerr).Msg("Zoom: ListPhoneUsers failed at startup — staff number cache empty, falling back to Direction field for caller/callee classification")
+		}
+	}
+
 	// Zoom SSE hub (着信リアルタイム通知)
 	sseHub := zoom.NewSSEHub()
 
@@ -317,6 +358,7 @@ func main() {
 		sseHub.Broadcast("", n)
 	})
 	zoomWebhook.OnCallEnded(func(ev zoom.PhoneCallEvent) {
+		// SSE broadcast (UI に通話終了通知)
 		sseHub.Broadcast("", zoom.CallNotification{
 			Type:         "ended",
 			CallID:       ev.CallID,
@@ -324,7 +366,11 @@ func main() {
 			Direction:    ev.Direction,
 			Timestamp:    ev.DateTime,
 		})
+		// Activity row 作成 (Phase 22)
+		zoomActivityHandler.HandleCallEnded(ev)
 	})
+	// Phase 22: 録音完了で Activity を更新
+	zoomWebhook.OnRecordingComplete(zoomActivityHandler.HandleRecordingCompleted)
 
 	// HTTPサーバーの設定
 	mux := http.NewServeMux()
