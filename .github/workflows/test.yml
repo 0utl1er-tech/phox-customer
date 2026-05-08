@@ -10,6 +10,12 @@ jobs:
   # ─── Unit Tests (全ブランチで実行) ─────────────────────────────
   unit-test:
     runs-on: ubuntu-latest
+    # Job 自体を container で動かす → service と同じ Docker network に乗る。
+    # これにより postgres へは service hostname `postgres:5432` で到達可能、
+    # host 側 :5432 を bind する必要が無い (= 並列 CI でのポート衝突を回避)。
+    # 旧: ports: ["5432:5432"] + localhost:5432 → forgejo runner が DinD 共有
+    # で 2 並列以上走ると "port is already allocated" で失敗していた。
+    container: catthehacker/ubuntu:act-latest
 
     services:
       postgres:
@@ -18,7 +24,7 @@ jobs:
           POSTGRES_USER: root
           POSTGRES_PASSWORD: secret
           POSTGRES_DB: phox-customer
-        ports: ["5432:5432"]
+        # ports binding を削除 — service は内部 docker network 経由のみで OK
         options: >-
           --health-cmd "pg_isready -U root"
           --health-interval 5s
@@ -37,7 +43,9 @@ jobs:
         run: go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
 
       - name: Run migrations
-        run: migrate -path db/migration -database "postgresql://root:secret@localhost:5432/phox-customer?sslmode=disable" up
+        run: migrate -path db/migration -database "postgresql://root:secret@postgres:5432/phox-customer?sslmode=disable" up
 
       - name: Run unit tests
         run: go test -v -cover -count=1 ./...
+        env:
+          DB_SOURCE: postgresql://root:secret@postgres:5432/phox-customer?sslmode=disable
