@@ -6,10 +6,11 @@ on:
   pull_request:
     branches: [main]
 
-# 同じ branch の重複 push は前のを cancel して 1 並列に絞る。
-# Forgejo runner の DinD は共有なので、複数 job が同じ host port を bind
-# しようとすると `port is already allocated` で死ぬ (実証 2026-05)。
-# concurrency group で 1 並列に絞れば host port 衝突は構造的に発生しない。
+# 同 branch の重複 push は前のを cancel して 1 並列に絞る (host port 衝突回避 +
+# CPU 節約)。なお runner 側 config の `container.network: ""` 設定により
+# job ごとに user-defined docker network が立つので、本来 host port bind は
+# 不要だが port: ["5432:5432"] は GHA 互換の保険として残す (host からの
+# debug アクセスや、将来 container 化されない job のためにも便利)。
 concurrency:
   group: test-${{ github.ref }}
   cancel-in-progress: true
@@ -35,9 +36,8 @@ jobs:
 
     steps:
       # 異常終了した前回 job の orphan service container を掃除。
-      # concurrency:cancel-in-progress でキャンセルされた job は
-      # forgejo runner が service container を後始末しないことがあり、
-      # 次の job が host port bind に失敗する原因になる。
+      # concurrency:cancel-in-progress でキャンセルされた job が
+      # service container を後始末しなかった場合の保険。
       - name: Pre-flight orphan container cleanup
         run: |
           docker ps -aq --filter "publish=5432" | xargs -r docker rm -f
@@ -53,8 +53,13 @@ jobs:
       - name: Install migrate CLI
         run: go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
 
+      # job container と postgres service container は同じ user-defined network
+      # に乗る (act_runner の network: "" 設定による) ので、service の name
+      # `postgres` で 5432 に届く。job container の localhost ではない点に注意。
       - name: Run migrations
-        run: migrate -path db/migration -database "postgresql://root:secret@localhost:5432/phox-customer?sslmode=disable" up
+        run: migrate -path db/migration -database "postgresql://root:secret@postgres:5432/phox-customer?sslmode=disable" up
 
       - name: Run unit tests
         run: go test -v -cover -count=1 ./...
+        env:
+          DB_SOURCE: postgresql://root:secret@postgres:5432/phox-customer?sslmode=disable
