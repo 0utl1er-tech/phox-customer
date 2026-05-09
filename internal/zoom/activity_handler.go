@@ -105,13 +105,13 @@ func (h *ActivityHandler) HandleCallEnded(event PhoneCallEvent) {
 	if customerPhone == "" {
 		log.Warn().
 			Str("call_id", event.CallID).
-			Str("caller", event.CallerNumber).
-			Str("callee", event.CalleeNumber).
+			Str("caller", event.Caller.PhoneNumber).
+			Str("callee", event.Callee.PhoneNumber).
 			Msg("zoom: cannot identify customer side, skipping")
 		return
 	}
 
-	occurredAt := parseZoomTime(event.EndTime, event.AnswerTime, event.StartTime, event.DateTime)
+	occurredAt := parseZoomTime(event.CallEndTime, event.ConnectedStartTime, event.RingingStartTime)
 
 	match, err := MatchCustomerByPhoneAndTime(
 		ctx, h.queries, customerPhone, occurredAt, 30*24*time.Hour,
@@ -240,29 +240,29 @@ func (h *ActivityHandler) pickCustomerSide(e PhoneCallEvent) (phone, name string
 	staff := h.staffNumbers
 	h.staffMu.RUnlock()
 
-	callerDigits := PhoneToDigits(e.CallerNumber)
-	calleeDigits := PhoneToDigits(e.CalleeNumber)
+	callerDigits := PhoneToDigits(e.Caller.PhoneNumber)
+	calleeDigits := PhoneToDigits(e.Callee.PhoneNumber)
 	_, callerStaff := staff[callerDigits]
 	_, calleeStaff := staff[calleeDigits]
 
 	if len(staff) > 0 {
 		if !callerStaff && calleeStaff {
-			return e.CallerNumber, e.CallerName
+			return e.Caller.PhoneNumber, e.Caller.Name
 		}
 		if callerStaff && !calleeStaff {
-			return e.CalleeNumber, e.CalleeName
+			return e.Callee.PhoneNumber, e.Callee.Name
 		}
 		// 両方 staff / 両方 non-staff → fallthrough to direction
 	}
 
 	switch strings.ToLower(e.Direction) {
 	case "inbound":
-		return e.CallerNumber, e.CallerName
+		return e.Caller.PhoneNumber, e.Caller.Name
 	case "outbound":
-		return e.CalleeNumber, e.CalleeName
+		return e.Callee.PhoneNumber, e.Callee.Name
 	}
 	// 最終フォールバック: callee を客とする (発信が業務の中心ユースケース)
-	return e.CalleeNumber, e.CalleeName
+	return e.Callee.PhoneNumber, e.Callee.Name
 }
 
 // parseZoomTime は Zoom 系 time フィールドの優先順序で最初に parse 成功した

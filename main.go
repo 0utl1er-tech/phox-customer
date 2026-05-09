@@ -393,15 +393,22 @@ func main() {
 		log.Warn().Msg("Zoom webhook secret not set — signature verification disabled")
 	}
 	zoomWebhook.OnIncomingRinging(func(ev zoom.PhoneCallEvent) {
-		// 着信番号で Customer 逆引き
-		callerNorm := zoom.NormalizeJapanesePhone(ev.CallerNumber)
+		// 着信番号で Customer 逆引き (caller/callee の客側を取る)
+		// outbound でも UI 側に「発信中」通知として SSE で流したい。
+		callerSide := ev.Caller.PhoneNumber
+		callerName := ev.Caller.Name
+		if ev.Direction == "outbound" {
+			callerSide = ev.Callee.PhoneNumber
+			callerName = ev.Callee.Name
+		}
+		callerNorm := zoom.NormalizeJapanesePhone(callerSide)
 		n := zoom.CallNotification{
 			Type:         "ringing",
 			CallID:       ev.CallID,
-			CallerNumber: ev.CallerNumber,
-			CallerName:   ev.CallerName,
+			CallerNumber: callerSide,
+			CallerName:   callerName,
 			Direction:    ev.Direction,
-			Timestamp:    ev.DateTime,
+			Timestamp:    ev.RingingStartTime,
 		}
 		// Customer.phone / Contact.phone で逆引きを試行
 		// (FindCustomerByEmail は mail 用なので、phone 逆引きは別途実装が望ましい。
@@ -411,13 +418,17 @@ func main() {
 		sseHub.Broadcast("", n)
 	})
 	zoomWebhook.OnCallEnded(func(ev zoom.PhoneCallEvent) {
-		// SSE broadcast (UI に通話終了通知)
+		// SSE broadcast (UI に通話終了通知) — caller を客側に揃える
+		callerSide := ev.Caller.PhoneNumber
+		if ev.Direction == "outbound" {
+			callerSide = ev.Callee.PhoneNumber
+		}
 		sseHub.Broadcast("", zoom.CallNotification{
 			Type:         "ended",
 			CallID:       ev.CallID,
-			CallerNumber: ev.CallerNumber,
+			CallerNumber: callerSide,
 			Direction:    ev.Direction,
-			Timestamp:    ev.DateTime,
+			Timestamp:    ev.CallEndTime,
 		})
 		// Activity row 作成 (Phase 22)
 		zoomActivityHandler.HandleCallEnded(ev)
