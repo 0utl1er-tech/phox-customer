@@ -6,11 +6,10 @@ on:
   pull_request:
     branches: [main]
 
-# 同 branch の重複 push は前のを cancel して 1 並列に絞る (host port 衝突回避 +
-# CPU 節約)。なお runner 側 config の `container.network: ""` 設定により
-# job ごとに user-defined docker network が立つので、本来 host port bind は
-# 不要だが port: ["5432:5432"] は GHA 互換の保険として残す (host からの
-# debug アクセスや、将来 container 化されない job のためにも便利)。
+# act_runner の `container.network: ""` 設定で job ごとに user-defined
+# docker network が立ち上がり、その上で docker embedded DNS が走る。
+# ので job container から `postgres:5432` で直接 service container に
+# 届く。host port bind は不要 (= 並列 job の port 衝突も無い)。
 concurrency:
   group: test-${{ github.ref }}
   cancel-in-progress: true
@@ -27,7 +26,6 @@ jobs:
           POSTGRES_USER: root
           POSTGRES_PASSWORD: secret
           POSTGRES_DB: phox-customer
-        ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U root"
           --health-interval 5s
@@ -35,14 +33,6 @@ jobs:
           --health-retries 10
 
     steps:
-      # 異常終了した前回 job の orphan service container を掃除。
-      # concurrency:cancel-in-progress でキャンセルされた job が
-      # service container を後始末しなかった場合の保険。
-      - name: Pre-flight orphan container cleanup
-        run: |
-          docker ps -aq --filter "publish=5432" | xargs -r docker rm -f
-          docker ps -aq --filter "ancestor=postgres:16" | xargs -r docker rm -f
-
       - uses: actions/checkout@v4
 
       - uses: actions/setup-go@v5
