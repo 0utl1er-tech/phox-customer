@@ -384,7 +384,14 @@ func main() {
 	}
 
 	// Zoom Webhook handler (着信・通話終了・録音完了)
-	zoomWebhook := zoom.NewWebhookHandler("") // Secret Token は後で設定
+	// ZOOM_WEBHOOK_SECRET 設定時は signature 検証 + URL validation challenge を
+	// その鍵で HMAC-SHA256 する。空なら署名検証スキップ (dev / 移行期)。
+	zoomWebhook := zoom.NewWebhookHandler(cfg.ZoomWebhookSecret)
+	if cfg.ZoomWebhookSecret != "" {
+		log.Info().Msg("Zoom webhook signature verification enabled")
+	} else {
+		log.Warn().Msg("Zoom webhook secret not set — signature verification disabled")
+	}
 	zoomWebhook.OnIncomingRinging(func(ev zoom.PhoneCallEvent) {
 		// 着信番号で Customer 逆引き
 		callerNorm := zoom.NormalizeJapanesePhone(ev.CallerNumber)

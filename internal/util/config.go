@@ -77,6 +77,9 @@ type Config struct {
 	ZoomAccountID    string `mapstructure:"ZOOM_ACCOUNT_ID"`
 	ZoomClientID     string `mapstructure:"ZOOM_CLIENT_ID"`
 	ZoomClientSecret string `mapstructure:"ZOOM_CLIENT_SECRET"`
+	// Zoom App の Secret Token (webhook signature verification + URL validation HMAC)。
+	// 空なら署名検証をスキップ (dev / 移行期 only)。本番では必ず設定すること。
+	ZoomWebhookSecret string `mapstructure:"ZOOM_WEBHOOK_SECRET"`
 
 	// Phase 22: 通話録音アーカイブ用 S3 (Ceph RGW). OBC `phox-recordings-s3` 由来。
 	// 全空なら recording_archiver は disabled (= recording_url 未保存)。

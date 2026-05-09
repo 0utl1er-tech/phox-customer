@@ -90,7 +90,8 @@ func TestListPhoneUsers_ParsesResponse(t *testing.T) {
 func TestWebhookHandler_URLValidation(t *testing.T) {
 	handler := zoom.NewWebhookHandler("test-secret")
 
-	body := `{"event":"endpoint.url_validation","plainToken":"abc123"}`
+	// Zoom は plainToken を payload 内に入れて送ってくる (top-level ではない)。
+	body := `{"event":"endpoint.url_validation","payload":{"plainToken":"abc123"}}`
 	req := httptest.NewRequest("POST", "/webhook/zoom", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()

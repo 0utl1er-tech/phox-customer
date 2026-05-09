@@ -16,8 +16,15 @@ import (
 type WebhookEvent struct {
 	Event   string          `json:"event"`
 	Payload json.RawMessage `json:"payload"`
-	// Zoom URL validation 用
-	PlainToken string `json:"plainToken,omitempty"`
+}
+
+// urlValidationPayload は endpoint.url_validation event の payload。
+// Zoom は `{"event":"...","payload":{"plainToken":"..."}}` の形で送ってくる
+// ので、top-level ではなく payload 内から取り出す必要がある。
+// (top-level に PlainToken を置く実装ミスのせいで URL 検証応答が空 body の
+// 200 で返り、Zoom Marketplace 側の event subscription が登録不能になっていた)
+type urlValidationPayload struct {
+	PlainToken string `json:"plainToken"`
 }
 
 // PhoneCallEvent は phone.callee_ringing / phone.callee_answered / phone.callee_ended の payload。
@@ -115,12 +122,18 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// URL validation: Zoom が plainToken を送ってきたら、HMAC-SHA256 で応答する
-	if env.Event == "endpoint.url_validation" && env.PlainToken != "" {
-		hash := hmacSHA256(h.secretToken, env.PlainToken)
+	// URL validation: Zoom が plainToken を送ってきたら、HMAC-SHA256 で応答する。
+	// plainToken は payload 内に入ってるので env.Payload から再パースする。
+	if env.Event == "endpoint.url_validation" {
+		var v urlValidationPayload
+		if err := json.Unmarshal(env.Payload, &v); err != nil || v.PlainToken == "" {
+			http.Error(w, "invalid url_validation payload", http.StatusBadRequest)
+			return
+		}
+		hash := hmacSHA256(h.secretToken, v.PlainToken)
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]string{
-			"plainToken":     env.PlainToken,
+			"plainToken":     v.PlainToken,
 			"encryptedToken": hash,
 		})
 		log.Info().Msg("zoom webhook: URL validation responded")
