@@ -1,12 +1,13 @@
 name: E2E Tests (main only)
 
 on:
-  push:
-    branches: [main]
+  # 当面は手動 trigger のみ。main push 自動実行に戻すには:
+  #   1. Keycloak service container を追加し `phox` realm JSON を seed
+  #   2. TEST_USER_EMAIL / TEST_USER_PASSWORD を Forgejo Actions secret に
+  #   3. ここに `push: { branches: [main] }` を再追加
+  # 上記 1, 2 が未整備のため自動実行すると毎 push で失敗が出る。
+  workflow_dispatch: {}
 
-# main 上での重複 push は前のを cancel して順次 1 件ずつ走らせる。
-# 元コメントは "host port 衝突回避" だったが、後述の通り host port は要らないので
-# 純粋にリソース節約のための直列化。
 concurrency:
   group: e2e-${{ github.workflow }}-${{ github.sha }}
   cancel-in-progress: true
@@ -77,32 +78,37 @@ jobs:
           go run main.go reindex.go &
           for i in $(seq 1 30); do curl -sf http://localhost:8082/ > /dev/null 2>&1 && break; sleep 1; done
 
-      # phox-ui と phox-e2e は別 repo なので checkout が必要
-      # 同じ GitHub org なら actions/checkout で path 指定で並列チェックアウト可能
-      # ここでは monorepo 外の場合を想定して sparse checkout
+      # phox-ui と phox-e2e は別 repo。actions/checkout v4 は path に
+      # workspace の親 (`../`) を許容しないので、サブディレクトリに置く。
+      # phox-customer 自身は workspace ルートに既に展開済 (1 回目の checkout)。
+      #
+      # cross-repo は default の secrets.GITHUB_TOKEN だと running repo
+      # (phox-customer) しか見れず Forgejo API が 404 を返す。
+      # CROSS_REPO_TOKEN = read:repository スコープの PAT (gitea_admin 発行)
+      # で他 repo を引く。失効時は Forgejo > User Settings > Applications で再発行。
       - name: Checkout phox-ui
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository_owner }}/phox-ui
-          path: ../phox-ui
-          token: ${{ secrets.GITHUB_TOKEN }}
+          path: phox-ui
+          token: ${{ secrets.CROSS_REPO_TOKEN }}
 
       - name: Checkout phox-e2e
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository_owner }}/phox-e2e
-          path: ../phox-e2e
-          token: ${{ secrets.GITHUB_TOKEN }}
+          path: phox-e2e
+          token: ${{ secrets.CROSS_REPO_TOKEN }}
 
       - name: Start phox-ui
-        working-directory: ../phox-ui
+        working-directory: phox-ui
         run: |
           npm ci
           npm run dev &
           for i in $(seq 1 30); do curl -sf http://localhost:3000/ > /dev/null 2>&1 && break; sleep 1; done
 
       - name: Run E2E
-        working-directory: ../phox-e2e
+        working-directory: phox-e2e
         run: |
           npm ci
           npx playwright install --with-deps chromium
@@ -113,5 +119,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-results
-          path: ../phox-e2e/test-results/
+          path: phox-e2e/test-results/
           retention-days: 7
