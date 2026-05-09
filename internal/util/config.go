@@ -88,6 +88,21 @@ type Config struct {
 	RecordingS3Region    string `mapstructure:"PHOX_RECORDING_S3_REGION"`
 	RecordingS3UseTLS    bool   `mapstructure:"PHOX_RECORDING_S3_USE_TLS"`
 
+	// Phase 22b: 録音再生用の short-lived signed URL の HMAC 鍵。
+	// UI は GetActivityRecording RPC で発行された URL を <audio src=...> に
+	// 渡すだけで良い (Bearer token を URL に乗せる必要がない)。鍵は base64 で
+	// 32 byte 以上推奨。空なら GetActivityRecording は CodeUnavailable を返す。
+	RecordingURLSigningKey string `mapstructure:"PHOX_RECORDING_URL_SIGNING_KEY"`
+	// signed URL の publish base (browser から到達する公開 URL)。
+	// 例: https://phox-api.0utl1er.tech / dev: http://localhost:8082
+	// 末尾スラッシュ付けない。空なら ICAL_FEED_BASE_URL にフォールバック。
+	APIPublicBaseURL string `mapstructure:"PHOX_API_PUBLIC_BASE_URL"`
+
+	// Phase 23: SSE 配信を pod 跨ぎで届けるための Redis pub/sub backend。
+	// 単 pod 運用ではこの env を空のままにすれば in-memory hub に fallback する。
+	// host:port 形式 (auth は cluster 内なので省略)。
+	RedisAddr string `mapstructure:"REDIS_ADDR"`
+
 	// Phase 20e: iCalendar 購読 URL のベース。phox-customer 自身が listen する
 	// 外部到達 URL (ブラウザやカレンダークライアントから見える URL)。
 	// 例 dev: http://localhost:8082  /  prod: https://phox-api.example.com

@@ -19,6 +19,12 @@ service ActivityService {
       returns (CreateActivityEmailSentResponse);
   rpc UpdateActivityStatus(UpdateActivityStatusRequest)
       returns (UpdateActivityStatusResponse);
+  // 通話録音 (Zoom Phone) を再生するための短命 presigned GET URL を返す。
+  // 録音実体は Ceph RGW (s3://phox-recordings/...) に保存されており、
+  // ここで minio.PresignedGetObject を使って 5 分の URL を発行する。
+  // 認可: activity が指す customer の book に user が permit を持つこと。
+  rpc GetActivityRecording(GetActivityRecordingRequest)
+      returns (GetActivityRecordingResponse);
 }
 
 enum ActivityType {
@@ -49,6 +55,12 @@ message Activity {
   optional string message_id = 18;
   google.protobuf.Timestamp occurred_at = 19;
   google.protobuf.Timestamp created_at = 20;
+  // 通話録音 (Zoom Phone) のメタ。recording_url 自体は s3:// 形式の internal
+  // path なので UI には返さず、has_recording=true なら別 RPC GetActivityRecording
+  // で短命 presigned URL を取りに来る、という分離。duration_seconds は call
+  // type の Activity でのみ意味を持つ。
+  bool has_recording = 21;
+  optional int32 duration_seconds = 22;
 }
 
 message ListActivitiesByCustomerIDRequest {
@@ -88,4 +100,14 @@ message UpdateActivityStatusRequest {
 }
 message UpdateActivityStatusResponse {
   Activity activity = 1;
+}
+
+message GetActivityRecordingRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+message GetActivityRecordingResponse {
+  // ブラウザの <audio src=...> に直接渡せる HTTPS URL (presigned GET)。
+  string url = 1;
+  // この URL の有効期限。UI 側で再生開始時に再取得すべきか判断するヒント。
+  google.protobuf.Timestamp expires_at = 2;
 }

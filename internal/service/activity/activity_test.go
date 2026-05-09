@@ -33,7 +33,7 @@ func newFixture(t *testing.T) activityFixture {
 	s, err := q.GetDefaultStatusByBookID(context.Background(), c.BookID)
 	require.NoError(t, err)
 	return activityFixture{
-		svc: activity.NewActivityService(q, nil), queries: q,
+		svc: activity.NewActivityService(q, nil, nil), queries: q,
 		customer: c, userID: u.ID, statusID: s.ID.String(),
 	}
 }

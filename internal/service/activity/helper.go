@@ -77,6 +77,10 @@ func boolPtr(b pgtype.Bool) *bool {
 }
 
 // rowToProto は `ListActivitiesByCustomerID` の JOIN 済み行を proto Activity に変換。
+//
+// recording_url 自体は `s3://...` 形式の internal path なので UI へは渡さず、
+// 「録音があるか」のフラグだけ has_recording として露出する。再生時は別 RPC
+// `GetActivityRecording` で短命 presigned URL を発行する流れ。
 func rowToProto(r db.ListActivitiesByCustomerIDRow) *activityv1.Activity {
 	return &activityv1.Activity{
 		Id:              r.ID.String(),
@@ -97,6 +101,8 @@ func rowToProto(r db.ListActivitiesByCustomerIDRow) *activityv1.Activity {
 		Subject:         textPtr(r.Subject),
 		Body:            textPtr(r.Body),
 		MessageId:       textPtr(r.MessageID),
+		HasRecording:    r.RecordingUrl.Valid && r.RecordingUrl.String != "",
+		DurationSeconds: int32Ptr(r.DurationSeconds),
 		OccurredAt:      timestamppb.New(r.OccurredAt),
 		CreatedAt:       timestamppb.New(r.CreatedAt),
 	}
