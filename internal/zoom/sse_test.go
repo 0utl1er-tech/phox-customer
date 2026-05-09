@@ -127,10 +127,13 @@ func TestWebhookHandler_RecordingCompleted(t *testing.T) {
 		called = true
 	})
 
-	// Zoom の実 payload では recording 自体の id は `id` field (recording_id ではない)。
+	// Zoom の実 payload は payload.object.recordings[] の配列形 (started は flat だが
+	// completed は array、Zoom 側の inconsistency)。
 	body := `{
 		"event": "phone.recording_completed",
-		"payload": {"object": {"id": "rec-123", "call_id": "call-456", "download_url": "https://zoom.example/r/rec-123"}}
+		"payload": {"object": {"recordings": [
+			{"id": "rec-123", "call_id": "call-456", "download_url": "https://zoom.example/r/rec-123"}
+		]}}
 	}`
 	req := httptest.NewRequest("POST", "/webhook/zoom", strings.NewReader(body))
 	rec := httptest.NewRecorder()

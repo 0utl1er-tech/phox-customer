@@ -134,13 +134,27 @@ func (h *ActivityHandler) HandleCallEnded(event PhoneCallEvent) {
 		contactID = pgtype.UUID{Bytes: match.ContactID, Valid: true}
 	}
 
+	// type='call' の Activity は DB 制約 activity_call_requires_status で
+	// status_id NOT NULL を要求する。webhook 経路ではユーザーが status を選ぶ
+	// 余地が無いので、Customer が属する Book のデフォルト status (priority=1)
+	// を引いて使う。Phase 20b の backfill migration (000008) で全 Book に
+	// 必ず1件 seed されているはずなので、NotFound はバグレベルのアサート。
+	defaultStatus, err := h.queries.GetDefaultStatusByBookID(ctx, match.BookID)
+	if err != nil {
+		log.Warn().Err(err).
+			Str("call_id", event.CallID).
+			Str("book_id", match.BookID.String()).
+			Msg("zoom: no default status for book, skipping (backfill migration may have missed this Book)")
+		return
+	}
+
 	params := db.CreateActivityParams{
 		ID:              uuid.New(),
 		CustomerID:      match.CustomerID,
 		ContactID:       contactID,
 		Type:            "call",
 		UserID:          h.defaultUserID,
-		StatusID:        pgtype.UUID{Valid: false},
+		StatusID:        pgtype.UUID{Bytes: defaultStatus.ID, Valid: true},
 		Phone:           pgtype.Text{String: customerPhone, Valid: true},
 		MailFrom:        pgtype.Text{Valid: false},
 		MailTo:          pgtype.Text{Valid: false},

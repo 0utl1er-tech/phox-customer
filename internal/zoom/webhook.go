@@ -73,9 +73,14 @@ type PhoneCallEvent struct {
 	DurationSec int    `json:"-"` // CallEndTime - ConnectedStartTime
 }
 
-// RecordingCompletedEvent は phone.recording_completed / phone.recording_started
-// の payload.object。phone.callee_*/caller_* と違って caller/callee が nest
-// していない (flat な caller_number / callee_number を直接持つ)。
+// RecordingCompletedEvent は phone.recording_completed の payload.object.recordings[0]。
+//
+// Zoom の inconsistency:
+//   - phone.recording_started:    object.{id, call_id, ...} (flat)
+//   - phone.recording_completed:  object.recordings[0].{id, call_id, ...} (array)
+//
+// この struct は recording_completed の方で、handler が recordings 配列の
+// 先頭要素を取り出してこの struct に Unmarshal する。
 type RecordingCompletedEvent struct {
 	// id は recording 自体の ID。call_id とは別物。
 	RecordingID  string `json:"id"`
@@ -87,8 +92,7 @@ type RecordingCompletedEvent struct {
 	DateTime     string `json:"date_time"`
 	// Recording type: "Automatic" / "OnDemand" / "Adhoc" 等。
 	RecordingType string `json:"recording_type"`
-	// download_url は recording_completed のみ含まれる短期 URL (15 分有効、
-	// Zoom OAuth Bearer 必須)。recording_started には含まれない。
+	// download_url は短期 (15 分有効、Zoom OAuth Bearer 必須)。
 	DownloadURL string `json:"download_url"`
 	Duration    int    `json:"duration"` // seconds
 }
@@ -270,19 +274,31 @@ func (h *WebhookHandler) handleRecordingCompleted(payload json.RawMessage) {
 		log.Debug().Msg("zoom webhook: recording_completed (no handler registered)")
 		return
 	}
-	var obj struct {
-		Object RecordingCompletedEvent `json:"object"`
+	// Zoom の recording_completed は recordings 配列で来る:
+	//   "object": { "recordings": [{ id, call_id, download_url, ... }] }
+	// 配列だが基本 1 要素 (一つの通話に対して一つの録音)。各要素を別の
+	// recording として扱って archiver にかける。
+	var env struct {
+		Object struct {
+			Recordings []RecordingCompletedEvent `json:"recordings"`
+		} `json:"object"`
 	}
-	if err := json.Unmarshal(payload, &obj); err != nil {
+	if err := json.Unmarshal(payload, &env); err != nil {
 		log.Warn().Err(err).Msg("zoom webhook: parse recording_completed")
 		return
 	}
-	log.Info().
-		Str("call_id", obj.Object.CallID).
-		Str("recording_id", obj.Object.RecordingID).
-		Int("duration", obj.Object.Duration).
-		Msg("zoom webhook: recording completed")
-	h.onRecordingComplete(obj.Object)
+	if len(env.Object.Recordings) == 0 {
+		log.Warn().Msg("zoom webhook: recording_completed payload has empty recordings array")
+		return
+	}
+	for _, rec := range env.Object.Recordings {
+		log.Info().
+			Str("call_id", rec.CallID).
+			Str("recording_id", rec.RecordingID).
+			Int("duration", rec.Duration).
+			Msg("zoom webhook: recording completed")
+		h.onRecordingComplete(rec)
+	}
 }
 
 func hmacSHA256(secret, message string) string {
