@@ -8,7 +8,7 @@ RUN go mod download
 
 COPY . .
 
-RUN go build -o /app/tmp/main /app/main.go
+RUN go build -o /app/tmp/main .
 
 
 FROM alpine:3.19
