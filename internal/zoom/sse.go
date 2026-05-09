@@ -1,12 +1,14 @@
 package zoom
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"sync"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog/log"
 )
 
@@ -22,16 +24,77 @@ type CallNotification struct {
 	Timestamp    string `json:"timestamp"`
 }
 
+// SSEChannel は Broadcast を pod 跨ぎで配送するための Redis pub/sub channel 名。
+// 単 pod 運用 (rdb == nil) では使われない。
+const SSEChannel = "phox:sse:calls"
+
+// sseEnvelope は Redis pub/sub に乗せる際の wrapper。userEmail と本体を JSON 化。
+type sseEnvelope struct {
+	UserEmail    string           `json:"user_email"`
+	Notification CallNotification `json:"notification"`
+}
+
 // SSEHub は接続中のブラウザクライアントに SSE を配信するハブ。
 // 各 CRM ユーザーが /sse/calls を購読し、着信通知をリアルタイムで受け取る。
+//
+// rdb が non-nil の場合は pod 跨ぎ配信モードで動作する:
+//   - Broadcast() は Redis pub/sub channel "phox:sse:calls" に publish する
+//   - Run(ctx) で起動した subscriber goroutine が channel を購読し、
+//     受信した envelope を「自分の pod に居る」 SSE client に fan-out する
+//
+// rdb が nil の場合は in-memory のみ (単 pod 運用 or local dev) で動く。
 type SSEHub struct {
 	mu      sync.RWMutex
 	clients map[string]map[chan CallNotification]bool // userEmail → set of channels
+	rdb     *redis.Client                             // nil で in-memory モード
 }
 
+// NewSSEHub は in-memory hub を返す (単 pod / dev / test 用)。
 func NewSSEHub() *SSEHub {
 	return &SSEHub{
 		clients: make(map[string]map[chan CallNotification]bool),
+	}
+}
+
+// NewRedisSSEHub は Redis pub/sub backed hub を返す。
+// Run(ctx) を errgroup などに載せて subscriber goroutine を起動すること。
+func NewRedisSSEHub(rdb *redis.Client) *SSEHub {
+	return &SSEHub{
+		clients: make(map[string]map[chan CallNotification]bool),
+		rdb:     rdb,
+	}
+}
+
+// Run は rdb 設定時のみ subscriber を回す long-running goroutine。
+// rdb が nil の場合は何もせず即 nil 返却 (errgroup から呼んでも害なし)。
+func (h *SSEHub) Run(ctx context.Context) error {
+	if h.rdb == nil {
+		return nil
+	}
+	sub := h.rdb.Subscribe(ctx, SSEChannel)
+	defer sub.Close()
+
+	// 接続確認 (REDIS_ADDR が間違ってる場合に起動 fail させる)。
+	if _, err := sub.Receive(ctx); err != nil {
+		return fmt.Errorf("sse: redis subscribe %s: %w", SSEChannel, err)
+	}
+	log.Info().Str("channel", SSEChannel).Msg("SSE hub: redis subscriber started")
+	ch := sub.Channel()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case m, ok := <-ch:
+			if !ok {
+				return nil
+			}
+			var env sseEnvelope
+			if err := json.Unmarshal([]byte(m.Payload), &env); err != nil {
+				log.Warn().Err(err).Msg("SSE hub: bad redis payload, dropping")
+				continue
+			}
+			h.localBroadcast(env.UserEmail, env.Notification)
+		}
 	}
 }
 
@@ -64,7 +127,32 @@ func (h *SSEHub) Unsubscribe(userEmail string, ch chan CallNotification) {
 
 // Broadcast は指定ユーザーの全 SSE クライアントに通知を送る。
 // userEmail が空なら全ユーザーに送信 (global broadcast)。
+//
+// rdb 設定時は redis pub/sub に publish するだけ。各 pod の subscriber が
+// 受け取って localBroadcast でローカル client に fan-out する。
+// rdb 未設定時は直接 localBroadcast を呼ぶ (= 単 pod 運用)。
 func (h *SSEHub) Broadcast(userEmail string, n CallNotification) {
+	if h.rdb != nil {
+		payload, err := json.Marshal(sseEnvelope{UserEmail: userEmail, Notification: n})
+		if err != nil {
+			log.Warn().Err(err).Msg("SSE hub: marshal envelope")
+			return
+		}
+		// Publish は失敗しても呼び出し元 (webhook handler) を落とさない。
+		// SSE は best-effort 配信。
+		if err := h.rdb.Publish(context.Background(), SSEChannel, payload).Err(); err != nil {
+			log.Warn().Err(err).Msg("SSE hub: redis publish failed")
+		}
+		return
+	}
+	h.localBroadcast(userEmail, n)
+}
+
+// localBroadcast は redis を経由せず自分の pod 内 client にだけ届ける。
+// 直接呼ばれるのは:
+//   - rdb 未設定時の Broadcast() から
+//   - rdb 設定時の Run() subscriber goroutine から
+func (h *SSEHub) localBroadcast(userEmail string, n CallNotification) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 

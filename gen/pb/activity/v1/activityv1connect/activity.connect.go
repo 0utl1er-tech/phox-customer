@@ -45,6 +45,9 @@ const (
 	// ActivityServiceUpdateActivityStatusProcedure is the fully-qualified name of the ActivityService's
 	// UpdateActivityStatus RPC.
 	ActivityServiceUpdateActivityStatusProcedure = "/activity.v1.ActivityService/UpdateActivityStatus"
+	// ActivityServiceGetActivityRecordingProcedure is the fully-qualified name of the ActivityService's
+	// GetActivityRecording RPC.
+	ActivityServiceGetActivityRecordingProcedure = "/activity.v1.ActivityService/GetActivityRecording"
 )
 
 // ActivityServiceClient is a client for the activity.v1.ActivityService service.
@@ -53,6 +56,11 @@ type ActivityServiceClient interface {
 	CreateActivityCall(context.Context, *connect.Request[v1.CreateActivityCallRequest]) (*connect.Response[v1.CreateActivityCallResponse], error)
 	CreateActivityEmailSent(context.Context, *connect.Request[v1.CreateActivityEmailSentRequest]) (*connect.Response[v1.CreateActivityEmailSentResponse], error)
 	UpdateActivityStatus(context.Context, *connect.Request[v1.UpdateActivityStatusRequest]) (*connect.Response[v1.UpdateActivityStatusResponse], error)
+	// 通話録音 (Zoom Phone) を再生するための短命 presigned GET URL を返す。
+	// 録音実体は Ceph RGW (s3://phox-recordings/...) に保存されており、
+	// ここで minio.PresignedGetObject を使って 5 分の URL を発行する。
+	// 認可: activity が指す customer の book に user が permit を持つこと。
+	GetActivityRecording(context.Context, *connect.Request[v1.GetActivityRecordingRequest]) (*connect.Response[v1.GetActivityRecordingResponse], error)
 }
 
 // NewActivityServiceClient constructs a client for the activity.v1.ActivityService service. By
@@ -90,6 +98,12 @@ func NewActivityServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(activityServiceMethods.ByName("UpdateActivityStatus")),
 			connect.WithClientOptions(opts...),
 		),
+		getActivityRecording: connect.NewClient[v1.GetActivityRecordingRequest, v1.GetActivityRecordingResponse](
+			httpClient,
+			baseURL+ActivityServiceGetActivityRecordingProcedure,
+			connect.WithSchema(activityServiceMethods.ByName("GetActivityRecording")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -99,6 +113,7 @@ type activityServiceClient struct {
 	createActivityCall         *connect.Client[v1.CreateActivityCallRequest, v1.CreateActivityCallResponse]
 	createActivityEmailSent    *connect.Client[v1.CreateActivityEmailSentRequest, v1.CreateActivityEmailSentResponse]
 	updateActivityStatus       *connect.Client[v1.UpdateActivityStatusRequest, v1.UpdateActivityStatusResponse]
+	getActivityRecording       *connect.Client[v1.GetActivityRecordingRequest, v1.GetActivityRecordingResponse]
 }
 
 // ListActivitiesByCustomerID calls activity.v1.ActivityService.ListActivitiesByCustomerID.
@@ -121,12 +136,22 @@ func (c *activityServiceClient) UpdateActivityStatus(ctx context.Context, req *c
 	return c.updateActivityStatus.CallUnary(ctx, req)
 }
 
+// GetActivityRecording calls activity.v1.ActivityService.GetActivityRecording.
+func (c *activityServiceClient) GetActivityRecording(ctx context.Context, req *connect.Request[v1.GetActivityRecordingRequest]) (*connect.Response[v1.GetActivityRecordingResponse], error) {
+	return c.getActivityRecording.CallUnary(ctx, req)
+}
+
 // ActivityServiceHandler is an implementation of the activity.v1.ActivityService service.
 type ActivityServiceHandler interface {
 	ListActivitiesByCustomerID(context.Context, *connect.Request[v1.ListActivitiesByCustomerIDRequest]) (*connect.Response[v1.ListActivitiesByCustomerIDResponse], error)
 	CreateActivityCall(context.Context, *connect.Request[v1.CreateActivityCallRequest]) (*connect.Response[v1.CreateActivityCallResponse], error)
 	CreateActivityEmailSent(context.Context, *connect.Request[v1.CreateActivityEmailSentRequest]) (*connect.Response[v1.CreateActivityEmailSentResponse], error)
 	UpdateActivityStatus(context.Context, *connect.Request[v1.UpdateActivityStatusRequest]) (*connect.Response[v1.UpdateActivityStatusResponse], error)
+	// 通話録音 (Zoom Phone) を再生するための短命 presigned GET URL を返す。
+	// 録音実体は Ceph RGW (s3://phox-recordings/...) に保存されており、
+	// ここで minio.PresignedGetObject を使って 5 分の URL を発行する。
+	// 認可: activity が指す customer の book に user が permit を持つこと。
+	GetActivityRecording(context.Context, *connect.Request[v1.GetActivityRecordingRequest]) (*connect.Response[v1.GetActivityRecordingResponse], error)
 }
 
 // NewActivityServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -160,6 +185,12 @@ func NewActivityServiceHandler(svc ActivityServiceHandler, opts ...connect.Handl
 		connect.WithSchema(activityServiceMethods.ByName("UpdateActivityStatus")),
 		connect.WithHandlerOptions(opts...),
 	)
+	activityServiceGetActivityRecordingHandler := connect.NewUnaryHandler(
+		ActivityServiceGetActivityRecordingProcedure,
+		svc.GetActivityRecording,
+		connect.WithSchema(activityServiceMethods.ByName("GetActivityRecording")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/activity.v1.ActivityService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case ActivityServiceListActivitiesByCustomerIDProcedure:
@@ -170,6 +201,8 @@ func NewActivityServiceHandler(svc ActivityServiceHandler, opts ...connect.Handl
 			activityServiceCreateActivityEmailSentHandler.ServeHTTP(w, r)
 		case ActivityServiceUpdateActivityStatusProcedure:
 			activityServiceUpdateActivityStatusHandler.ServeHTTP(w, r)
+		case ActivityServiceGetActivityRecordingProcedure:
+			activityServiceGetActivityRecordingHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -193,4 +226,8 @@ func (UnimplementedActivityServiceHandler) CreateActivityEmailSent(context.Conte
 
 func (UnimplementedActivityServiceHandler) UpdateActivityStatus(context.Context, *connect.Request[v1.UpdateActivityStatusRequest]) (*connect.Response[v1.UpdateActivityStatusResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("activity.v1.ActivityService.UpdateActivityStatus is not implemented"))
+}
+
+func (UnimplementedActivityServiceHandler) GetActivityRecording(context.Context, *connect.Request[v1.GetActivityRecordingRequest]) (*connect.Response[v1.GetActivityRecordingResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("activity.v1.ActivityService.GetActivityRecording is not implemented"))
 }

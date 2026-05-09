@@ -29,6 +29,7 @@ import (
 	"github.com/0utl1er-tech/phox-customer/internal/keycloakadmin"
 	"github.com/0utl1er-tech/phox-customer/internal/mail"
 	oauthsvc "github.com/0utl1er-tech/phox-customer/internal/oauth"
+	"github.com/0utl1er-tech/phox-customer/internal/recording"
 	"github.com/0utl1er-tech/phox-customer/internal/search"
 	"github.com/0utl1er-tech/phox-customer/internal/service/activity"
 	"github.com/0utl1er-tech/phox-customer/internal/service/auth"
@@ -47,6 +48,8 @@ import (
 	"github.com/0utl1er-tech/phox-customer/internal/service/user"
 	"github.com/0utl1er-tech/phox-customer/internal/util"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/minio/minio-go/v7"
+	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
@@ -210,7 +213,8 @@ func main() {
 	// Activity service — Phase 11 で SMTPClient を注入済み。
 	// SMTP が未設定の場合 mailClient は nil で、CreateActivityEmailSent は
 	// Unavailable エラーを返す (degraded mode)。
-	activityService := activity.NewActivityService(queries, mailClient)
+	// activityService は Phase 22 archiver 初期化後に組み立てる (recording.Service
+	// を注入するため)。下の Phase 22 ブロックを参照。
 	mailTemplateService := mailtemplate.NewMailTemplateService(queries)
 
 	// Phase 20: Google Calendar 連携
@@ -315,6 +319,33 @@ func main() {
 		log.Info().Msg("Recording archiver disabled (S3 config missing)")
 	}
 
+	// Phase 22b: 録音再生用 signed URL の発行 + ストリーミングハンドラ。
+	// archiver と同じ minio client を再利用する (Bucket / 認証情報は同一)。
+	// Signing key 不在 / archiver 不在のいずれかで disabled に丸められる。
+	publicBaseURL := cfg.APIPublicBaseURL
+	if publicBaseURL == "" {
+		publicBaseURL = cfg.ICalFeedBaseURL // 同じ host が listen してるので fallback
+	}
+	var s3Client *minio.Client
+	if recordingArchiver != nil {
+		s3Client = recordingArchiver.S3()
+	}
+	recordingSvc := recording.NewService(
+		queries,
+		auth.NewAuthorizer(queries),
+		s3Client,
+		cfg.RecordingURLSigningKey,
+		publicBaseURL,
+	)
+	if recordingSvc.IsEnabled() {
+		log.Info().Str("public_base", publicBaseURL).Msg("Recording playback (signed URL) enabled")
+	} else {
+		log.Info().Msg("Recording playback disabled (signing key or S3 missing)")
+	}
+
+	// Activity service — recording.Service を注入してから construct。
+	activityService := activity.NewActivityService(queries, mailClient, recordingSvc)
+
 	// Phase 22: ActivityHandler — webhook event を Activity row に変換
 	zoomActivityHandler := zoom.NewActivityHandler(queries, recordingArchiver, "system")
 
@@ -334,8 +365,23 @@ func main() {
 		}
 	}
 
-	// Zoom SSE hub (着信リアルタイム通知)
-	sseHub := zoom.NewSSEHub()
+	// Zoom SSE hub (着信リアルタイム通知)。
+	// REDIS_ADDR が設定されていれば pod 跨ぎ配信モード (Redis pub/sub)。
+	// 空なら in-memory hub (単 pod / dev)。
+	var sseHub *zoom.SSEHub
+	var rdb *redis.Client
+	if cfg.RedisAddr != "" {
+		rdb = redis.NewClient(&redis.Options{Addr: cfg.RedisAddr})
+		// 起動時に PING で接続確認 — Redis 不通なら早めに失敗させる。
+		if err := rdb.Ping(context.Background()).Err(); err != nil {
+			log.Fatal().Err(err).Str("redis_addr", cfg.RedisAddr).Msg("Redis unreachable")
+		}
+		log.Info().Str("redis_addr", cfg.RedisAddr).Msg("Redis connected (SSE pub/sub backend)")
+		sseHub = zoom.NewRedisSSEHub(rdb)
+	} else {
+		log.Info().Msg("REDIS_ADDR empty — using in-memory SSE hub (single-pod mode)")
+		sseHub = zoom.NewSSEHub()
+	}
 
 	// Zoom Webhook handler (着信・通話終了・録音完了)
 	zoomWebhook := zoom.NewWebhookHandler("") // Secret Token は後で設定
@@ -415,6 +461,11 @@ func main() {
 	mux.Handle("/webhook/zoom", zoomWebhook)
 	mux.Handle("/sse/calls", sseHub)
 
+	// Phase 22b: 録音再生 streaming endpoint。
+	// signed URL は GetActivityRecording RPC で発行され、UI が <audio src="">
+	// に直接渡す形で再生する。disabled でも mux 登録はしておく (handler 側で 503)。
+	mux.Handle("GET /recordings/{activity_id}", recordingSvc)
+
 	// Debug endpoint — GCal mock 呼び出し履歴を返す (GCAL_MODE=mock のみ)
 	if gcalMock != nil {
 		mux.HandleFunc("/debug/gcal/calls", func(w http.ResponseWriter, r *http.Request) {
@@ -445,6 +496,11 @@ func main() {
 			return imapWorker.Run(ctx)
 		})
 	}
+
+	// SSE Redis subscriber (REDIS_ADDR 未設定時は即 nil 返却で無害)。
+	waitGroup.Go(func() error {
+		return sseHub.Run(ctx)
+	})
 
 	waitGroup.Go(func() error {
 		log.Info().Msgf("Start Connect-Go server at %s", server.Addr)

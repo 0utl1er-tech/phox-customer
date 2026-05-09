@@ -67,6 +67,16 @@ func (a *RecordingArchiver) Enabled() bool {
 	return a != nil && a.s3 != nil && a.bucket != ""
 }
 
+// S3 は内部の minio client を返す。再生用 signed URL を発行するパッケージ
+// (internal/recording) が同一 client を再利用するためのアクセサ。
+// archiver が disabled なら nil を返す。
+func (a *RecordingArchiver) S3() *minio.Client {
+	if !a.Enabled() {
+		return nil
+	}
+	return a.s3
+}
+
 // Archive は callID の通話録音を Zoom から download → S3 に PUT する。
 // 成功時 `s3://<bucket>/<key>` 形式のパスを返す (DB 保存用)。
 //
