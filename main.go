@@ -106,6 +106,14 @@ func main() {
 		return
 	}
 
+	// CLI subcommand: `phox-customer backfill [--since 24h]` — fetch past
+	// Zoom Phone call_logs + recordings via REST API and upsert Activity
+	// rows. Idempotent (zoom_call_id UNIQUE), safe to re-run.
+	if len(os.Args) > 1 && os.Args[1] == "backfill" {
+		runBackfill(cfg, os.Args[2:])
+		return
+	}
+
 	connPool, err := pgxpool.New(context.Background(), cfg.DBSource)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to create connection pool")

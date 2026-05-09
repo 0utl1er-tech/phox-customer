@@ -155,7 +155,9 @@ func (h *ActivityHandler) HandleCallEnded(event PhoneCallEvent) {
 		Type:            "call",
 		UserID:          h.defaultUserID,
 		StatusID:        pgtype.UUID{Bytes: defaultStatus.ID, Valid: true},
-		Phone:           pgtype.Text{String: customerPhone, Valid: true},
+		// Activity.phone は UI で Customer.phone と並べて表示されるので、
+		// E.164 (+819037241917) のまま入れず JP 国内表記 (09037241917) に戻す。
+		Phone:           pgtype.Text{String: JapanLocalPhone(customerPhone), Valid: true},
 		MailFrom:        pgtype.Text{Valid: false},
 		MailTo:          pgtype.Text{Valid: false},
 		MailCc:          pgtype.Text{Valid: false},

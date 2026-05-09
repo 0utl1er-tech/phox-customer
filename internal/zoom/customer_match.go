@@ -28,6 +28,27 @@ type CustomerMatch struct {
 	LastActivityAt time.Time
 }
 
+// JapanLocalPhone は Zoom が返す E.164 (+81xxxxxxxxxx) を JP 国内表記
+// (0xxxxxxxxxx) に戻す。+81 以外で始まる場合や 11 桁未満は変えずに返す。
+//
+// Customer.phone は人間が登録するので大抵 "09037241917" / "090-3724-1917"
+// 形式。一方 Zoom webhook は "+819037241917" (E.164) で来る。Activity.phone
+// に raw E.164 を保存すると UI の表示で Customer と不揃いに見えるので、
+// 保存前にこの helper で揃える。
+//
+// 例:
+//
+//	"+819037241917"  → "09037241917"
+//	"+81312345678"   → "0312345678"
+//	"09037241917"    → "09037241917"  (no-op)
+//	"+13105551234"   → "+13105551234" (US 番号は変えない — JP 用関数のため)
+func JapanLocalPhone(phone string) string {
+	if strings.HasPrefix(phone, "+81") && len(phone) >= 4 {
+		return "0" + phone[3:]
+	}
+	return phone
+}
+
 // PhoneToDigits は phone 文字列から数字のみ抽出 → 末尾 10 桁を返す。
 // DB 側の SQL `right(regexp_replace(...), 10)` と完全に同じ正規化を Go 側で
 // 行うことで、入出力 1:1 一致を保証する。
