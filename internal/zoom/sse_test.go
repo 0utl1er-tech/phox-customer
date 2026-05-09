@@ -1,7 +1,6 @@
 package zoom_test
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -112,19 +111,23 @@ func TestWebhookHandler_MethodNotAllowed(t *testing.T) {
 
 func TestWebhookHandler_RecordingCompleted(t *testing.T) {
 	handler := zoom.NewWebhookHandler("")
-	var received json.RawMessage
-	handler.OnRecordingComplete(func(ev json.RawMessage) {
+	var received zoom.RecordingCompletedEvent
+	called := false
+	handler.OnRecordingComplete(func(ev zoom.RecordingCompletedEvent) {
 		received = ev
+		called = true
 	})
 
 	body := `{
 		"event": "phone.recording_completed",
-		"payload": {"recording_id": "rec-123"}
+		"payload": {"object": {"recording_id": "rec-123", "call_id": "call-456", "download_url": "https://zoom.example/r/rec-123"}}
 	}`
 	req := httptest.NewRequest("POST", "/webhook/zoom", strings.NewReader(body))
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
 	assert.Equal(t, 200, rec.Code)
-	assert.NotNil(t, received)
+	assert.True(t, called, "OnRecordingComplete should fire")
+	assert.Equal(t, "rec-123", received.RecordingID)
+	assert.Equal(t, "call-456", received.CallID)
 }

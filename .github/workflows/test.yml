@@ -6,6 +6,22 @@ on:
   pull_request:
     branches: [main]
 
+# act_runner の `container.network: ""` 設定で job ごとに user-defined
+# docker network が立ち上がり、その上で docker embedded DNS が走る。
+# ので job container から `postgres:5432` で直接 service container に
+# 届く。host port bind は不要 (= 並列 job の port 衝突も無い)。
+#
+# concurrency group を SHA キーに変えてあるのは:
+#   feature ブランチに push すると `push` event と `pull_request` event の
+#   両方が発火し、同じ SHA に対して 2 並列ジョブが走る。act_runner は両者を
+#   同じ dind に放り込むため、setup-go の build cache (/root/.cache/go-build)
+#   が共有されて `go tool covdata: fork/exec ... text file busy` の race で
+#   片方が exit 1 する (実証 2026-05、phox-customer task 63)。
+#   SHA 単位で集約すれば後勝ちが先発をキャンセルし、race を回避できる。
+concurrency:
+  group: test-${{ github.workflow }}-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: true
+
 jobs:
   # ─── Unit Tests (全ブランチで実行) ─────────────────────────────
   unit-test:
@@ -18,7 +34,6 @@ jobs:
           POSTGRES_USER: root
           POSTGRES_PASSWORD: secret
           POSTGRES_DB: phox-customer
-        ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U root"
           --health-interval 5s
@@ -36,8 +51,13 @@ jobs:
       - name: Install migrate CLI
         run: go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
 
+      # job container と postgres service container は同じ user-defined network
+      # に乗る (act_runner の network: "" 設定による) ので、service の name
+      # `postgres` で 5432 に届く。job container の localhost ではない点に注意。
       - name: Run migrations
-        run: migrate -path db/migration -database "postgresql://root:secret@localhost:5432/phox-customer?sslmode=disable" up
+        run: migrate -path db/migration -database "postgresql://root:secret@postgres:5432/phox-customer?sslmode=disable" up
 
       - name: Run unit tests
         run: go test -v -cover -count=1 ./...
+        env:
+          DB_SOURCE: postgresql://root:secret@postgres:5432/phox-customer?sslmode=disable
