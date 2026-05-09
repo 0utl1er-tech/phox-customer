@@ -155,6 +155,11 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// 開発期のみ: 受信したイベントの payload 構造を ad-hoc に把握するため
+	// 全 event の生 payload を info で dump する (struct 修正のため一時的に)。
+	// 安定後は debug に下げる。
+	log.Info().Str("event", env.Event).RawJSON("payload", env.Payload).Msg("zoom webhook: raw payload")
+
 	// イベント分岐
 	switch env.Event {
 	case "phone.callee_ringing":
