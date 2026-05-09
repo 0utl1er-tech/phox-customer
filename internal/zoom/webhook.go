@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/rs/zerolog/log"
 )
@@ -27,37 +28,73 @@ type urlValidationPayload struct {
 	PlainToken string `json:"plainToken"`
 }
 
-// PhoneCallEvent は phone.callee_ringing / phone.callee_answered / phone.callee_ended の payload。
-//
-// `phone.callee_ended` には DurationSec (= 通話秒数) も含まれる。
-// `start_time` / `answer_time` / `end_time` は ISO8601 で、Activity.occurred_at の
-// ベースとして使う (= end_time、無ければ answer_time、無ければ DateTime)。
-type PhoneCallEvent struct {
-	CallID       string `json:"call_id"`
-	CallerNumber string `json:"caller_phone_number"`
-	CallerName   string `json:"caller_name"`
-	CalleeNumber string `json:"callee_phone_number"`
-	CalleeName   string `json:"callee_name"`
-	Direction    string `json:"direction"` // inbound / outbound
-	DateTime     string `json:"date_time"`
-	StartTime    string `json:"start_time"`
-	AnswerTime   string `json:"answer_time"`
-	EndTime      string `json:"end_time"`
-	DurationSec  int    `json:"duration"` // seconds, callee_ended only
-	UserID       string `json:"user_id"`
-	UserEmail    string `json:"user_email"`
+// CallParty は phone.{caller,callee}_* event の payload.object.{caller,callee}
+// 共通形。Zoom の癖メモ:
+//   - extension_number は数値 (extension_type=user の社内線でも、pstn の外部番号でも int)
+//   - extension_type で user / pstn / common_area / call_queue 等が区別される
+//   - phone_number は E.164 (+81…) で来る
+type CallParty struct {
+	Name            string `json:"name"`
+	UserID          string `json:"user_id"`
+	UserEmail       string `json:"user_email"`
+	ExtensionID     string `json:"extension_id"`
+	ExtensionType   string `json:"extension_type"`
+	ExtensionNumber int64  `json:"extension_number"`
+	PhoneNumber     string `json:"phone_number"`
+	ConnectionType  string `json:"connection_type"`
+	DeviceType      string `json:"device_type"`
+	DeviceName      string `json:"device_name"`
+	Timezone        string `json:"timezone"`
 }
 
-// RecordingCompletedEvent は phone.recording_completed の payload (object 内)。
-// download_url は Zoom OAuth Bearer 必須、有効期限 ~ 15 分。
+// PhoneCallEvent は phone.callee_* / phone.caller_* event の payload.object。
+//
+// 実際の Zoom payload で確認した shape:
+//   - caller / callee は **ネストされた CallParty オブジェクト** (旧版の flat
+//     `caller_phone_number` などは存在しない)
+//   - direction フィールド自体は無く、event 名 `phone.caller_*` (発信側 = staff
+//     が caller) か `phone.callee_*` (受信側 = staff が callee) で判別する
+//   - duration は無く、ringing/connected/end の時刻差から計算する
+//   - `handup_result` は Zoom 側の typo (hangup ではない)。"Call connected" 等
+//
+// Direction / DurationSec は JSON ではなく、handler が event 名 と時刻から
+// 後付けで埋める (consumer 側のロジックを単純にするため)。
+type PhoneCallEvent struct {
+	CallID             string    `json:"call_id"`
+	Caller             CallParty `json:"caller"`
+	Callee             CallParty `json:"callee"`
+	RingingStartTime   string    `json:"ringing_start_time"`
+	ConnectedStartTime string    `json:"connected_start_time"`
+	CallEndTime        string    `json:"call_end_time"`
+	HangupResult       string    `json:"handup_result"`
+
+	// 後付けフィールド (JSON tag 無し):
+	Direction   string `json:"-"` // "inbound" / "outbound" — event 名から導出
+	DurationSec int    `json:"-"` // CallEndTime - ConnectedStartTime
+}
+
+// RecordingCompletedEvent は phone.recording_completed の payload.object.recordings[0]。
+//
+// Zoom の inconsistency:
+//   - phone.recording_started:    object.{id, call_id, ...} (flat)
+//   - phone.recording_completed:  object.recordings[0].{id, call_id, ...} (array)
+//
+// この struct は recording_completed の方で、handler が recordings 配列の
+// 先頭要素を取り出してこの struct に Unmarshal する。
 type RecordingCompletedEvent struct {
+	// id は recording 自体の ID。call_id とは別物。
+	RecordingID  string `json:"id"`
 	CallID       string `json:"call_id"`
-	RecordingID  string `json:"recording_id"`
-	DownloadURL  string `json:"download_url"`
-	Duration     int    `json:"duration"` // seconds
+	UserID       string `json:"user_id"`
+	CallerNumber string `json:"caller_number"`
+	CalleeNumber string `json:"callee_number"`
+	Direction    string `json:"direction"`
 	DateTime     string `json:"date_time"`
-	CallerNumber string `json:"caller_phone_number"`
-	CalleeNumber string `json:"callee_phone_number"`
+	// Recording type: "Automatic" / "OnDemand" / "Adhoc" 等。
+	RecordingType string `json:"recording_type"`
+	// download_url は短期 (15 分有効、Zoom OAuth Bearer 必須)。
+	DownloadURL string `json:"download_url"`
+	Duration    int    `json:"duration"` // seconds
 }
 
 // IncomingCallHandler は着信通知を受け取るコールバック型。
@@ -155,14 +192,26 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// イベント分岐
+	// 受信した event の生 payload を debug log に残す (将来 Zoom が schema を
+	// 拡張した時の調査用)。debug level なので production では普段見えない。
+	log.Debug().Str("event", env.Event).RawJSON("payload", env.Payload).Msg("zoom webhook: raw payload")
+
+	// イベント分岐。caller_* と callee_* で direction が反対 (caller = phox 側
+	// が発信、callee = phox 側が受信) なので両方を載せて handler に渡す。
 	switch env.Event {
 	case "phone.callee_ringing":
-		h.handlePhoneEvent(env.Payload, h.onIncomingRinging, "ringing")
+		h.handlePhoneEvent(env.Payload, h.onIncomingRinging, "ringing", "inbound")
+	case "phone.caller_ringing":
+		h.handlePhoneEvent(env.Payload, h.onIncomingRinging, "ringing", "outbound")
 	case "phone.callee_answered":
-		h.handlePhoneEvent(env.Payload, h.onCallAnswered, "answered")
-	case "phone.callee_ended", "phone.caller_ended":
-		h.handlePhoneEvent(env.Payload, h.onCallEnded, "ended")
+		h.handlePhoneEvent(env.Payload, h.onCallAnswered, "answered", "inbound")
+	case "phone.caller_connected":
+		// Zoom は caller 側を caller_connected と呼ぶ (callee_answered と対)
+		h.handlePhoneEvent(env.Payload, h.onCallAnswered, "answered", "outbound")
+	case "phone.callee_ended":
+		h.handlePhoneEvent(env.Payload, h.onCallEnded, "ended", "inbound")
+	case "phone.caller_ended":
+		h.handlePhoneEvent(env.Payload, h.onCallEnded, "ended", "outbound")
 	case "phone.recording_completed":
 		h.handleRecordingCompleted(env.Payload)
 	default:
@@ -172,7 +221,11 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func (h *WebhookHandler) handlePhoneEvent(payload json.RawMessage, handler IncomingCallHandler, label string) {
+func (h *WebhookHandler) handlePhoneEvent(
+	payload json.RawMessage,
+	handler IncomingCallHandler,
+	label, direction string,
+) {
 	if handler == nil {
 		return
 	}
@@ -183,15 +236,37 @@ func (h *WebhookHandler) handlePhoneEvent(payload json.RawMessage, handler Incom
 		log.Warn().Err(err).Str("label", label).Msg("zoom webhook: parse phone event")
 		return
 	}
+	// Direction は event 名 (caller_* / callee_*) から導出して付与。
+	obj.Object.Direction = direction
+	// DurationSec は connected_start_time → call_end_time の差。両方無いと 0。
+	obj.Object.DurationSec = computeDuration(obj.Object.ConnectedStartTime, obj.Object.CallEndTime)
+
 	log.Info().
 		Str("event", label).
+		Str("direction", direction).
 		Str("call_id", obj.Object.CallID).
-		Str("caller", obj.Object.CallerNumber).
-		Str("callee", obj.Object.CalleeNumber).
-		Str("direction", obj.Object.Direction).
+		Str("caller", obj.Object.Caller.PhoneNumber).
+		Str("callee", obj.Object.Callee.PhoneNumber).
 		Int("duration", obj.Object.DurationSec).
 		Msg("zoom webhook: phone event")
 	handler(obj.Object)
+}
+
+// computeDuration は ISO8601 二点間の秒数。parse 失敗 / 順序逆転 / 片方空 で 0。
+func computeDuration(startISO, endISO string) int {
+	if startISO == "" || endISO == "" {
+		return 0
+	}
+	start, err1 := time.Parse(time.RFC3339, startISO)
+	end, err2 := time.Parse(time.RFC3339, endISO)
+	if err1 != nil || err2 != nil {
+		return 0
+	}
+	d := int(end.Sub(start).Seconds())
+	if d < 0 {
+		return 0
+	}
+	return d
 }
 
 func (h *WebhookHandler) handleRecordingCompleted(payload json.RawMessage) {
@@ -199,19 +274,31 @@ func (h *WebhookHandler) handleRecordingCompleted(payload json.RawMessage) {
 		log.Debug().Msg("zoom webhook: recording_completed (no handler registered)")
 		return
 	}
-	var obj struct {
-		Object RecordingCompletedEvent `json:"object"`
+	// Zoom の recording_completed は recordings 配列で来る:
+	//   "object": { "recordings": [{ id, call_id, download_url, ... }] }
+	// 配列だが基本 1 要素 (一つの通話に対して一つの録音)。各要素を別の
+	// recording として扱って archiver にかける。
+	var env struct {
+		Object struct {
+			Recordings []RecordingCompletedEvent `json:"recordings"`
+		} `json:"object"`
 	}
-	if err := json.Unmarshal(payload, &obj); err != nil {
+	if err := json.Unmarshal(payload, &env); err != nil {
 		log.Warn().Err(err).Msg("zoom webhook: parse recording_completed")
 		return
 	}
-	log.Info().
-		Str("call_id", obj.Object.CallID).
-		Str("recording_id", obj.Object.RecordingID).
-		Int("duration", obj.Object.Duration).
-		Msg("zoom webhook: recording completed")
-	h.onRecordingComplete(obj.Object)
+	if len(env.Object.Recordings) == 0 {
+		log.Warn().Msg("zoom webhook: recording_completed payload has empty recordings array")
+		return
+	}
+	for _, rec := range env.Object.Recordings {
+		log.Info().
+			Str("call_id", rec.CallID).
+			Str("recording_id", rec.RecordingID).
+			Int("duration", rec.Duration).
+			Msg("zoom webhook: recording completed")
+		h.onRecordingComplete(rec)
+	}
 }
 
 func hmacSHA256(secret, message string) string {

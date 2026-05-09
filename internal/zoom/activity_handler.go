@@ -105,13 +105,13 @@ func (h *ActivityHandler) HandleCallEnded(event PhoneCallEvent) {
 	if customerPhone == "" {
 		log.Warn().
 			Str("call_id", event.CallID).
-			Str("caller", event.CallerNumber).
-			Str("callee", event.CalleeNumber).
+			Str("caller", event.Caller.PhoneNumber).
+			Str("callee", event.Callee.PhoneNumber).
 			Msg("zoom: cannot identify customer side, skipping")
 		return
 	}
 
-	occurredAt := parseZoomTime(event.EndTime, event.AnswerTime, event.StartTime, event.DateTime)
+	occurredAt := parseZoomTime(event.CallEndTime, event.ConnectedStartTime, event.RingingStartTime)
 
 	match, err := MatchCustomerByPhoneAndTime(
 		ctx, h.queries, customerPhone, occurredAt, 30*24*time.Hour,
@@ -134,14 +134,30 @@ func (h *ActivityHandler) HandleCallEnded(event PhoneCallEvent) {
 		contactID = pgtype.UUID{Bytes: match.ContactID, Valid: true}
 	}
 
+	// type='call' の Activity は DB 制約 activity_call_requires_status で
+	// status_id NOT NULL を要求する。webhook 経路ではユーザーが status を選ぶ
+	// 余地が無いので、Customer が属する Book のデフォルト status (priority=1)
+	// を引いて使う。Phase 20b の backfill migration (000008) で全 Book に
+	// 必ず1件 seed されているはずなので、NotFound はバグレベルのアサート。
+	defaultStatus, err := h.queries.GetDefaultStatusByBookID(ctx, match.BookID)
+	if err != nil {
+		log.Warn().Err(err).
+			Str("call_id", event.CallID).
+			Str("book_id", match.BookID.String()).
+			Msg("zoom: no default status for book, skipping (backfill migration may have missed this Book)")
+		return
+	}
+
 	params := db.CreateActivityParams{
 		ID:              uuid.New(),
 		CustomerID:      match.CustomerID,
 		ContactID:       contactID,
 		Type:            "call",
 		UserID:          h.defaultUserID,
-		StatusID:        pgtype.UUID{Valid: false},
-		Phone:           pgtype.Text{String: customerPhone, Valid: true},
+		StatusID:        pgtype.UUID{Bytes: defaultStatus.ID, Valid: true},
+		// Activity.phone は UI で Customer.phone と並べて表示されるので、
+		// E.164 (+819037241917) のまま入れず JP 国内表記 (09037241917) に戻す。
+		Phone:           pgtype.Text{String: JapanLocalPhone(customerPhone), Valid: true},
 		MailFrom:        pgtype.Text{Valid: false},
 		MailTo:          pgtype.Text{Valid: false},
 		MailCc:          pgtype.Text{Valid: false},
@@ -240,29 +256,29 @@ func (h *ActivityHandler) pickCustomerSide(e PhoneCallEvent) (phone, name string
 	staff := h.staffNumbers
 	h.staffMu.RUnlock()
 
-	callerDigits := PhoneToDigits(e.CallerNumber)
-	calleeDigits := PhoneToDigits(e.CalleeNumber)
+	callerDigits := PhoneToDigits(e.Caller.PhoneNumber)
+	calleeDigits := PhoneToDigits(e.Callee.PhoneNumber)
 	_, callerStaff := staff[callerDigits]
 	_, calleeStaff := staff[calleeDigits]
 
 	if len(staff) > 0 {
 		if !callerStaff && calleeStaff {
-			return e.CallerNumber, e.CallerName
+			return e.Caller.PhoneNumber, e.Caller.Name
 		}
 		if callerStaff && !calleeStaff {
-			return e.CalleeNumber, e.CalleeName
+			return e.Callee.PhoneNumber, e.Callee.Name
 		}
 		// 両方 staff / 両方 non-staff → fallthrough to direction
 	}
 
 	switch strings.ToLower(e.Direction) {
 	case "inbound":
-		return e.CallerNumber, e.CallerName
+		return e.Caller.PhoneNumber, e.Caller.Name
 	case "outbound":
-		return e.CalleeNumber, e.CalleeName
+		return e.Callee.PhoneNumber, e.Callee.Name
 	}
 	// 最終フォールバック: callee を客とする (発信が業務の中心ユースケース)
-	return e.CalleeNumber, e.CalleeName
+	return e.Callee.PhoneNumber, e.Callee.Name
 }
 
 // parseZoomTime は Zoom 系 time フィールドの優先順序で最初に parse 成功した

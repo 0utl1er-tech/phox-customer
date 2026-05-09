@@ -87,9 +87,17 @@ func TestWebhookHandler_PhoneEnded(t *testing.T) {
 		ended = &ev
 	})
 
+	// phone.caller_ended は staff 側が発信 → direction=outbound に導出される。
+	// 時刻 5 秒差 → DurationSec=5。
 	body := `{
-		"event": "phone.callee_ended",
-		"payload": {"object": {"call_id": "end-1", "direction": "outbound"}}
+		"event": "phone.caller_ended",
+		"payload": {"object": {
+			"call_id": "end-1",
+			"caller": {"phone_number": "+815054975111"},
+			"callee": {"phone_number": "+819037241917"},
+			"connected_start_time": "2026-05-09T19:22:45Z",
+			"call_end_time":        "2026-05-09T19:22:50Z"
+		}}
 	}`
 	req := httptest.NewRequest("POST", "/webhook/zoom", strings.NewReader(body))
 	rec := httptest.NewRecorder()
@@ -99,6 +107,7 @@ func TestWebhookHandler_PhoneEnded(t *testing.T) {
 	require.NotNil(t, ended)
 	assert.Equal(t, "end-1", ended.CallID)
 	assert.Equal(t, "outbound", ended.Direction)
+	assert.Equal(t, 5, ended.DurationSec)
 }
 
 func TestWebhookHandler_MethodNotAllowed(t *testing.T) {
@@ -118,9 +127,13 @@ func TestWebhookHandler_RecordingCompleted(t *testing.T) {
 		called = true
 	})
 
+	// Zoom の実 payload は payload.object.recordings[] の配列形 (started は flat だが
+	// completed は array、Zoom 側の inconsistency)。
 	body := `{
 		"event": "phone.recording_completed",
-		"payload": {"object": {"recording_id": "rec-123", "call_id": "call-456", "download_url": "https://zoom.example/r/rec-123"}}
+		"payload": {"object": {"recordings": [
+			{"id": "rec-123", "call_id": "call-456", "download_url": "https://zoom.example/r/rec-123"}
+		]}}
 	}`
 	req := httptest.NewRequest("POST", "/webhook/zoom", strings.NewReader(body))
 	rec := httptest.NewRecorder()

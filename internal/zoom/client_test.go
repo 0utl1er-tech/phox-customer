@@ -113,15 +113,20 @@ func TestWebhookHandler_PhoneRinging(t *testing.T) {
 		received = &ev
 	})
 
+	// Zoom の実 payload (nested caller/callee) を再現。
 	body := `{
 		"event": "phone.callee_ringing",
 		"payload": {
 			"object": {
 				"call_id": "call-123",
-				"caller_phone_number": "03-1234-5678",
-				"caller_name": "田中太郎",
-				"callee_phone_number": "+815054975111",
-				"direction": "inbound"
+				"caller": {
+					"name": "田中太郎",
+					"phone_number": "03-1234-5678"
+				},
+				"callee": {
+					"phone_number": "+815054975111"
+				},
+				"ringing_start_time": "2026-05-09T19:22:41Z"
 			}
 		}
 	}`
@@ -134,7 +139,9 @@ func TestWebhookHandler_PhoneRinging(t *testing.T) {
 	assert.Equal(t, 200, rec.Code)
 	require.NotNil(t, received)
 	assert.Equal(t, "call-123", received.CallID)
-	assert.Equal(t, "03-1234-5678", received.CallerNumber)
-	assert.Equal(t, "田中太郎", received.CallerName)
+	assert.Equal(t, "03-1234-5678", received.Caller.PhoneNumber)
+	assert.Equal(t, "田中太郎", received.Caller.Name)
+	assert.Equal(t, "+815054975111", received.Callee.PhoneNumber)
+	// Direction は event 名 (callee_ringing) から導出されて inbound にセットされる
 	assert.Equal(t, "inbound", received.Direction)
 }
