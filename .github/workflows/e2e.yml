@@ -3,6 +3,8 @@ name: E2E Tests (main only)
 on:
   push:
     branches: [main]
+  # main 以外のブランチから手動 trigger 用 (cross-repo checkout の確認等)
+  workflow_dispatch: {}
 
 # main 上での重複 push は前のを cancel して順次 1 件ずつ走らせる。
 # 元コメントは "host port 衝突回避" だったが、後述の通り host port は要らないので
@@ -77,32 +79,32 @@ jobs:
           go run main.go reindex.go &
           for i in $(seq 1 30); do curl -sf http://localhost:8082/ > /dev/null 2>&1 && break; sleep 1; done
 
-      # phox-ui と phox-e2e は別 repo なので checkout が必要
-      # 同じ GitHub org なら actions/checkout で path 指定で並列チェックアウト可能
-      # ここでは monorepo 外の場合を想定して sparse checkout
+      # phox-ui と phox-e2e は別 repo。actions/checkout v4 は path に
+      # workspace の親 (`../`) を許容しないので、サブディレクトリに置く。
+      # phox-customer 自身は workspace ルートに既に展開済 (1 回目の checkout)。
       - name: Checkout phox-ui
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository_owner }}/phox-ui
-          path: ../phox-ui
+          path: phox-ui
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Checkout phox-e2e
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository_owner }}/phox-e2e
-          path: ../phox-e2e
+          path: phox-e2e
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Start phox-ui
-        working-directory: ../phox-ui
+        working-directory: phox-ui
         run: |
           npm ci
           npm run dev &
           for i in $(seq 1 30); do curl -sf http://localhost:3000/ > /dev/null 2>&1 && break; sleep 1; done
 
       - name: Run E2E
-        working-directory: ../phox-e2e
+        working-directory: phox-e2e
         run: |
           npm ci
           npx playwright install --with-deps chromium
@@ -113,5 +115,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-results
-          path: ../phox-e2e/test-results/
+          path: phox-e2e/test-results/
           retention-days: 7
