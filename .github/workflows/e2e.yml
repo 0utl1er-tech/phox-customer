@@ -82,19 +82,24 @@ jobs:
       # phox-ui と phox-e2e は別 repo。actions/checkout v4 は path に
       # workspace の親 (`../`) を許容しないので、サブディレクトリに置く。
       # phox-customer 自身は workspace ルートに既に展開済 (1 回目の checkout)。
+      #
+      # cross-repo は default の secrets.GITHUB_TOKEN だと running repo
+      # (phox-customer) しか見れず Forgejo API が 404 を返す。
+      # CROSS_REPO_TOKEN = read:repository スコープの PAT (gitea_admin 発行)
+      # で他 repo を引く。失効時は Forgejo > User Settings > Applications で再発行。
       - name: Checkout phox-ui
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository_owner }}/phox-ui
           path: phox-ui
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.CROSS_REPO_TOKEN }}
 
       - name: Checkout phox-e2e
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository_owner }}/phox-e2e
           path: phox-e2e
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.CROSS_REPO_TOKEN }}
 
       - name: Start phox-ui
         working-directory: phox-ui
