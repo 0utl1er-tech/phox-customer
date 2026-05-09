@@ -1,14 +1,13 @@
 name: E2E Tests (main only)
 
 on:
-  push:
-    branches: [main]
-  # main 以外のブランチから手動 trigger 用 (cross-repo checkout の確認等)
+  # 当面は手動 trigger のみ。main push 自動実行に戻すには:
+  #   1. Keycloak service container を追加し `phox` realm JSON を seed
+  #   2. TEST_USER_EMAIL / TEST_USER_PASSWORD を Forgejo Actions secret に
+  #   3. ここに `push: { branches: [main] }` を再追加
+  # 上記 1, 2 が未整備のため自動実行すると毎 push で失敗が出る。
   workflow_dispatch: {}
 
-# main 上での重複 push は前のを cancel して順次 1 件ずつ走らせる。
-# 元コメントは "host port 衝突回避" だったが、後述の通り host port は要らないので
-# 純粋にリソース節約のための直列化。
 concurrency:
   group: e2e-${{ github.workflow }}-${{ github.sha }}
   cancel-in-progress: true
