@@ -4,19 +4,24 @@ on:
   push:
     branches: [main]
 
-# main 上での重複 push は前のを cancel して順次 1 件ずつ走らせる
-# (host port 衝突回避 + リソース節約)。
+# main 上での重複 push は前のを cancel して順次 1 件ずつ走らせる。
+# 元コメントは "host port 衝突回避" だったが、後述の通り host port は要らないので
+# 純粋にリソース節約のための直列化。
 concurrency:
-  group: e2e-${{ github.ref }}
+  group: e2e-${{ github.workflow }}-${{ github.sha }}
   cancel-in-progress: true
 
 jobs:
   e2e:
     runs-on: ubuntu-latest
 
-    # Job 自体は host で go + node プロセスを走らせる構造なので container 化
-    # しない (test.yml と方針が違う)。host port は非デフォルトにずらして、
-    # 並列 push が cancel-in-progress を抜けて重なった時の保険とする。
+    # Forgejo runner config (act_runner) の labels: ubuntu-latest:docker://...
+    # で job 自体が catthehacker/ubuntu:act-latest container として起動する。
+    # → 旧コメントの "host で走る" は誤認。job container の localhost は
+    # service container にも host にも届かない。act_runner が job ごとに
+    # 立てる user-defined network 上で docker embedded DNS が動くので、
+    # service の name (`postgres`, `mailhog`) で直接届く。host port mapping
+    # は不要 (= 並列 job の port 衝突も発生しない)。
     services:
       postgres:
         image: postgres:16
@@ -24,7 +29,6 @@ jobs:
           POSTGRES_USER: root
           POSTGRES_PASSWORD: secret
           POSTGRES_DB: phox-customer
-        ports: ["15432:5432"]
         options: >-
           --health-cmd "pg_isready -U root"
           --health-interval 5s
@@ -33,9 +37,6 @@ jobs:
 
       mailhog:
         image: mailhog/mailhog:v1.0.1
-        ports:
-          - "11025:1025"
-          - "18025:8025"
 
     steps:
       - uses: actions/checkout@v4
@@ -52,17 +53,17 @@ jobs:
       - name: Install migrate + run migrations
         run: |
           go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
-          migrate -path db/migration -database "postgresql://root:secret@localhost:15432/phox-customer?sslmode=disable" up
+          migrate -path db/migration -database "postgresql://root:secret@postgres:5432/phox-customer?sslmode=disable" up
 
       - name: Start phox-customer
         run: |
           cat > app.env << 'EOF'
           ENV=CI
-          DB_SOURCE=postgresql://root:secret@localhost:15432/phox-customer?sslmode=disable
+          DB_SOURCE=postgresql://root:secret@postgres:5432/phox-customer?sslmode=disable
           CONNECT_SERVER_ADDRESS=localhost:8082
           JWT_ENABLED=false
-          SMTP_HOST=localhost
-          SMTP_PORT=11025
+          SMTP_HOST=mailhog
+          SMTP_PORT=1025
           SMTP_TLS_MODE=none
           SMTP_DEFAULT_FROM=noreply@phox.local
           GCAL_MODE=mock
