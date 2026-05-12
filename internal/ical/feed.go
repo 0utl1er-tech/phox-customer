@@ -56,7 +56,15 @@ func BuildFeed(in FeedInput) []byte {
 
 	var buf bytes.Buffer
 	_ = cal.SerializeTo(&buf)
-	return buf.Bytes()
+
+	// RFC 5545 §3.1 は **CRLF (\r\n)** を MUST で要求してる。arran4/golang-ical
+	// v0.3.5 の SerializeTo は LF だけで書く既知のクセがあり、Outlook や
+	// iOS Calendar 等の strict クライアントが「subscribe しても 0 件 / 失敗」と
+	// する原因になる (Google Calendar / Apple macOS は寛容なので一見動いて見える)。
+	// 全 LF を CRLF に正規化して return。
+	out := bytes.ReplaceAll(buf.Bytes(), []byte("\r\n"), []byte("\n")) // collapse 既存 CRLF
+	out = bytes.ReplaceAll(out, []byte("\n"), []byte("\r\n"))           // 全部 CRLF に揃える
+	return out
 }
 
 func buildDescription(r db.ListRedialsByUserWithCustomerRow, phoxBaseURL string) string {
