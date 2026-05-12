@@ -40,7 +40,20 @@ func BuildFeed(in FeedInput) []byte {
 
 	for _, r := range in.Redials {
 		ev := cal.AddEvent(fmt.Sprintf("phox-redial-%s@phox.local", r.ID.String()))
-		ev.SetDtStampTime(in.GeneratedAt.UTC())
+		// DTSTAMP は「このイベントが最後に変更された時刻」(RFC 5545 §3.8.7.2)。
+		// 旧版は time.Now() を入れていたが、これだと毎フェッチごとに全イベントが
+		// 「更新された」ように見えてしまい、Google Calendar の subscription
+		// sync が次第に止まる現象を引き起こす (毎回 100% diff → suspicious feed
+		// 扱いで refresh が稀に / 全くされなくなる)。Redial.updated_at を使う。
+		ev.SetDtStampTime(r.UpdatedAt.UTC())
+		// SEQUENCE は revision counter (RFC 5545 §3.8.7.4)。
+		// updated_at が変わるたびにイベントが「更新された」と認識させる必要が
+		// あるが、stable な単調増加カウンタは持ってないので unix 秒で代用。
+		// 同一 UID 内で過去より大きい SEQUENCE なら client は更新として扱う。
+		ev.SetSequence(int(r.UpdatedAt.Unix()))
+		// LAST-MODIFIED も DTSTAMP と同じ意味だが、ある client は LAST-MODIFIED
+		// のみ参照する (RFC 5545 §3.8.7.3)。両方付けておく。
+		ev.SetLastModifiedAt(r.UpdatedAt.UTC())
 		ev.SetStartAt(r.StartAt.UTC())
 		ev.SetEndAt(r.EndAt.UTC())
 		ev.SetSummary(fmt.Sprintf("[Phox] %s へ掛け直し", r.CustomerName))
