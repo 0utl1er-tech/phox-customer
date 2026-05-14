@@ -99,6 +99,33 @@ func TestBuildFeed_VEventCountAndHeaders(t *testing.T) {
 	mustContain(t, s, "http://localhost:3000/book/33333333-3333-3333-3333-333333333333/customer/22222222-2222-2222-2222-222222222222")
 }
 
+// TestBuildFeed_CRLFLineEndings は RFC 5545 §3.1 が MUST で要求する
+// CRLF 改行が全行に入っているかを検証する。arran4/golang-ical の SerializeTo
+// が LF だけ書いてしまうクセに対する post-processing が効いてること、と
+// Outlook/iOS の strict client で subscribe が成立する保証。
+func TestBuildFeed_CRLFLineEndings(t *testing.T) {
+	out := ical.BuildFeed(ical.FeedInput{
+		UserID:      "user-1",
+		UserName:    "テスト",
+		PhoxBaseURL: "http://localhost:3000",
+		Redials:     nil,
+		GeneratedAt: time.Now(),
+	})
+	s := string(out)
+	if strings.Contains(s, "\n") && !strings.Contains(s, "\r\n") {
+		t.Fatal("output has bare LF but no CRLF — RFC 5545 violation")
+	}
+	// 末尾以外で bare LF (= \r\n でない \n) が無いことを確認
+	for i := 0; i < len(s)-1; i++ {
+		if s[i] == '\n' && (i == 0 || s[i-1] != '\r') {
+			t.Fatalf("bare LF at offset %d (no preceding CR)", i)
+		}
+	}
+	if !strings.HasSuffix(s, "END:VCALENDAR\r\n") && !strings.HasSuffix(s, "END:VCALENDAR") {
+		t.Fatalf("calendar does not end cleanly: %q", s[len(s)-30:])
+	}
+}
+
 func TestBuildFeed_EmptyRedials(t *testing.T) {
 	out := ical.BuildFeed(ical.FeedInput{
 		UserID:      "user-1",
