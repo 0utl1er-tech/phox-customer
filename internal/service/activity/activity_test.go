@@ -3,6 +3,7 @@ package activity_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"connectrpc.com/connect"
 	activityv1 "github.com/0utl1er-tech/phox-customer/gen/pb/activity/v1"
@@ -11,7 +12,11 @@ import (
 	"github.com/0utl1er-tech/phox-customer/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+// 手動コール追加で過去日時を指定するテスト用の固定時刻。
+var pastOccurredAt = time.Date(2025, 1, 2, 3, 4, 5, 0, time.UTC)
 
 // ─── fixture ────────────────────────────────────────────────────
 
@@ -97,6 +102,18 @@ func TestCreateActivityCall(t *testing.T) {
 				}
 			}(),
 			wantCode: connect.CodeInvalidArgument, wantErr: "invalid contact_id",
+		},
+		{
+			name: "正常系/occurred_at 指定で過去日時が記録される",
+			ctx:  testutil.AuthContext(t, f.userID, "ok@test.com"),
+			req: &activityv1.CreateActivityCallRequest{
+				CustomerId: f.customer.ID.String(), Phone: "03-0000-0000", StatusId: f.statusID,
+				OccurredAt: timestamppb.New(pastOccurredAt),
+			},
+			checkResp: func(t *testing.T, r *activityv1.CreateActivityCallResponse) {
+				require.NotNil(t, r.Activity.OccurredAt)
+				assert.WithinDuration(t, pastOccurredAt, r.Activity.OccurredAt.AsTime(), time.Second)
+			},
 		},
 	}
 

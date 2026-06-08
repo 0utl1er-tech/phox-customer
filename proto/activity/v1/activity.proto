@@ -77,6 +77,8 @@ message CreateActivityCallRequest {
   string phone = 2 [(buf.validate.field).string.min_len = 1];
   string status_id = 3 [(buf.validate.field).string.uuid = true];
   optional string contact_id = 4;
+  // 手動でコール履歴を追加する際の発生日時。未指定ならサーバ側で現在時刻を使う。
+  optional google.protobuf.Timestamp occurred_at = 5;
 }
 message CreateActivityCallResponse {
   Activity activity = 1;

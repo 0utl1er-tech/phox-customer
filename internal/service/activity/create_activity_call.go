@@ -53,6 +53,12 @@ func (s *ActivityService) CreateActivityCall(
 		contactID = pgtype.UUID{Bytes: cid, Valid: true}
 	}
 
+	// occurred_at は手動追加時に過去日時を指定できる。未指定なら現在時刻。
+	occurredAt := time.Now()
+	if req.Msg.OccurredAt != nil {
+		occurredAt = req.Msg.OccurredAt.AsTime()
+	}
+
 	act, err := s.queries.CreateActivity(ctx, db.CreateActivityParams{
 		ID:         uuid.New(),
 		CustomerID: customerID,
@@ -61,7 +67,7 @@ func (s *ActivityService) CreateActivityCall(
 		UserID:     userID,
 		StatusID:   pgtype.UUID{Bytes: statusID, Valid: true},
 		Phone:      pgtype.Text{String: req.Msg.Phone, Valid: true},
-		OccurredAt: time.Now(),
+		OccurredAt: occurredAt,
 	})
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("create activity: %w", err))
