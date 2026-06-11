@@ -13,7 +13,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	sqlc "github.com/0utl1er-tech/phox-customer/gen/sqlc"
+	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
 	uuid "github.com/google/uuid"
 	pgtype "github.com/jackc/pgx/v5/pgtype"
 	gomock "go.uber.org/mock/gomock"
@@ -44,7 +44,7 @@ func (m *MockQuerier) EXPECT() *MockQuerierMockRecorder {
 }
 
 // CheckUserAccessToBook mocks base method.
-func (m *MockQuerier) CheckUserAccessToBook(ctx context.Context, arg sqlc.CheckUserAccessToBookParams) (bool, error) {
+func (m *MockQuerier) CheckUserAccessToBook(ctx context.Context, arg db.CheckUserAccessToBookParams) (bool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CheckUserAccessToBook", ctx, arg)
 	ret0, _ := ret[0].(bool)
@@ -59,10 +59,10 @@ func (mr *MockQuerierMockRecorder) CheckUserAccessToBook(ctx, arg any) *gomock.C
 }
 
 // CheckUserRoleForBook mocks base method.
-func (m *MockQuerier) CheckUserRoleForBook(ctx context.Context, arg sqlc.CheckUserRoleForBookParams) (sqlc.Role, error) {
+func (m *MockQuerier) CheckUserRoleForBook(ctx context.Context, arg db.CheckUserRoleForBookParams) (db.Role, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CheckUserRoleForBook", ctx, arg)
-	ret0, _ := ret[0].(sqlc.Role)
+	ret0, _ := ret[0].(db.Role)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -74,10 +74,10 @@ func (mr *MockQuerierMockRecorder) CheckUserRoleForBook(ctx, arg any) *gomock.Ca
 }
 
 // ClearRedialGcalSync mocks base method.
-func (m *MockQuerier) ClearRedialGcalSync(ctx context.Context, id uuid.UUID) (sqlc.Redial, error) {
+func (m *MockQuerier) ClearRedialGcalSync(ctx context.Context, id uuid.UUID) (db.Redial, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ClearRedialGcalSync", ctx, id)
-	ret0, _ := ret[0].(sqlc.Redial)
+	ret0, _ := ret[0].(db.Redial)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -88,11 +88,26 @@ func (mr *MockQuerierMockRecorder) ClearRedialGcalSync(ctx, id any) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClearRedialGcalSync", reflect.TypeOf((*MockQuerier)(nil).ClearRedialGcalSync), ctx, id)
 }
 
+// CountActivitiesByBookID mocks base method.
+func (m *MockQuerier) CountActivitiesByBookID(ctx context.Context, arg db.CountActivitiesByBookIDParams) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountActivitiesByBookID", ctx, arg)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CountActivitiesByBookID indicates an expected call of CountActivitiesByBookID.
+func (mr *MockQuerierMockRecorder) CountActivitiesByBookID(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountActivitiesByBookID", reflect.TypeOf((*MockQuerier)(nil).CountActivitiesByBookID), ctx, arg)
+}
+
 // CreateActivity mocks base method.
-func (m *MockQuerier) CreateActivity(ctx context.Context, arg sqlc.CreateActivityParams) (sqlc.Activity, error) {
+func (m *MockQuerier) CreateActivity(ctx context.Context, arg db.CreateActivityParams) (db.Activity, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateActivity", ctx, arg)
-	ret0, _ := ret[0].(sqlc.Activity)
+	ret0, _ := ret[0].(db.Activity)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -104,10 +119,10 @@ func (mr *MockQuerierMockRecorder) CreateActivity(ctx, arg any) *gomock.Call {
 }
 
 // CreateBook mocks base method.
-func (m *MockQuerier) CreateBook(ctx context.Context, arg sqlc.CreateBookParams) (sqlc.Book, error) {
+func (m *MockQuerier) CreateBook(ctx context.Context, arg db.CreateBookParams) (db.Book, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateBook", ctx, arg)
-	ret0, _ := ret[0].(sqlc.Book)
+	ret0, _ := ret[0].(db.Book)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -119,10 +134,10 @@ func (mr *MockQuerierMockRecorder) CreateBook(ctx, arg any) *gomock.Call {
 }
 
 // CreateCompany mocks base method.
-func (m *MockQuerier) CreateCompany(ctx context.Context, arg sqlc.CreateCompanyParams) (sqlc.Company, error) {
+func (m *MockQuerier) CreateCompany(ctx context.Context, arg db.CreateCompanyParams) (db.Company, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateCompany", ctx, arg)
-	ret0, _ := ret[0].(sqlc.Company)
+	ret0, _ := ret[0].(db.Company)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -134,10 +149,10 @@ func (mr *MockQuerierMockRecorder) CreateCompany(ctx, arg any) *gomock.Call {
 }
 
 // CreateContact mocks base method.
-func (m *MockQuerier) CreateContact(ctx context.Context, arg sqlc.CreateContactParams) (sqlc.Contact, error) {
+func (m *MockQuerier) CreateContact(ctx context.Context, arg db.CreateContactParams) (db.Contact, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateContact", ctx, arg)
-	ret0, _ := ret[0].(sqlc.Contact)
+	ret0, _ := ret[0].(db.Contact)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -149,10 +164,10 @@ func (mr *MockQuerierMockRecorder) CreateContact(ctx, arg any) *gomock.Call {
 }
 
 // CreateCustomer mocks base method.
-func (m *MockQuerier) CreateCustomer(ctx context.Context, arg sqlc.CreateCustomerParams) (sqlc.Customer, error) {
+func (m *MockQuerier) CreateCustomer(ctx context.Context, arg db.CreateCustomerParams) (db.Customer, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateCustomer", ctx, arg)
-	ret0, _ := ret[0].(sqlc.Customer)
+	ret0, _ := ret[0].(db.Customer)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -164,10 +179,10 @@ func (mr *MockQuerierMockRecorder) CreateCustomer(ctx, arg any) *gomock.Call {
 }
 
 // CreateMailTemplate mocks base method.
-func (m *MockQuerier) CreateMailTemplate(ctx context.Context, arg sqlc.CreateMailTemplateParams) (sqlc.MailTemplate, error) {
+func (m *MockQuerier) CreateMailTemplate(ctx context.Context, arg db.CreateMailTemplateParams) (db.MailTemplate, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateMailTemplate", ctx, arg)
-	ret0, _ := ret[0].(sqlc.MailTemplate)
+	ret0, _ := ret[0].(db.MailTemplate)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -179,10 +194,10 @@ func (mr *MockQuerierMockRecorder) CreateMailTemplate(ctx, arg any) *gomock.Call
 }
 
 // CreatePermit mocks base method.
-func (m *MockQuerier) CreatePermit(ctx context.Context, arg sqlc.CreatePermitParams) (sqlc.Permit, error) {
+func (m *MockQuerier) CreatePermit(ctx context.Context, arg db.CreatePermitParams) (db.Permit, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreatePermit", ctx, arg)
-	ret0, _ := ret[0].(sqlc.Permit)
+	ret0, _ := ret[0].(db.Permit)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -194,10 +209,10 @@ func (mr *MockQuerierMockRecorder) CreatePermit(ctx, arg any) *gomock.Call {
 }
 
 // CreateRedial mocks base method.
-func (m *MockQuerier) CreateRedial(ctx context.Context, arg sqlc.CreateRedialParams) (sqlc.Redial, error) {
+func (m *MockQuerier) CreateRedial(ctx context.Context, arg db.CreateRedialParams) (db.Redial, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateRedial", ctx, arg)
-	ret0, _ := ret[0].(sqlc.Redial)
+	ret0, _ := ret[0].(db.Redial)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -209,10 +224,10 @@ func (mr *MockQuerierMockRecorder) CreateRedial(ctx, arg any) *gomock.Call {
 }
 
 // CreateStatus mocks base method.
-func (m *MockQuerier) CreateStatus(ctx context.Context, arg sqlc.CreateStatusParams) (sqlc.Status, error) {
+func (m *MockQuerier) CreateStatus(ctx context.Context, arg db.CreateStatusParams) (db.Status, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateStatus", ctx, arg)
-	ret0, _ := ret[0].(sqlc.Status)
+	ret0, _ := ret[0].(db.Status)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -224,10 +239,10 @@ func (mr *MockQuerierMockRecorder) CreateStatus(ctx, arg any) *gomock.Call {
 }
 
 // CreateUser mocks base method.
-func (m *MockQuerier) CreateUser(ctx context.Context, arg sqlc.CreateUserParams) (sqlc.User, error) {
+func (m *MockQuerier) CreateUser(ctx context.Context, arg db.CreateUserParams) (db.User, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateUser", ctx, arg)
-	ret0, _ := ret[0].(sqlc.User)
+	ret0, _ := ret[0].(db.User)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -365,10 +380,10 @@ func (mr *MockQuerierMockRecorder) DeleteStatus(ctx, id any) *gomock.Call {
 }
 
 // DeleteUser mocks base method.
-func (m *MockQuerier) DeleteUser(ctx context.Context, id string) (sqlc.User, error) {
+func (m *MockQuerier) DeleteUser(ctx context.Context, id string) (db.User, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeleteUser", ctx, id)
-	ret0, _ := ret[0].(sqlc.User)
+	ret0, _ := ret[0].(db.User)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -408,10 +423,10 @@ func (mr *MockQuerierMockRecorder) DeleteUserICalFeed(ctx, userID any) *gomock.C
 }
 
 // FindCustomerByEmail mocks base method.
-func (m *MockQuerier) FindCustomerByEmail(ctx context.Context, mail string) (sqlc.FindCustomerByEmailRow, error) {
+func (m *MockQuerier) FindCustomerByEmail(ctx context.Context, mail string) (db.FindCustomerByEmailRow, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "FindCustomerByEmail", ctx, mail)
-	ret0, _ := ret[0].(sqlc.FindCustomerByEmailRow)
+	ret0, _ := ret[0].(db.FindCustomerByEmailRow)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -422,11 +437,26 @@ func (mr *MockQuerierMockRecorder) FindCustomerByEmail(ctx, mail any) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindCustomerByEmail", reflect.TypeOf((*MockQuerier)(nil).FindCustomerByEmail), ctx, mail)
 }
 
+// FindCustomersByPhoneDigits mocks base method.
+func (m *MockQuerier) FindCustomersByPhoneDigits(ctx context.Context, dollar_1 string) ([]db.FindCustomersByPhoneDigitsRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FindCustomersByPhoneDigits", ctx, dollar_1)
+	ret0, _ := ret[0].([]db.FindCustomersByPhoneDigitsRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FindCustomersByPhoneDigits indicates an expected call of FindCustomersByPhoneDigits.
+func (mr *MockQuerierMockRecorder) FindCustomersByPhoneDigits(ctx, dollar_1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindCustomersByPhoneDigits", reflect.TypeOf((*MockQuerier)(nil).FindCustomersByPhoneDigits), ctx, dollar_1)
+}
+
 // FindUnsyncedRedialsByUser mocks base method.
-func (m *MockQuerier) FindUnsyncedRedialsByUser(ctx context.Context, userID string) ([]sqlc.Redial, error) {
+func (m *MockQuerier) FindUnsyncedRedialsByUser(ctx context.Context, userID string) ([]db.Redial, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "FindUnsyncedRedialsByUser", ctx, userID)
-	ret0, _ := ret[0].([]sqlc.Redial)
+	ret0, _ := ret[0].([]db.Redial)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -438,10 +468,10 @@ func (mr *MockQuerierMockRecorder) FindUnsyncedRedialsByUser(ctx, userID any) *g
 }
 
 // FindUserICalFeedByToken mocks base method.
-func (m *MockQuerier) FindUserICalFeedByToken(ctx context.Context, token string) (sqlc.UserICalFeed, error) {
+func (m *MockQuerier) FindUserICalFeedByToken(ctx context.Context, token string) (db.UserICalFeed, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "FindUserICalFeedByToken", ctx, token)
-	ret0, _ := ret[0].(sqlc.UserICalFeed)
+	ret0, _ := ret[0].(db.UserICalFeed)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -453,10 +483,10 @@ func (mr *MockQuerierMockRecorder) FindUserICalFeedByToken(ctx, token any) *gomo
 }
 
 // GetActivity mocks base method.
-func (m *MockQuerier) GetActivity(ctx context.Context, id uuid.UUID) (sqlc.Activity, error) {
+func (m *MockQuerier) GetActivity(ctx context.Context, id uuid.UUID) (db.Activity, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetActivity", ctx, id)
-	ret0, _ := ret[0].(sqlc.Activity)
+	ret0, _ := ret[0].(db.Activity)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -468,10 +498,10 @@ func (mr *MockQuerierMockRecorder) GetActivity(ctx, id any) *gomock.Call {
 }
 
 // GetActivityByMessageID mocks base method.
-func (m *MockQuerier) GetActivityByMessageID(ctx context.Context, messageID pgtype.Text) (sqlc.Activity, error) {
+func (m *MockQuerier) GetActivityByMessageID(ctx context.Context, messageID pgtype.Text) (db.Activity, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetActivityByMessageID", ctx, messageID)
-	ret0, _ := ret[0].(sqlc.Activity)
+	ret0, _ := ret[0].(db.Activity)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -482,11 +512,26 @@ func (mr *MockQuerierMockRecorder) GetActivityByMessageID(ctx, messageID any) *g
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetActivityByMessageID", reflect.TypeOf((*MockQuerier)(nil).GetActivityByMessageID), ctx, messageID)
 }
 
+// GetActivityByZoomCallID mocks base method.
+func (m *MockQuerier) GetActivityByZoomCallID(ctx context.Context, zoomCallID pgtype.Text) (db.Activity, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetActivityByZoomCallID", ctx, zoomCallID)
+	ret0, _ := ret[0].(db.Activity)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetActivityByZoomCallID indicates an expected call of GetActivityByZoomCallID.
+func (mr *MockQuerierMockRecorder) GetActivityByZoomCallID(ctx, zoomCallID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetActivityByZoomCallID", reflect.TypeOf((*MockQuerier)(nil).GetActivityByZoomCallID), ctx, zoomCallID)
+}
+
 // GetBookByIDAndUserID mocks base method.
-func (m *MockQuerier) GetBookByIDAndUserID(ctx context.Context, arg sqlc.GetBookByIDAndUserIDParams) (sqlc.GetBookByIDAndUserIDRow, error) {
+func (m *MockQuerier) GetBookByIDAndUserID(ctx context.Context, arg db.GetBookByIDAndUserIDParams) (db.GetBookByIDAndUserIDRow, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetBookByIDAndUserID", ctx, arg)
-	ret0, _ := ret[0].(sqlc.GetBookByIDAndUserIDRow)
+	ret0, _ := ret[0].(db.GetBookByIDAndUserIDRow)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -498,10 +543,10 @@ func (mr *MockQuerierMockRecorder) GetBookByIDAndUserID(ctx, arg any) *gomock.Ca
 }
 
 // GetBooksByUserID mocks base method.
-func (m *MockQuerier) GetBooksByUserID(ctx context.Context, userID string) ([]sqlc.GetBooksByUserIDRow, error) {
+func (m *MockQuerier) GetBooksByUserID(ctx context.Context, userID string) ([]db.GetBooksByUserIDRow, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetBooksByUserID", ctx, userID)
-	ret0, _ := ret[0].([]sqlc.GetBooksByUserIDRow)
+	ret0, _ := ret[0].([]db.GetBooksByUserIDRow)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -512,11 +557,26 @@ func (mr *MockQuerierMockRecorder) GetBooksByUserID(ctx, userID any) *gomock.Cal
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBooksByUserID", reflect.TypeOf((*MockQuerier)(nil).GetBooksByUserID), ctx, userID)
 }
 
+// GetCallStatsByBook mocks base method.
+func (m *MockQuerier) GetCallStatsByBook(ctx context.Context, arg db.GetCallStatsByBookParams) ([]db.GetCallStatsByBookRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetCallStatsByBook", ctx, arg)
+	ret0, _ := ret[0].([]db.GetCallStatsByBookRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetCallStatsByBook indicates an expected call of GetCallStatsByBook.
+func (mr *MockQuerierMockRecorder) GetCallStatsByBook(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCallStatsByBook", reflect.TypeOf((*MockQuerier)(nil).GetCallStatsByBook), ctx, arg)
+}
+
 // GetCompany mocks base method.
-func (m *MockQuerier) GetCompany(ctx context.Context, id uuid.UUID) (sqlc.Company, error) {
+func (m *MockQuerier) GetCompany(ctx context.Context, id uuid.UUID) (db.Company, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetCompany", ctx, id)
-	ret0, _ := ret[0].(sqlc.Company)
+	ret0, _ := ret[0].(db.Company)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -528,10 +588,10 @@ func (mr *MockQuerierMockRecorder) GetCompany(ctx, id any) *gomock.Call {
 }
 
 // GetContact mocks base method.
-func (m *MockQuerier) GetContact(ctx context.Context, id uuid.UUID) (sqlc.Contact, error) {
+func (m *MockQuerier) GetContact(ctx context.Context, id uuid.UUID) (db.Contact, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetContact", ctx, id)
-	ret0, _ := ret[0].(sqlc.Contact)
+	ret0, _ := ret[0].(db.Contact)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -543,10 +603,10 @@ func (mr *MockQuerierMockRecorder) GetContact(ctx, id any) *gomock.Call {
 }
 
 // GetCustomer mocks base method.
-func (m *MockQuerier) GetCustomer(ctx context.Context, id uuid.UUID) (sqlc.GetCustomerRow, error) {
+func (m *MockQuerier) GetCustomer(ctx context.Context, id uuid.UUID) (db.GetCustomerRow, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetCustomer", ctx, id)
-	ret0, _ := ret[0].(sqlc.GetCustomerRow)
+	ret0, _ := ret[0].(db.GetCustomerRow)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -558,10 +618,10 @@ func (mr *MockQuerierMockRecorder) GetCustomer(ctx, id any) *gomock.Call {
 }
 
 // GetCustomerByBookId mocks base method.
-func (m *MockQuerier) GetCustomerByBookId(ctx context.Context, bookID uuid.UUID) (sqlc.GetCustomerByBookIdRow, error) {
+func (m *MockQuerier) GetCustomerByBookId(ctx context.Context, bookID uuid.UUID) (db.GetCustomerByBookIdRow, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetCustomerByBookId", ctx, bookID)
-	ret0, _ := ret[0].(sqlc.GetCustomerByBookIdRow)
+	ret0, _ := ret[0].(db.GetCustomerByBookIdRow)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -588,7 +648,7 @@ func (mr *MockQuerierMockRecorder) GetCustomerCount(ctx, bookID any) *gomock.Cal
 }
 
 // GetCustomerCountByAddress mocks base method.
-func (m *MockQuerier) GetCustomerCountByAddress(ctx context.Context, arg sqlc.GetCustomerCountByAddressParams) (int64, error) {
+func (m *MockQuerier) GetCustomerCountByAddress(ctx context.Context, arg db.GetCustomerCountByAddressParams) (int64, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetCustomerCountByAddress", ctx, arg)
 	ret0, _ := ret[0].(int64)
@@ -603,7 +663,7 @@ func (mr *MockQuerierMockRecorder) GetCustomerCountByAddress(ctx, arg any) *gomo
 }
 
 // GetCustomerCountByCategory mocks base method.
-func (m *MockQuerier) GetCustomerCountByCategory(ctx context.Context, arg sqlc.GetCustomerCountByCategoryParams) (int64, error) {
+func (m *MockQuerier) GetCustomerCountByCategory(ctx context.Context, arg db.GetCustomerCountByCategoryParams) (int64, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetCustomerCountByCategory", ctx, arg)
 	ret0, _ := ret[0].(int64)
@@ -618,7 +678,7 @@ func (mr *MockQuerierMockRecorder) GetCustomerCountByCategory(ctx, arg any) *gom
 }
 
 // GetCustomerCountByCorporation mocks base method.
-func (m *MockQuerier) GetCustomerCountByCorporation(ctx context.Context, arg sqlc.GetCustomerCountByCorporationParams) (int64, error) {
+func (m *MockQuerier) GetCustomerCountByCorporation(ctx context.Context, arg db.GetCustomerCountByCorporationParams) (int64, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetCustomerCountByCorporation", ctx, arg)
 	ret0, _ := ret[0].(int64)
@@ -633,7 +693,7 @@ func (mr *MockQuerierMockRecorder) GetCustomerCountByCorporation(ctx, arg any) *
 }
 
 // GetCustomerCountByDate mocks base method.
-func (m *MockQuerier) GetCustomerCountByDate(ctx context.Context, arg sqlc.GetCustomerCountByDateParams) (int64, error) {
+func (m *MockQuerier) GetCustomerCountByDate(ctx context.Context, arg db.GetCustomerCountByDateParams) (int64, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetCustomerCountByDate", ctx, arg)
 	ret0, _ := ret[0].(int64)
@@ -648,10 +708,10 @@ func (mr *MockQuerierMockRecorder) GetCustomerCountByDate(ctx, arg any) *gomock.
 }
 
 // GetDefaultStatusByBookID mocks base method.
-func (m *MockQuerier) GetDefaultStatusByBookID(ctx context.Context, bookID uuid.UUID) (sqlc.Status, error) {
+func (m *MockQuerier) GetDefaultStatusByBookID(ctx context.Context, bookID uuid.UUID) (db.Status, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetDefaultStatusByBookID", ctx, bookID)
-	ret0, _ := ret[0].(sqlc.Status)
+	ret0, _ := ret[0].(db.Status)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -662,11 +722,41 @@ func (mr *MockQuerierMockRecorder) GetDefaultStatusByBookID(ctx, bookID any) *go
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDefaultStatusByBookID", reflect.TypeOf((*MockQuerier)(nil).GetDefaultStatusByBookID), ctx, bookID)
 }
 
+// GetMailReplyStatsByBook mocks base method.
+func (m *MockQuerier) GetMailReplyStatsByBook(ctx context.Context, arg db.GetMailReplyStatsByBookParams) ([]db.GetMailReplyStatsByBookRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMailReplyStatsByBook", ctx, arg)
+	ret0, _ := ret[0].([]db.GetMailReplyStatsByBookRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetMailReplyStatsByBook indicates an expected call of GetMailReplyStatsByBook.
+func (mr *MockQuerierMockRecorder) GetMailReplyStatsByBook(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMailReplyStatsByBook", reflect.TypeOf((*MockQuerier)(nil).GetMailReplyStatsByBook), ctx, arg)
+}
+
+// GetMailSentStatsByBook mocks base method.
+func (m *MockQuerier) GetMailSentStatsByBook(ctx context.Context, arg db.GetMailSentStatsByBookParams) ([]db.GetMailSentStatsByBookRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMailSentStatsByBook", ctx, arg)
+	ret0, _ := ret[0].([]db.GetMailSentStatsByBookRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetMailSentStatsByBook indicates an expected call of GetMailSentStatsByBook.
+func (mr *MockQuerierMockRecorder) GetMailSentStatsByBook(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMailSentStatsByBook", reflect.TypeOf((*MockQuerier)(nil).GetMailSentStatsByBook), ctx, arg)
+}
+
 // GetMailTemplate mocks base method.
-func (m *MockQuerier) GetMailTemplate(ctx context.Context, id uuid.UUID) (sqlc.MailTemplate, error) {
+func (m *MockQuerier) GetMailTemplate(ctx context.Context, id uuid.UUID) (db.MailTemplate, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetMailTemplate", ctx, id)
-	ret0, _ := ret[0].(sqlc.MailTemplate)
+	ret0, _ := ret[0].(db.MailTemplate)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -692,11 +782,26 @@ func (mr *MockQuerierMockRecorder) GetMaxStatusPriority(ctx, bookID any) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMaxStatusPriority", reflect.TypeOf((*MockQuerier)(nil).GetMaxStatusPriority), ctx, bookID)
 }
 
+// GetMostRecentActivityForCustomer mocks base method.
+func (m *MockQuerier) GetMostRecentActivityForCustomer(ctx context.Context, arg db.GetMostRecentActivityForCustomerParams) (db.GetMostRecentActivityForCustomerRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMostRecentActivityForCustomer", ctx, arg)
+	ret0, _ := ret[0].(db.GetMostRecentActivityForCustomerRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetMostRecentActivityForCustomer indicates an expected call of GetMostRecentActivityForCustomer.
+func (mr *MockQuerierMockRecorder) GetMostRecentActivityForCustomer(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMostRecentActivityForCustomer", reflect.TypeOf((*MockQuerier)(nil).GetMostRecentActivityForCustomer), ctx, arg)
+}
+
 // GetPermit mocks base method.
-func (m *MockQuerier) GetPermit(ctx context.Context, id uuid.UUID) (sqlc.Permit, error) {
+func (m *MockQuerier) GetPermit(ctx context.Context, id uuid.UUID) (db.Permit, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetPermit", ctx, id)
-	ret0, _ := ret[0].(sqlc.Permit)
+	ret0, _ := ret[0].(db.Permit)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -708,10 +813,10 @@ func (mr *MockQuerierMockRecorder) GetPermit(ctx, id any) *gomock.Call {
 }
 
 // GetPermitByBookIDAndUserID mocks base method.
-func (m *MockQuerier) GetPermitByBookIDAndUserID(ctx context.Context, arg sqlc.GetPermitByBookIDAndUserIDParams) (sqlc.Permit, error) {
+func (m *MockQuerier) GetPermitByBookIDAndUserID(ctx context.Context, arg db.GetPermitByBookIDAndUserIDParams) (db.Permit, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetPermitByBookIDAndUserID", ctx, arg)
-	ret0, _ := ret[0].(sqlc.Permit)
+	ret0, _ := ret[0].(db.Permit)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -723,10 +828,10 @@ func (mr *MockQuerierMockRecorder) GetPermitByBookIDAndUserID(ctx, arg any) *gom
 }
 
 // GetPermitsByUserID mocks base method.
-func (m *MockQuerier) GetPermitsByUserID(ctx context.Context, userID string) ([]sqlc.Permit, error) {
+func (m *MockQuerier) GetPermitsByUserID(ctx context.Context, userID string) ([]db.Permit, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetPermitsByUserID", ctx, userID)
-	ret0, _ := ret[0].([]sqlc.Permit)
+	ret0, _ := ret[0].([]db.Permit)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -738,10 +843,10 @@ func (mr *MockQuerierMockRecorder) GetPermitsByUserID(ctx, userID any) *gomock.C
 }
 
 // GetRedial mocks base method.
-func (m *MockQuerier) GetRedial(ctx context.Context, id uuid.UUID) (sqlc.Redial, error) {
+func (m *MockQuerier) GetRedial(ctx context.Context, id uuid.UUID) (db.Redial, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetRedial", ctx, id)
-	ret0, _ := ret[0].(sqlc.Redial)
+	ret0, _ := ret[0].(db.Redial)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -753,10 +858,10 @@ func (mr *MockQuerierMockRecorder) GetRedial(ctx, id any) *gomock.Call {
 }
 
 // GetStatus mocks base method.
-func (m *MockQuerier) GetStatus(ctx context.Context, id uuid.UUID) (sqlc.Status, error) {
+func (m *MockQuerier) GetStatus(ctx context.Context, id uuid.UUID) (db.Status, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetStatus", ctx, id)
-	ret0, _ := ret[0].(sqlc.Status)
+	ret0, _ := ret[0].(db.Status)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -768,10 +873,10 @@ func (mr *MockQuerierMockRecorder) GetStatus(ctx, id any) *gomock.Call {
 }
 
 // GetUser mocks base method.
-func (m *MockQuerier) GetUser(ctx context.Context, id string) (sqlc.User, error) {
+func (m *MockQuerier) GetUser(ctx context.Context, id string) (db.User, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetUser", ctx, id)
-	ret0, _ := ret[0].(sqlc.User)
+	ret0, _ := ret[0].(db.User)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -783,10 +888,10 @@ func (mr *MockQuerierMockRecorder) GetUser(ctx, id any) *gomock.Call {
 }
 
 // GetUserGoogleToken mocks base method.
-func (m *MockQuerier) GetUserGoogleToken(ctx context.Context, userID string) (sqlc.UserGoogleToken, error) {
+func (m *MockQuerier) GetUserGoogleToken(ctx context.Context, userID string) (db.UserGoogleToken, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetUserGoogleToken", ctx, userID)
-	ret0, _ := ret[0].(sqlc.UserGoogleToken)
+	ret0, _ := ret[0].(db.UserGoogleToken)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -798,10 +903,10 @@ func (mr *MockQuerierMockRecorder) GetUserGoogleToken(ctx, userID any) *gomock.C
 }
 
 // GetUserICalFeed mocks base method.
-func (m *MockQuerier) GetUserICalFeed(ctx context.Context, userID string) (sqlc.UserICalFeed, error) {
+func (m *MockQuerier) GetUserICalFeed(ctx context.Context, userID string) (db.UserICalFeed, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetUserICalFeed", ctx, userID)
-	ret0, _ := ret[0].(sqlc.UserICalFeed)
+	ret0, _ := ret[0].(db.UserICalFeed)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -812,11 +917,26 @@ func (mr *MockQuerierMockRecorder) GetUserICalFeed(ctx, userID any) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserICalFeed", reflect.TypeOf((*MockQuerier)(nil).GetUserICalFeed), ctx, userID)
 }
 
+// ListActivitiesByBookID mocks base method.
+func (m *MockQuerier) ListActivitiesByBookID(ctx context.Context, arg db.ListActivitiesByBookIDParams) ([]db.ListActivitiesByBookIDRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListActivitiesByBookID", ctx, arg)
+	ret0, _ := ret[0].([]db.ListActivitiesByBookIDRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListActivitiesByBookID indicates an expected call of ListActivitiesByBookID.
+func (mr *MockQuerierMockRecorder) ListActivitiesByBookID(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListActivitiesByBookID", reflect.TypeOf((*MockQuerier)(nil).ListActivitiesByBookID), ctx, arg)
+}
+
 // ListActivitiesByCustomerID mocks base method.
-func (m *MockQuerier) ListActivitiesByCustomerID(ctx context.Context, arg sqlc.ListActivitiesByCustomerIDParams) ([]sqlc.ListActivitiesByCustomerIDRow, error) {
+func (m *MockQuerier) ListActivitiesByCustomerID(ctx context.Context, arg db.ListActivitiesByCustomerIDParams) ([]db.ListActivitiesByCustomerIDRow, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListActivitiesByCustomerID", ctx, arg)
-	ret0, _ := ret[0].([]sqlc.ListActivitiesByCustomerIDRow)
+	ret0, _ := ret[0].([]db.ListActivitiesByCustomerIDRow)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -828,10 +948,10 @@ func (mr *MockQuerierMockRecorder) ListActivitiesByCustomerID(ctx, arg any) *gom
 }
 
 // ListAllContacts mocks base method.
-func (m *MockQuerier) ListAllContacts(ctx context.Context, arg sqlc.ListAllContactsParams) ([]sqlc.ListAllContactsRow, error) {
+func (m *MockQuerier) ListAllContacts(ctx context.Context, arg db.ListAllContactsParams) ([]db.ListAllContactsRow, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListAllContacts", ctx, arg)
-	ret0, _ := ret[0].([]sqlc.ListAllContactsRow)
+	ret0, _ := ret[0].([]db.ListAllContactsRow)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -843,10 +963,10 @@ func (mr *MockQuerierMockRecorder) ListAllContacts(ctx, arg any) *gomock.Call {
 }
 
 // ListAllCustomers mocks base method.
-func (m *MockQuerier) ListAllCustomers(ctx context.Context) ([]sqlc.ListAllCustomersRow, error) {
+func (m *MockQuerier) ListAllCustomers(ctx context.Context) ([]db.ListAllCustomersRow, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListAllCustomers", ctx)
-	ret0, _ := ret[0].([]sqlc.ListAllCustomersRow)
+	ret0, _ := ret[0].([]db.ListAllCustomersRow)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -858,10 +978,10 @@ func (mr *MockQuerierMockRecorder) ListAllCustomers(ctx any) *gomock.Call {
 }
 
 // ListCompanies mocks base method.
-func (m *MockQuerier) ListCompanies(ctx context.Context) ([]sqlc.Company, error) {
+func (m *MockQuerier) ListCompanies(ctx context.Context) ([]db.Company, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListCompanies", ctx)
-	ret0, _ := ret[0].([]sqlc.Company)
+	ret0, _ := ret[0].([]db.Company)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -873,10 +993,10 @@ func (mr *MockQuerierMockRecorder) ListCompanies(ctx any) *gomock.Call {
 }
 
 // ListContacts mocks base method.
-func (m *MockQuerier) ListContacts(ctx context.Context, customerID uuid.UUID) ([]sqlc.Contact, error) {
+func (m *MockQuerier) ListContacts(ctx context.Context, customerID uuid.UUID) ([]db.Contact, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListContacts", ctx, customerID)
-	ret0, _ := ret[0].([]sqlc.Contact)
+	ret0, _ := ret[0].([]db.Contact)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -888,10 +1008,10 @@ func (mr *MockQuerierMockRecorder) ListContacts(ctx, customerID any) *gomock.Cal
 }
 
 // ListCustomers mocks base method.
-func (m *MockQuerier) ListCustomers(ctx context.Context, arg sqlc.ListCustomersParams) ([]sqlc.ListCustomersRow, error) {
+func (m *MockQuerier) ListCustomers(ctx context.Context, arg db.ListCustomersParams) ([]db.ListCustomersRow, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListCustomers", ctx, arg)
-	ret0, _ := ret[0].([]sqlc.ListCustomersRow)
+	ret0, _ := ret[0].([]db.ListCustomersRow)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -903,10 +1023,10 @@ func (mr *MockQuerierMockRecorder) ListCustomers(ctx, arg any) *gomock.Call {
 }
 
 // ListMailTemplatesByBook mocks base method.
-func (m *MockQuerier) ListMailTemplatesByBook(ctx context.Context, bookID uuid.UUID) ([]sqlc.MailTemplate, error) {
+func (m *MockQuerier) ListMailTemplatesByBook(ctx context.Context, bookID uuid.UUID) ([]db.MailTemplate, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListMailTemplatesByBook", ctx, bookID)
-	ret0, _ := ret[0].([]sqlc.MailTemplate)
+	ret0, _ := ret[0].([]db.MailTemplate)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -918,10 +1038,10 @@ func (mr *MockQuerierMockRecorder) ListMailTemplatesByBook(ctx, bookID any) *gom
 }
 
 // ListPermits mocks base method.
-func (m *MockQuerier) ListPermits(ctx context.Context, bookID uuid.UUID) ([]sqlc.Permit, error) {
+func (m *MockQuerier) ListPermits(ctx context.Context, bookID uuid.UUID) ([]db.Permit, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListPermits", ctx, bookID)
-	ret0, _ := ret[0].([]sqlc.Permit)
+	ret0, _ := ret[0].([]db.Permit)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -933,10 +1053,10 @@ func (mr *MockQuerierMockRecorder) ListPermits(ctx, bookID any) *gomock.Call {
 }
 
 // ListPermitsWithUserInfo mocks base method.
-func (m *MockQuerier) ListPermitsWithUserInfo(ctx context.Context, bookID uuid.UUID) ([]sqlc.ListPermitsWithUserInfoRow, error) {
+func (m *MockQuerier) ListPermitsWithUserInfo(ctx context.Context, bookID uuid.UUID) ([]db.ListPermitsWithUserInfoRow, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListPermitsWithUserInfo", ctx, bookID)
-	ret0, _ := ret[0].([]sqlc.ListPermitsWithUserInfoRow)
+	ret0, _ := ret[0].([]db.ListPermitsWithUserInfoRow)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -948,10 +1068,10 @@ func (mr *MockQuerierMockRecorder) ListPermitsWithUserInfo(ctx, bookID any) *gom
 }
 
 // ListRedialsByCustomer mocks base method.
-func (m *MockQuerier) ListRedialsByCustomer(ctx context.Context, customerID uuid.UUID) ([]sqlc.Redial, error) {
+func (m *MockQuerier) ListRedialsByCustomer(ctx context.Context, customerID uuid.UUID) ([]db.Redial, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListRedialsByCustomer", ctx, customerID)
-	ret0, _ := ret[0].([]sqlc.Redial)
+	ret0, _ := ret[0].([]db.Redial)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -963,10 +1083,10 @@ func (mr *MockQuerierMockRecorder) ListRedialsByCustomer(ctx, customerID any) *g
 }
 
 // ListRedialsByUserWithCustomer mocks base method.
-func (m *MockQuerier) ListRedialsByUserWithCustomer(ctx context.Context, arg sqlc.ListRedialsByUserWithCustomerParams) ([]sqlc.ListRedialsByUserWithCustomerRow, error) {
+func (m *MockQuerier) ListRedialsByUserWithCustomer(ctx context.Context, arg db.ListRedialsByUserWithCustomerParams) ([]db.ListRedialsByUserWithCustomerRow, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListRedialsByUserWithCustomer", ctx, arg)
-	ret0, _ := ret[0].([]sqlc.ListRedialsByUserWithCustomerRow)
+	ret0, _ := ret[0].([]db.ListRedialsByUserWithCustomerRow)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -978,10 +1098,10 @@ func (mr *MockQuerierMockRecorder) ListRedialsByUserWithCustomer(ctx, arg any) *
 }
 
 // ListStatusesByBookID mocks base method.
-func (m *MockQuerier) ListStatusesByBookID(ctx context.Context, bookID uuid.UUID) ([]sqlc.Status, error) {
+func (m *MockQuerier) ListStatusesByBookID(ctx context.Context, bookID uuid.UUID) ([]db.Status, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListStatusesByBookID", ctx, bookID)
-	ret0, _ := ret[0].([]sqlc.Status)
+	ret0, _ := ret[0].([]db.Status)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -993,10 +1113,10 @@ func (mr *MockQuerierMockRecorder) ListStatusesByBookID(ctx, bookID any) *gomock
 }
 
 // ListUsers mocks base method.
-func (m *MockQuerier) ListUsers(ctx context.Context) ([]sqlc.User, error) {
+func (m *MockQuerier) ListUsers(ctx context.Context) ([]db.User, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListUsers", ctx)
-	ret0, _ := ret[0].([]sqlc.User)
+	ret0, _ := ret[0].([]db.User)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -1008,10 +1128,10 @@ func (mr *MockQuerierMockRecorder) ListUsers(ctx any) *gomock.Call {
 }
 
 // ListUsersByCompany mocks base method.
-func (m *MockQuerier) ListUsersByCompany(ctx context.Context, companyID uuid.UUID) ([]sqlc.User, error) {
+func (m *MockQuerier) ListUsersByCompany(ctx context.Context, companyID uuid.UUID) ([]db.User, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListUsersByCompany", ctx, companyID)
-	ret0, _ := ret[0].([]sqlc.User)
+	ret0, _ := ret[0].([]db.User)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -1023,10 +1143,10 @@ func (mr *MockQuerierMockRecorder) ListUsersByCompany(ctx, companyID any) *gomoc
 }
 
 // SetRedialGcalSynced mocks base method.
-func (m *MockQuerier) SetRedialGcalSynced(ctx context.Context, arg sqlc.SetRedialGcalSyncedParams) (sqlc.Redial, error) {
+func (m *MockQuerier) SetRedialGcalSynced(ctx context.Context, arg db.SetRedialGcalSyncedParams) (db.Redial, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SetRedialGcalSynced", ctx, arg)
-	ret0, _ := ret[0].(sqlc.Redial)
+	ret0, _ := ret[0].(db.Redial)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -1037,11 +1157,25 @@ func (mr *MockQuerierMockRecorder) SetRedialGcalSynced(ctx, arg any) *gomock.Cal
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetRedialGcalSynced", reflect.TypeOf((*MockQuerier)(nil).SetRedialGcalSynced), ctx, arg)
 }
 
+// UpdateActivityRecordingURL mocks base method.
+func (m *MockQuerier) UpdateActivityRecordingURL(ctx context.Context, arg db.UpdateActivityRecordingURLParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateActivityRecordingURL", ctx, arg)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateActivityRecordingURL indicates an expected call of UpdateActivityRecordingURL.
+func (mr *MockQuerierMockRecorder) UpdateActivityRecordingURL(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateActivityRecordingURL", reflect.TypeOf((*MockQuerier)(nil).UpdateActivityRecordingURL), ctx, arg)
+}
+
 // UpdateActivityStatus mocks base method.
-func (m *MockQuerier) UpdateActivityStatus(ctx context.Context, arg sqlc.UpdateActivityStatusParams) (sqlc.Activity, error) {
+func (m *MockQuerier) UpdateActivityStatus(ctx context.Context, arg db.UpdateActivityStatusParams) (db.Activity, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UpdateActivityStatus", ctx, arg)
-	ret0, _ := ret[0].(sqlc.Activity)
+	ret0, _ := ret[0].(db.Activity)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -1053,10 +1187,10 @@ func (mr *MockQuerierMockRecorder) UpdateActivityStatus(ctx, arg any) *gomock.Ca
 }
 
 // UpdateBook mocks base method.
-func (m *MockQuerier) UpdateBook(ctx context.Context, arg sqlc.UpdateBookParams) (sqlc.Book, error) {
+func (m *MockQuerier) UpdateBook(ctx context.Context, arg db.UpdateBookParams) (db.Book, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UpdateBook", ctx, arg)
-	ret0, _ := ret[0].(sqlc.Book)
+	ret0, _ := ret[0].(db.Book)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -1068,10 +1202,10 @@ func (mr *MockQuerierMockRecorder) UpdateBook(ctx, arg any) *gomock.Call {
 }
 
 // UpdateCompany mocks base method.
-func (m *MockQuerier) UpdateCompany(ctx context.Context, arg sqlc.UpdateCompanyParams) (sqlc.Company, error) {
+func (m *MockQuerier) UpdateCompany(ctx context.Context, arg db.UpdateCompanyParams) (db.Company, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UpdateCompany", ctx, arg)
-	ret0, _ := ret[0].(sqlc.Company)
+	ret0, _ := ret[0].(db.Company)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -1083,10 +1217,10 @@ func (mr *MockQuerierMockRecorder) UpdateCompany(ctx, arg any) *gomock.Call {
 }
 
 // UpdateContact mocks base method.
-func (m *MockQuerier) UpdateContact(ctx context.Context, arg sqlc.UpdateContactParams) (sqlc.Contact, error) {
+func (m *MockQuerier) UpdateContact(ctx context.Context, arg db.UpdateContactParams) (db.Contact, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UpdateContact", ctx, arg)
-	ret0, _ := ret[0].(sqlc.Contact)
+	ret0, _ := ret[0].(db.Contact)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -1098,10 +1232,10 @@ func (mr *MockQuerierMockRecorder) UpdateContact(ctx, arg any) *gomock.Call {
 }
 
 // UpdateCustomer mocks base method.
-func (m *MockQuerier) UpdateCustomer(ctx context.Context, arg sqlc.UpdateCustomerParams) (sqlc.Customer, error) {
+func (m *MockQuerier) UpdateCustomer(ctx context.Context, arg db.UpdateCustomerParams) (db.Customer, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UpdateCustomer", ctx, arg)
-	ret0, _ := ret[0].(sqlc.Customer)
+	ret0, _ := ret[0].(db.Customer)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -1113,10 +1247,10 @@ func (mr *MockQuerierMockRecorder) UpdateCustomer(ctx, arg any) *gomock.Call {
 }
 
 // UpdateMailTemplate mocks base method.
-func (m *MockQuerier) UpdateMailTemplate(ctx context.Context, arg sqlc.UpdateMailTemplateParams) (sqlc.MailTemplate, error) {
+func (m *MockQuerier) UpdateMailTemplate(ctx context.Context, arg db.UpdateMailTemplateParams) (db.MailTemplate, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UpdateMailTemplate", ctx, arg)
-	ret0, _ := ret[0].(sqlc.MailTemplate)
+	ret0, _ := ret[0].(db.MailTemplate)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -1128,10 +1262,10 @@ func (mr *MockQuerierMockRecorder) UpdateMailTemplate(ctx, arg any) *gomock.Call
 }
 
 // UpdatePermit mocks base method.
-func (m *MockQuerier) UpdatePermit(ctx context.Context, arg sqlc.UpdatePermitParams) (sqlc.Permit, error) {
+func (m *MockQuerier) UpdatePermit(ctx context.Context, arg db.UpdatePermitParams) (db.Permit, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UpdatePermit", ctx, arg)
-	ret0, _ := ret[0].(sqlc.Permit)
+	ret0, _ := ret[0].(db.Permit)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -1143,10 +1277,10 @@ func (mr *MockQuerierMockRecorder) UpdatePermit(ctx, arg any) *gomock.Call {
 }
 
 // UpdateRedial mocks base method.
-func (m *MockQuerier) UpdateRedial(ctx context.Context, arg sqlc.UpdateRedialParams) (sqlc.Redial, error) {
+func (m *MockQuerier) UpdateRedial(ctx context.Context, arg db.UpdateRedialParams) (db.Redial, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UpdateRedial", ctx, arg)
-	ret0, _ := ret[0].(sqlc.Redial)
+	ret0, _ := ret[0].(db.Redial)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -1158,10 +1292,10 @@ func (mr *MockQuerierMockRecorder) UpdateRedial(ctx, arg any) *gomock.Call {
 }
 
 // UpdateStatus mocks base method.
-func (m *MockQuerier) UpdateStatus(ctx context.Context, arg sqlc.UpdateStatusParams) (sqlc.Status, error) {
+func (m *MockQuerier) UpdateStatus(ctx context.Context, arg db.UpdateStatusParams) (db.Status, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UpdateStatus", ctx, arg)
-	ret0, _ := ret[0].(sqlc.Status)
+	ret0, _ := ret[0].(db.Status)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -1173,10 +1307,10 @@ func (mr *MockQuerierMockRecorder) UpdateStatus(ctx, arg any) *gomock.Call {
 }
 
 // UpdateUser mocks base method.
-func (m *MockQuerier) UpdateUser(ctx context.Context, arg sqlc.UpdateUserParams) (sqlc.User, error) {
+func (m *MockQuerier) UpdateUser(ctx context.Context, arg db.UpdateUserParams) (db.User, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UpdateUser", ctx, arg)
-	ret0, _ := ret[0].(sqlc.User)
+	ret0, _ := ret[0].(db.User)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -1188,10 +1322,10 @@ func (mr *MockQuerierMockRecorder) UpdateUser(ctx, arg any) *gomock.Call {
 }
 
 // UpdateUserGoogleTokenAccess mocks base method.
-func (m *MockQuerier) UpdateUserGoogleTokenAccess(ctx context.Context, arg sqlc.UpdateUserGoogleTokenAccessParams) (sqlc.UserGoogleToken, error) {
+func (m *MockQuerier) UpdateUserGoogleTokenAccess(ctx context.Context, arg db.UpdateUserGoogleTokenAccessParams) (db.UserGoogleToken, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UpdateUserGoogleTokenAccess", ctx, arg)
-	ret0, _ := ret[0].(sqlc.UserGoogleToken)
+	ret0, _ := ret[0].(db.UserGoogleToken)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -1203,10 +1337,10 @@ func (mr *MockQuerierMockRecorder) UpdateUserGoogleTokenAccess(ctx, arg any) *go
 }
 
 // UpsertUserGoogleToken mocks base method.
-func (m *MockQuerier) UpsertUserGoogleToken(ctx context.Context, arg sqlc.UpsertUserGoogleTokenParams) (sqlc.UserGoogleToken, error) {
+func (m *MockQuerier) UpsertUserGoogleToken(ctx context.Context, arg db.UpsertUserGoogleTokenParams) (db.UserGoogleToken, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UpsertUserGoogleToken", ctx, arg)
-	ret0, _ := ret[0].(sqlc.UserGoogleToken)
+	ret0, _ := ret[0].(db.UserGoogleToken)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -1218,10 +1352,10 @@ func (mr *MockQuerierMockRecorder) UpsertUserGoogleToken(ctx, arg any) *gomock.C
 }
 
 // UpsertUserICalFeed mocks base method.
-func (m *MockQuerier) UpsertUserICalFeed(ctx context.Context, arg sqlc.UpsertUserICalFeedParams) (sqlc.UserICalFeed, error) {
+func (m *MockQuerier) UpsertUserICalFeed(ctx context.Context, arg db.UpsertUserICalFeedParams) (db.UserICalFeed, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UpsertUserICalFeed", ctx, arg)
-	ret0, _ := ret[0].(sqlc.UserICalFeed)
+	ret0, _ := ret[0].(db.UserICalFeed)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

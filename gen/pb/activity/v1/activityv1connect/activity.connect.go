@@ -36,6 +36,15 @@ const (
 	// ActivityServiceListActivitiesByCustomerIDProcedure is the fully-qualified name of the
 	// ActivityService's ListActivitiesByCustomerID RPC.
 	ActivityServiceListActivitiesByCustomerIDProcedure = "/activity.v1.ActivityService/ListActivitiesByCustomerID"
+	// ActivityServiceListActivitiesByBookIDProcedure is the fully-qualified name of the
+	// ActivityService's ListActivitiesByBookID RPC.
+	ActivityServiceListActivitiesByBookIDProcedure = "/activity.v1.ActivityService/ListActivitiesByBookID"
+	// ActivityServiceGetCallStatsProcedure is the fully-qualified name of the ActivityService's
+	// GetCallStats RPC.
+	ActivityServiceGetCallStatsProcedure = "/activity.v1.ActivityService/GetCallStats"
+	// ActivityServiceGetMailStatsProcedure is the fully-qualified name of the ActivityService's
+	// GetMailStats RPC.
+	ActivityServiceGetMailStatsProcedure = "/activity.v1.ActivityService/GetMailStats"
 	// ActivityServiceCreateActivityCallProcedure is the fully-qualified name of the ActivityService's
 	// CreateActivityCall RPC.
 	ActivityServiceCreateActivityCallProcedure = "/activity.v1.ActivityService/CreateActivityCall"
@@ -53,6 +62,15 @@ const (
 // ActivityServiceClient is a client for the activity.v1.ActivityService service.
 type ActivityServiceClient interface {
 	ListActivitiesByCustomerID(context.Context, *connect.Request[v1.ListActivitiesByCustomerIDRequest]) (*connect.Response[v1.ListActivitiesByCustomerIDResponse], error)
+	// Book 内の全顧客の Activity を横断して返す活動フィード。
+	// 種別 / 担当者 / 期間でフィルタでき、occurred_at 降順 + offset ページング。
+	ListActivitiesByBookID(context.Context, *connect.Request[v1.ListActivitiesByBookIDRequest]) (*connect.Response[v1.ListActivitiesByBookIDResponse], error)
+	// 担当者 × コール結果 (Status) のクロス集計。ロングフォーマットの
+	// セル (user, status, count) を返し、ピボットは UI 側で行う。
+	GetCallStats(context.Context, *connect.Request[v1.GetCallStatsRequest]) (*connect.Response[v1.GetCallStatsResponse], error)
+	// 担当者ごとのメール送信数と返信数。返信は「その顧客に最後に送信した
+	// 担当者」への帰属で近似する (スレッド追跡は未実装)。
+	GetMailStats(context.Context, *connect.Request[v1.GetMailStatsRequest]) (*connect.Response[v1.GetMailStatsResponse], error)
 	CreateActivityCall(context.Context, *connect.Request[v1.CreateActivityCallRequest]) (*connect.Response[v1.CreateActivityCallResponse], error)
 	CreateActivityEmailSent(context.Context, *connect.Request[v1.CreateActivityEmailSentRequest]) (*connect.Response[v1.CreateActivityEmailSentResponse], error)
 	UpdateActivityStatus(context.Context, *connect.Request[v1.UpdateActivityStatusRequest]) (*connect.Response[v1.UpdateActivityStatusResponse], error)
@@ -78,6 +96,24 @@ func NewActivityServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			httpClient,
 			baseURL+ActivityServiceListActivitiesByCustomerIDProcedure,
 			connect.WithSchema(activityServiceMethods.ByName("ListActivitiesByCustomerID")),
+			connect.WithClientOptions(opts...),
+		),
+		listActivitiesByBookID: connect.NewClient[v1.ListActivitiesByBookIDRequest, v1.ListActivitiesByBookIDResponse](
+			httpClient,
+			baseURL+ActivityServiceListActivitiesByBookIDProcedure,
+			connect.WithSchema(activityServiceMethods.ByName("ListActivitiesByBookID")),
+			connect.WithClientOptions(opts...),
+		),
+		getCallStats: connect.NewClient[v1.GetCallStatsRequest, v1.GetCallStatsResponse](
+			httpClient,
+			baseURL+ActivityServiceGetCallStatsProcedure,
+			connect.WithSchema(activityServiceMethods.ByName("GetCallStats")),
+			connect.WithClientOptions(opts...),
+		),
+		getMailStats: connect.NewClient[v1.GetMailStatsRequest, v1.GetMailStatsResponse](
+			httpClient,
+			baseURL+ActivityServiceGetMailStatsProcedure,
+			connect.WithSchema(activityServiceMethods.ByName("GetMailStats")),
 			connect.WithClientOptions(opts...),
 		),
 		createActivityCall: connect.NewClient[v1.CreateActivityCallRequest, v1.CreateActivityCallResponse](
@@ -110,6 +146,9 @@ func NewActivityServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 // activityServiceClient implements ActivityServiceClient.
 type activityServiceClient struct {
 	listActivitiesByCustomerID *connect.Client[v1.ListActivitiesByCustomerIDRequest, v1.ListActivitiesByCustomerIDResponse]
+	listActivitiesByBookID     *connect.Client[v1.ListActivitiesByBookIDRequest, v1.ListActivitiesByBookIDResponse]
+	getCallStats               *connect.Client[v1.GetCallStatsRequest, v1.GetCallStatsResponse]
+	getMailStats               *connect.Client[v1.GetMailStatsRequest, v1.GetMailStatsResponse]
 	createActivityCall         *connect.Client[v1.CreateActivityCallRequest, v1.CreateActivityCallResponse]
 	createActivityEmailSent    *connect.Client[v1.CreateActivityEmailSentRequest, v1.CreateActivityEmailSentResponse]
 	updateActivityStatus       *connect.Client[v1.UpdateActivityStatusRequest, v1.UpdateActivityStatusResponse]
@@ -119,6 +158,21 @@ type activityServiceClient struct {
 // ListActivitiesByCustomerID calls activity.v1.ActivityService.ListActivitiesByCustomerID.
 func (c *activityServiceClient) ListActivitiesByCustomerID(ctx context.Context, req *connect.Request[v1.ListActivitiesByCustomerIDRequest]) (*connect.Response[v1.ListActivitiesByCustomerIDResponse], error) {
 	return c.listActivitiesByCustomerID.CallUnary(ctx, req)
+}
+
+// ListActivitiesByBookID calls activity.v1.ActivityService.ListActivitiesByBookID.
+func (c *activityServiceClient) ListActivitiesByBookID(ctx context.Context, req *connect.Request[v1.ListActivitiesByBookIDRequest]) (*connect.Response[v1.ListActivitiesByBookIDResponse], error) {
+	return c.listActivitiesByBookID.CallUnary(ctx, req)
+}
+
+// GetCallStats calls activity.v1.ActivityService.GetCallStats.
+func (c *activityServiceClient) GetCallStats(ctx context.Context, req *connect.Request[v1.GetCallStatsRequest]) (*connect.Response[v1.GetCallStatsResponse], error) {
+	return c.getCallStats.CallUnary(ctx, req)
+}
+
+// GetMailStats calls activity.v1.ActivityService.GetMailStats.
+func (c *activityServiceClient) GetMailStats(ctx context.Context, req *connect.Request[v1.GetMailStatsRequest]) (*connect.Response[v1.GetMailStatsResponse], error) {
+	return c.getMailStats.CallUnary(ctx, req)
 }
 
 // CreateActivityCall calls activity.v1.ActivityService.CreateActivityCall.
@@ -144,6 +198,15 @@ func (c *activityServiceClient) GetActivityRecording(ctx context.Context, req *c
 // ActivityServiceHandler is an implementation of the activity.v1.ActivityService service.
 type ActivityServiceHandler interface {
 	ListActivitiesByCustomerID(context.Context, *connect.Request[v1.ListActivitiesByCustomerIDRequest]) (*connect.Response[v1.ListActivitiesByCustomerIDResponse], error)
+	// Book 内の全顧客の Activity を横断して返す活動フィード。
+	// 種別 / 担当者 / 期間でフィルタでき、occurred_at 降順 + offset ページング。
+	ListActivitiesByBookID(context.Context, *connect.Request[v1.ListActivitiesByBookIDRequest]) (*connect.Response[v1.ListActivitiesByBookIDResponse], error)
+	// 担当者 × コール結果 (Status) のクロス集計。ロングフォーマットの
+	// セル (user, status, count) を返し、ピボットは UI 側で行う。
+	GetCallStats(context.Context, *connect.Request[v1.GetCallStatsRequest]) (*connect.Response[v1.GetCallStatsResponse], error)
+	// 担当者ごとのメール送信数と返信数。返信は「その顧客に最後に送信した
+	// 担当者」への帰属で近似する (スレッド追跡は未実装)。
+	GetMailStats(context.Context, *connect.Request[v1.GetMailStatsRequest]) (*connect.Response[v1.GetMailStatsResponse], error)
 	CreateActivityCall(context.Context, *connect.Request[v1.CreateActivityCallRequest]) (*connect.Response[v1.CreateActivityCallResponse], error)
 	CreateActivityEmailSent(context.Context, *connect.Request[v1.CreateActivityEmailSentRequest]) (*connect.Response[v1.CreateActivityEmailSentResponse], error)
 	UpdateActivityStatus(context.Context, *connect.Request[v1.UpdateActivityStatusRequest]) (*connect.Response[v1.UpdateActivityStatusResponse], error)
@@ -165,6 +228,24 @@ func NewActivityServiceHandler(svc ActivityServiceHandler, opts ...connect.Handl
 		ActivityServiceListActivitiesByCustomerIDProcedure,
 		svc.ListActivitiesByCustomerID,
 		connect.WithSchema(activityServiceMethods.ByName("ListActivitiesByCustomerID")),
+		connect.WithHandlerOptions(opts...),
+	)
+	activityServiceListActivitiesByBookIDHandler := connect.NewUnaryHandler(
+		ActivityServiceListActivitiesByBookIDProcedure,
+		svc.ListActivitiesByBookID,
+		connect.WithSchema(activityServiceMethods.ByName("ListActivitiesByBookID")),
+		connect.WithHandlerOptions(opts...),
+	)
+	activityServiceGetCallStatsHandler := connect.NewUnaryHandler(
+		ActivityServiceGetCallStatsProcedure,
+		svc.GetCallStats,
+		connect.WithSchema(activityServiceMethods.ByName("GetCallStats")),
+		connect.WithHandlerOptions(opts...),
+	)
+	activityServiceGetMailStatsHandler := connect.NewUnaryHandler(
+		ActivityServiceGetMailStatsProcedure,
+		svc.GetMailStats,
+		connect.WithSchema(activityServiceMethods.ByName("GetMailStats")),
 		connect.WithHandlerOptions(opts...),
 	)
 	activityServiceCreateActivityCallHandler := connect.NewUnaryHandler(
@@ -195,6 +276,12 @@ func NewActivityServiceHandler(svc ActivityServiceHandler, opts ...connect.Handl
 		switch r.URL.Path {
 		case ActivityServiceListActivitiesByCustomerIDProcedure:
 			activityServiceListActivitiesByCustomerIDHandler.ServeHTTP(w, r)
+		case ActivityServiceListActivitiesByBookIDProcedure:
+			activityServiceListActivitiesByBookIDHandler.ServeHTTP(w, r)
+		case ActivityServiceGetCallStatsProcedure:
+			activityServiceGetCallStatsHandler.ServeHTTP(w, r)
+		case ActivityServiceGetMailStatsProcedure:
+			activityServiceGetMailStatsHandler.ServeHTTP(w, r)
 		case ActivityServiceCreateActivityCallProcedure:
 			activityServiceCreateActivityCallHandler.ServeHTTP(w, r)
 		case ActivityServiceCreateActivityEmailSentProcedure:
@@ -214,6 +301,18 @@ type UnimplementedActivityServiceHandler struct{}
 
 func (UnimplementedActivityServiceHandler) ListActivitiesByCustomerID(context.Context, *connect.Request[v1.ListActivitiesByCustomerIDRequest]) (*connect.Response[v1.ListActivitiesByCustomerIDResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("activity.v1.ActivityService.ListActivitiesByCustomerID is not implemented"))
+}
+
+func (UnimplementedActivityServiceHandler) ListActivitiesByBookID(context.Context, *connect.Request[v1.ListActivitiesByBookIDRequest]) (*connect.Response[v1.ListActivitiesByBookIDResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("activity.v1.ActivityService.ListActivitiesByBookID is not implemented"))
+}
+
+func (UnimplementedActivityServiceHandler) GetCallStats(context.Context, *connect.Request[v1.GetCallStatsRequest]) (*connect.Response[v1.GetCallStatsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("activity.v1.ActivityService.GetCallStats is not implemented"))
+}
+
+func (UnimplementedActivityServiceHandler) GetMailStats(context.Context, *connect.Request[v1.GetMailStatsRequest]) (*connect.Response[v1.GetMailStatsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("activity.v1.ActivityService.GetMailStats is not implemented"))
 }
 
 func (UnimplementedActivityServiceHandler) CreateActivityCall(context.Context, *connect.Request[v1.CreateActivityCallRequest]) (*connect.Response[v1.CreateActivityCallResponse], error) {

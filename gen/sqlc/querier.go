@@ -15,6 +15,8 @@ type Querier interface {
 	CheckUserAccessToBook(ctx context.Context, arg CheckUserAccessToBookParams) (bool, error)
 	CheckUserRoleForBook(ctx context.Context, arg CheckUserRoleForBookParams) (Role, error)
 	ClearRedialGcalSync(ctx context.Context, id uuid.UUID) (Redial, error)
+	// ListActivitiesByBookID のページネーション用 total。フィルタ条件は同一に保つこと。
+	CountActivitiesByBookID(ctx context.Context, arg CountActivitiesByBookIDParams) (int64, error)
 	// duration_seconds / recording_url / zoom_call_id は call type で Zoom 連携時に
 	// セットされる。他の type (email_sent / email_received / manual call) では
 	// 全て NULL を渡せば良い (列は nullable)。
@@ -61,6 +63,10 @@ type Querier interface {
 	GetActivityByZoomCallID(ctx context.Context, zoomCallID pgtype.Text) (Activity, error)
 	GetBookByIDAndUserID(ctx context.Context, arg GetBookByIDAndUserIDParams) (GetBookByIDAndUserIDRow, error)
 	GetBooksByUserID(ctx context.Context, userID string) ([]GetBooksByUserIDRow, error)
+	// 担当者 × コール結果 (Status) のクロス集計。UI 側でピボットする前提の
+	// ロングフォーマット (1 行 = 1 セル)。status_id が NULL の行は
+	// 「Status 削除済み / 未設定」のコールを表す。
+	GetCallStatsByBook(ctx context.Context, arg GetCallStatsByBookParams) ([]GetCallStatsByBookRow, error)
 	GetCompany(ctx context.Context, id uuid.UUID) (Company, error)
 	GetContact(ctx context.Context, id uuid.UUID) (Contact, error)
 	GetCustomer(ctx context.Context, id uuid.UUID) (GetCustomerRow, error)
@@ -71,6 +77,14 @@ type Querier interface {
 	GetCustomerCountByCorporation(ctx context.Context, arg GetCustomerCountByCorporationParams) (int64, error)
 	GetCustomerCountByDate(ctx context.Context, arg GetCustomerCountByDateParams) (int64, error)
 	GetDefaultStatusByBookID(ctx context.Context, bookID uuid.UUID) (Status, error)
+	// email_received を「その顧客に最後に email_sent した担当者」に帰属させて
+	// 返信数を集計する。Activity には in_reply_to が無くスレッド追跡が
+	// できないため、顧客単位の近似で十分という判断 (1 顧客 1 担当が通常運用)。
+	// 先行する email_sent が無い受信メールは attributed_user_id = NULL の行に
+	// まとまる (UI では「担当なし」として表示する)。
+	GetMailReplyStatsByBook(ctx context.Context, arg GetMailReplyStatsByBookParams) ([]GetMailReplyStatsByBookRow, error)
+	// 担当者ごとの送信メール数。
+	GetMailSentStatsByBook(ctx context.Context, arg GetMailSentStatsByBookParams) ([]GetMailSentStatsByBookRow, error)
 	GetMailTemplate(ctx context.Context, id uuid.UUID) (MailTemplate, error)
 	GetMaxStatusPriority(ctx context.Context, bookID uuid.UUID) (interface{}, error)
 	// Zoom Phone webhook の caller/callee マッチで複数 Customer 候補が出た時に
@@ -85,6 +99,11 @@ type Querier interface {
 	GetUser(ctx context.Context, id string) (User, error)
 	GetUserGoogleToken(ctx context.Context, userID string) (UserGoogleToken, error)
 	GetUserICalFeed(ctx context.Context, userID string) (UserICalFeed, error)
+	// Book 内の全 Activity を横断で返す (活動フィード用)。
+	// types が空配列のときは全 type。filter_user_id が空文字のときは全担当者。
+	// from_time / to_time は呼び出し側で必ず埋める (未指定はサービス層で
+	// epoch 〜 遠未来のセンチネルに展開する)。
+	ListActivitiesByBookID(ctx context.Context, arg ListActivitiesByBookIDParams) ([]ListActivitiesByBookIDRow, error)
 	// types が空配列 or NULL のときは全件、非空のときは type IN (types) で絞り込む。
 	ListActivitiesByCustomerID(ctx context.Context, arg ListActivitiesByCustomerIDParams) ([]ListActivitiesByCustomerIDRow, error)
 	ListAllContacts(ctx context.Context, arg ListAllContactsParams) ([]ListAllContactsRow, error)
