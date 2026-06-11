@@ -8,7 +8,7 @@ import (
 	permitv1 "github.com/0utl1er-tech/phox-customer/gen/pb/permit/v1"
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
 	"github.com/0utl1er-tech/phox-customer/internal/service/auth"
-	util "github.com/0utl1er-tech/phox-customer/internal/util"
+	"github.com/0utl1er-tech/phox-customer/internal/util"
 	"github.com/google/uuid"
 )
 
@@ -19,11 +19,14 @@ func (server *PermitService) CreatePermit(ctx context.Context, req *connect.Requ
 	}
 	userID := token.Subject()
 
-	permitId := uuid.New()
+	bookID, err := util.ParseUUID("book_id", req.Msg.BookId)
+	if err != nil {
+		return nil, err
+	}
 
 	result, err := server.queries.CreatePermit(ctx, db.CreatePermitParams{
-		ID:     permitId,
-		BookID: uuid.MustParse(req.Msg.BookId),
+		ID:     uuid.New(),
+		BookID: bookID,
 		UserID: userID,
 		Role:   util.ConvertProtoRoleToDBRole(req.Msg.Role),
 	})
@@ -32,11 +35,6 @@ func (server *PermitService) CreatePermit(ctx context.Context, req *connect.Requ
 	}
 
 	return connect.NewResponse(&permitv1.CreatePermitResponse{
-		CreatedPermit: &permitv1.Permit{
-			Id:     result.ID.String(),
-			BookId: result.BookID.String(),
-			UserId: result.UserID,
-			Role:   util.ConvertDBRoleToProtoRole(result.Role),
-		},
+		CreatedPermit: modelToProto(result),
 	}), nil
 }

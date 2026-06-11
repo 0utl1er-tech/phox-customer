@@ -20,7 +20,10 @@ func (server *PermitService) AddBookUser(ctx context.Context, req *connect.Reque
 	}
 	callerID := token.Subject()
 
-	bookID := uuid.MustParse(req.Msg.BookId)
+	bookID, err := util.ParseUUID("book_id", req.Msg.BookId)
+	if err != nil {
+		return nil, err
+	}
 	targetUserID := req.Msg.UserId
 
 	callerRole, err := server.queries.CheckUserRoleForBook(ctx, db.CheckUserRoleForBookParams{
@@ -72,11 +75,6 @@ func (server *PermitService) AddBookUser(ctx context.Context, req *connect.Reque
 	}
 
 	return connect.NewResponse(&permitv1.AddBookUserResponse{
-		Permit: &permitv1.Permit{
-			Id:     result.ID.String(),
-			BookId: result.BookID.String(),
-			UserId: result.UserID,
-			Role:   util.ConvertDBRoleToProtoRole(result.Role),
-		},
+		Permit: modelToProto(result),
 	}), nil
 }
