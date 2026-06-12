@@ -173,10 +173,18 @@ func TestGetCallStats(t *testing.T) {
 	f := newBookStatsFixture(t)
 	ctx := testutil.AuthContext(t, f.userX.ID, "x@test.com")
 
-	// X: status あり×2 + status なし×1 / Y: status あり×1
+	// 2 つ目のコール結果 Status (DB の activity_call_requires_status 制約で
+	// type=call は status 必須なので「status なし」のセルは存在し得ない)
+	st2, err := f.queries.CreateStatus(context.Background(), db.CreateStatusParams{
+		ID: uuid.New(), BookID: f.book.ID, Priority: 2,
+		Name: "アポ獲得", Effective: true, Ng: false,
+	})
+	require.NoError(t, err)
+
+	// X: status1 ×2 + status2 ×1 / Y: status1 ×1
 	f.seedActivity(t, "call", f.customerA.ID, f.userX.ID, &f.statusID, statsBase)
 	f.seedActivity(t, "call", f.customerB.ID, f.userX.ID, &f.statusID, statsBase.Add(time.Hour))
-	f.seedActivity(t, "call", f.customerA.ID, f.userX.ID, nil, statsBase.Add(2*time.Hour))
+	f.seedActivity(t, "call", f.customerA.ID, f.userX.ID, &st2.ID, statsBase.Add(2*time.Hour))
 	f.seedActivity(t, "call", f.customerA.ID, f.userY.ID, &f.statusID, statsBase.Add(3*time.Hour))
 	// 期間外 (除外されること)
 	f.seedActivity(t, "call", f.customerA.ID, f.userY.ID, &f.statusID, statsBase.Add(-24*time.Hour))
@@ -190,18 +198,22 @@ func TestGetCallStats(t *testing.T) {
 	}))
 	require.NoError(t, err)
 
-	// セルを (user, status有無) で索引化して検証
+	// セルを (user, status) で索引化して検証
 	type key struct {
-		userID    string
-		hasStatus bool
+		userID   string
+		statusID string
 	}
 	got := map[key]int64{}
 	for _, c := range resp.Msg.Cells {
-		got[key{c.UserId, c.StatusId != nil}] = c.Count
+		sid := ""
+		if c.StatusId != nil {
+			sid = *c.StatusId
+		}
+		got[key{c.UserId, sid}] = c.Count
 	}
-	assert.EqualValues(t, 2, got[key{f.userX.ID, true}], "X の status ありコール")
-	assert.EqualValues(t, 1, got[key{f.userX.ID, false}], "X の status なしコール")
-	assert.EqualValues(t, 1, got[key{f.userY.ID, true}], "Y の status ありコール (期間外は除外)")
+	assert.EqualValues(t, 2, got[key{f.userX.ID, f.statusID.String()}], "X × status1")
+	assert.EqualValues(t, 1, got[key{f.userX.ID, st2.ID.String()}], "X × status2")
+	assert.EqualValues(t, 1, got[key{f.userY.ID, f.statusID.String()}], "Y × status1 (期間外は除外)")
 }
 
 // ─── GetMailStats ───────────────────────────────────────────────
