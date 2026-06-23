@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"embed"
 	"encoding/json"
 	"net/http"
 	"os"
@@ -30,6 +31,7 @@ import (
 	"github.com/0utl1er-tech/phox-customer/internal/mail"
 	oauthsvc "github.com/0utl1er-tech/phox-customer/internal/oauth"
 	"github.com/0utl1er-tech/phox-customer/internal/recording"
+	"github.com/0utl1er-tech/phox-customer/internal/schemaguard"
 	"github.com/0utl1er-tech/phox-customer/internal/search"
 	"github.com/0utl1er-tech/phox-customer/internal/service/activity"
 	"github.com/0utl1er-tech/phox-customer/internal/service/auth"
@@ -58,6 +60,13 @@ import (
 	"golang.org/x/sync/errgroup"
 	googlecalendar "google.golang.org/api/calendar/v3"
 )
+
+// migrationFS はスキーマ版ズレ検出 (schemaguard) 用に migration ファイル名を
+// バイナリへ埋め込む。実行されるのはあくまで start.sh / CI の migrate CLI で、
+// ここでは「バイナリが期待する最新 version」を知るためだけに使う。
+//
+//go:embed db/migration/*.up.sql
+var migrationFS embed.FS
 
 // safePrefix は ログ用に文字列の先頭 N 文字を返す。機密値を ***** で隠す。
 func safePrefix(s string, n int) string {
@@ -129,6 +138,13 @@ func main() {
 	}
 
 	log.Info().Msg("Database connection established successfully")
+
+	// スキーマ版ズレの fail-fast。migrate を実行しない直起動 (go run . / air)
+	// が古い DB に当たると初回 INSERT まで 42703 が遅延して出るため、
+	// 起動時点で検出して修正コマンド付きで止める。
+	if err := schemaguard.Verify(ctx, connPool, migrationFS, "db/migration"); err != nil {
+		log.Fatal().Err(err).Msg("DB schema version check failed")
+	}
 
 	queries := db.New(connPool)
 

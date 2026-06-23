@@ -19,14 +19,12 @@ import (
 type ZoomPhoneService struct {
 	queries    *db.Queries
 	zoomClient *zoom.Client
-	authorizer *auth.Authorizer
 }
 
 func NewZoomPhoneService(queries *db.Queries, zoomClient *zoom.Client) *ZoomPhoneService {
 	return &ZoomPhoneService{
 		queries:    queries,
 		zoomClient: zoomClient,
-		authorizer: auth.NewAuthorizer(queries),
 	}
 }
 
@@ -133,9 +131,9 @@ func (s *ZoomPhoneService) GetMyZoomPhoneStatus(
 	}
 
 	return connect.NewResponse(&zoomphonev1.GetMyZoomPhoneStatusResponse{
-		Connected:      true,
+		Connected:       true,
 		ZoomPhoneNumber: zu.PhoneNumber,
-		ZoomUserName:   zu.Name,
-		Extension:      zu.ExtensionNumber,
+		ZoomUserName:    zu.Name,
+		Extension:       zu.ExtensionNumber,
 	}), nil
 }
