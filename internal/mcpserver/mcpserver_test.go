@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -170,6 +171,9 @@ func TestToolsAgainstDB(t *testing.T) {
 		UserID:     owner.ID,
 		Phone:      pgtype.Text{String: "090-1111-2222", Valid: true},
 		StatusID:   pgtype.UUID{Bytes: st.ID, Valid: true},
+		// zero 値 (西暦 1 年) は ListActivitiesByBookID の epoch センチネル
+		// (from 未指定 = epoch 以降) より前になり除外される。now() で seed。
+		OccurredAt: time.Now(),
 	})
 	require.NoError(t, err)
 
