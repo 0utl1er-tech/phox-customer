@@ -13,6 +13,7 @@ require (
 	github.com/jackc/pgx/v5 v5.7.5
 	github.com/lestrrat-go/jwx/v2 v2.1.6
 	github.com/minio/minio-go/v7 v7.1.0
+	github.com/modelcontextprotocol/go-sdk v1.6.1
 	github.com/redis/go-redis/v9 v9.19.0
 	github.com/rs/zerolog v1.34.0
 	github.com/spf13/viper v1.20.1
@@ -20,7 +21,7 @@ require (
 	github.com/wneessen/go-mail v0.7.2
 	go.uber.org/mock v0.6.0
 	golang.org/x/net v0.52.0
-	golang.org/x/oauth2 v0.25.0
+	golang.org/x/oauth2 v0.35.0
 	golang.org/x/sync v0.20.0
 	google.golang.org/api v0.215.0
 	google.golang.org/genproto/googleapis/api v0.0.0-20260319201613-d00831a3d3e7
@@ -46,7 +47,8 @@ require (
 	github.com/go-resty/resty/v2 v2.7.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
 	github.com/goccy/go-json v0.10.3 // indirect
-	github.com/golang-jwt/jwt/v5 v5.0.0 // indirect
+	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
+	github.com/google/jsonschema-go v0.4.3 // indirect
 	github.com/google/s2a-go v0.1.8 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.4 // indirect
 	github.com/googleapis/gax-go/v2 v2.14.1 // indirect
@@ -73,6 +75,7 @@ require (
 	github.com/rs/xid v1.6.0 // indirect
 	github.com/sagikazarmark/locafero v0.7.0 // indirect
 	github.com/segmentio/asm v1.2.0 // indirect
+	github.com/segmentio/encoding v0.5.4 // indirect
 	github.com/segmentio/ksuid v1.0.4 // indirect
 	github.com/sourcegraph/conc v0.3.0 // indirect
 	github.com/spf13/afero v1.12.0 // indirect
@@ -80,6 +83,7 @@ require (
 	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/tinylib/msgp v1.6.1 // indirect
+	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	github.com/zeebo/xxh3 v1.1.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.54.0 // indirect

@@ -87,57 +87,71 @@ func NewAuthInterceptor(ctx context.Context, queries *db.Queries, config util.Co
 // WrapUnary creates a new unary interceptor for authentication and authorization.
 func (i *Interceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 	return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
-		authHeader := req.Header().Get(authorizationHeader)
-		if authHeader == "" {
-			return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("authorization header is not provided"))
-		}
-
-		fields := strings.Fields(authHeader)
-		if len(fields) < 2 {
-			return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("invalid authorization header format"))
-		}
-
-		authType := strings.ToLower(fields[0])
-		if authType != authorizationBearer {
-			return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unsupported authorization type: %s", authType))
-		}
-
-		accessToken := fields[1]
-		token, err := i.verifyToken(ctx, accessToken)
+		ctx, err := i.Authenticate(ctx, req.Header().Get(authorizationHeader))
 		if err != nil {
-			return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("invalid access token: %w", err))
+			return nil, err
 		}
-
-		// Log token subject for debugging
-		log.Debug().
-			Str("subject", token.Subject()).
-			Str("issuer", token.Issuer()).
-			Msg("Token verified successfully")
-
-		// Check if user exists in the database. If not, Just-In-Time (JIT)
-		// provision them using claims from the verified JWT. The token is
-		// already audience/issuer/signature verified by this point, so we
-		// trust the sub as a stable identity from Keycloak.
-		user, err := i.Queries.GetUser(ctx, token.Subject())
-		if err != nil {
-			user, err = i.jitProvisionUser(ctx, token)
-			if err != nil {
-				log.Warn().
-					Err(err).
-					Str("token_subject", token.Subject()).
-					Msg("JIT user provisioning failed")
-				return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("user not found in database"))
-			}
-		}
-
-		log.Debug().
-			Str("user_id", user.ID).
-			Str("name", user.Name).
-			Msg("User found in database")
-
-		ctx = context.WithValue(ctx, AuthorizationPayloadKey, token)
 		return next(ctx, req)
 	}
+}
+
+// Authenticate validates a raw `Authorization` header value ("Bearer <jwt>"),
+// ensures a DB User row exists (JIT provisioning), and returns a child
+// context carrying the verified token under AuthorizationPayloadKey — the
+// same contract WrapUnary provides to Connect handlers.
+//
+// Exposed so non-Connect entry points (the /mcp Streamable-HTTP handler) can
+// share the exact same auth path instead of reimplementing it. Errors are
+// *connect.Error with CodeUnauthenticated so callers can map them uniformly.
+func (i *Interceptor) Authenticate(ctx context.Context, authHeader string) (context.Context, error) {
+	if authHeader == "" {
+		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("authorization header is not provided"))
+	}
+
+	fields := strings.Fields(authHeader)
+	if len(fields) < 2 {
+		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("invalid authorization header format"))
+	}
+
+	authType := strings.ToLower(fields[0])
+	if authType != authorizationBearer {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unsupported authorization type: %s", authType))
+	}
+
+	accessToken := fields[1]
+	token, err := i.verifyToken(ctx, accessToken)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("invalid access token: %w", err))
+	}
+
+	// Log token subject for debugging
+	log.Debug().
+		Str("subject", token.Subject()).
+		Str("issuer", token.Issuer()).
+		Msg("Token verified successfully")
+
+	// Check if user exists in the database. If not, Just-In-Time (JIT)
+	// provision them using claims from the verified JWT. The token is
+	// already audience/issuer/signature verified by this point, so we
+	// trust the sub as a stable identity from Keycloak.
+	user, err := i.Queries.GetUser(ctx, token.Subject())
+	if err != nil {
+		user, err = i.jitProvisionUser(ctx, token)
+		if err != nil {
+			log.Warn().
+				Err(err).
+				Str("token_subject", token.Subject()).
+				Msg("JIT user provisioning failed")
+			return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("user not found in database"))
+		}
+	}
+
+	log.Debug().
+		Str("user_id", user.ID).
+		Str("name", user.Name).
+		Msg("User found in database")
+
+	return context.WithValue(ctx, AuthorizationPayloadKey, token), nil
 }
 
 // WrapStreamingClient implements the connect.Interceptor interface for streaming client RPCs.

@@ -19,16 +19,17 @@ import (
 	mailtemplatev1connect "github.com/0utl1er-tech/phox-customer/gen/pb/mailtemplate/v1/mailtemplatev1connect"
 	permitv1connect "github.com/0utl1er-tech/phox-customer/gen/pb/permit/v1/permitv1connect"
 	redialv1connect "github.com/0utl1er-tech/phox-customer/gen/pb/redial/v1/redialv1connect"
-	zoomphonev1connect "github.com/0utl1er-tech/phox-customer/gen/pb/zoomphone/v1/zoomphonev1connect"
 	"github.com/0utl1er-tech/phox-customer/gen/pb/search/v1/searchv1connect"
 	statusv1connect "github.com/0utl1er-tech/phox-customer/gen/pb/status/v1/statusv1connect"
 	userv1connect "github.com/0utl1er-tech/phox-customer/gen/pb/user/v1/userv1connect"
+	zoomphonev1connect "github.com/0utl1er-tech/phox-customer/gen/pb/zoomphone/v1/zoomphonev1connect"
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
 	"github.com/0utl1er-tech/phox-customer/internal/crypto"
 	"github.com/0utl1er-tech/phox-customer/internal/gcal"
 	"github.com/0utl1er-tech/phox-customer/internal/ical"
 	"github.com/0utl1er-tech/phox-customer/internal/keycloakadmin"
 	"github.com/0utl1er-tech/phox-customer/internal/mail"
+	"github.com/0utl1er-tech/phox-customer/internal/mcpserver"
 	oauthsvc "github.com/0utl1er-tech/phox-customer/internal/oauth"
 	"github.com/0utl1er-tech/phox-customer/internal/recording"
 	"github.com/0utl1er-tech/phox-customer/internal/schemaguard"
@@ -44,11 +45,11 @@ import (
 	"github.com/0utl1er-tech/phox-customer/internal/service/permit"
 	"github.com/0utl1er-tech/phox-customer/internal/service/redial"
 	searchsvc "github.com/0utl1er-tech/phox-customer/internal/service/search"
-	zoomphoneservice "github.com/0utl1er-tech/phox-customer/internal/service/zoomphone"
-	"github.com/0utl1er-tech/phox-customer/internal/zoom"
 	"github.com/0utl1er-tech/phox-customer/internal/service/status"
 	"github.com/0utl1er-tech/phox-customer/internal/service/user"
+	zoomphoneservice "github.com/0utl1er-tech/phox-customer/internal/service/zoomphone"
 	"github.com/0utl1er-tech/phox-customer/internal/util"
+	"github.com/0utl1er-tech/phox-customer/internal/zoom"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/minio/minio-go/v7"
 	"github.com/redis/go-redis/v9"
@@ -507,6 +508,19 @@ func main() {
 	// signed URL は GetActivityRecording RPC で発行され、UI が <audio src="">
 	// に直接渡す形で再生する。disabled でも mux 登録はしておく (handler 側で 503)。
 	mux.Handle("GET /recordings/{activity_id}", recordingSvc)
+
+	// Phase 24: MCP server (Streamable HTTP)。認証は Connect RPC と同一
+	// (authInterceptor.Authenticate) — ツールは既存 service を in-process で
+	// 呼ぶので Permit / role チェックもそのまま適用される。
+	if cfg.MCPEnabled {
+		mux.Handle("/mcp", mcpserver.NewHandler(authInterceptor, mcpserver.Deps{
+			Book:     bookService,
+			Customer: customerService,
+			Search:   searchService,
+			Activity: activityService,
+		}))
+		log.Info().Msg("MCP server mounted at /mcp")
+	}
 
 	// Debug endpoint — GCal mock 呼び出し履歴を返す (GCAL_MODE=mock のみ)
 	if gcalMock != nil {

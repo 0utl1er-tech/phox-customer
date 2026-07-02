@@ -43,6 +43,49 @@ Keycloak 標準では access token の `aud` は `"account"` になる。phox-cu
 `oidc-audience-mapper` を仕込んで `phox-customer` を `aud` 配列に追加する。
 この設定は `phox-manifest/keycloak/realm-phox.json` に同梱されている。
 
+## MCP サーバー (Phase 24)
+
+`/mcp` に MCP (Model Context Protocol) サーバーを Streamable HTTP で公開している。
+Claude Code / Claude Desktop などの MCP クライアントから Phox CRM を読める:
+
+| tool | 内容 |
+|---|---|
+| `list_books` | アクセス可能な顧客リスト一覧 |
+| `search_customers` | 顧客全文検索 (ES / kuromoji、都道府県フィルタ付き) |
+| `get_customer` | 顧客 1 件の詳細 |
+| `list_customer_activities` | 顧客単位の活動履歴 |
+| `list_book_activities` | Book 横断の活動フィード (種別/担当者/期間フィルタ) |
+| `get_call_stats` / `get_mail_stats` | 担当者別のコール/メール集計 |
+
+設計:
+
+- **読み取り専用** (v1)。書き込み tool は必要になったら追加する。
+- 認証は Connect RPC と完全に同一 — `Authorization: Bearer <Keycloak JWT>`
+  (aud=phox-customer) を必須にし、`auth.Interceptor.Authenticate` を共用。
+  tool は既存 service を in-process で呼ぶので Permit / role チェックも
+  そのまま効く。認可の実装が二重化しない。
+- transport は **Stateless + JSONResponse** — セッション親和性が不要なので
+  replicas > 1 でも安全、curl でも叩ける。
+- `MCP_ENABLED=false` でエンドポイントごと無効化 (既定 true)。
+
+Claude Code からの接続例 (staging):
+
+```bash
+TOKEN=$(curl -s https://auth.0utl1er.tech/realms/company/protocol/openid-connect/token \
+  -d grant_type=password -d client_id=phox-mcp \
+  -d client_secret=$PHOX_MCP_CLIENT_SECRET \
+  -d username=e2e-bot -d password=$E2E_PW | jq -r .access_token)
+
+claude mcp add --transport http phox https://phox-api-staging.0utl1er.tech/mcp \
+  --header "Authorization: Bearer $TOKEN"
+```
+
+(`phox-mcp` は password grant 用の confidential client。kuki-dc の
+`phox/bootstrap/keycloak-mcp-client.sh` で作成する。token は realm 設定の
+lifetime で失効する点に注意 — 長時間使うなら都度取得すること。)
+
+実装: `internal/mcpserver/` (tool 定義とテストは同 package)。
+
 ## ローカル開発
 
 ```bash
