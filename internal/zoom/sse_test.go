@@ -1,6 +1,7 @@
 package zoom_test
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -78,6 +79,76 @@ func TestSSEHub_ServeHTTP_RequiresEmail(t *testing.T) {
 	rec := httptest.NewRecorder()
 	hub.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+// 回帰: クライアント切断で SSE ハンドラが抜け、Unsubscribe されること。
+// 以前は r.Context().Done() だけに依存しており、プロキシ経由で Done が
+// 発火しないと goroutine と購読エントリがリークしていた (2026-07-02)。
+func TestSSEHub_ServeHTTP_UnsubscribesOnClientDisconnect(t *testing.T) {
+	hub := zoom.NewSSEHub()
+	srv := httptest.NewServer(hub)
+	defer srv.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	req, err := http.NewRequestWithContext(ctx, "GET", srv.URL+"/sse/calls?email=disc@test.com", nil)
+	require.NoError(t, err)
+
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+
+	// 初期 ping が届く = 購読確立。
+	buf := make([]byte, 64)
+	_, _ = resp.Body.Read(buf)
+	require.Eventually(t, func() bool { return hub.ClientCount() == 1 }, time.Second, 5*time.Millisecond,
+		"client should be subscribed")
+
+	// クライアント切断 (ブラウザが去るのに相当)。
+	cancel()
+	_ = resp.Body.Close()
+
+	// ハンドラが抜けて Unsubscribe され、購読が 0 に戻る。
+	require.Eventually(t, func() bool { return hub.ClientCount() == 0 }, 2*time.Second, 10*time.Millisecond,
+		"handler must unsubscribe after client disconnects")
+}
+
+// heartbeat の書き込み失敗でも確実に抜けることを、短い interval で検証。
+func TestSSEHub_ServeHTTP_HeartbeatDetectsDeadClient(t *testing.T) {
+	restore := zoom.SetSSEHeartbeatIntervalForTest(20 * time.Millisecond)
+	defer restore()
+
+	hub := zoom.NewSSEHub()
+	srv := httptest.NewServer(hub)
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/sse/calls?email=hb@test.com")
+	require.NoError(t, err)
+	buf := make([]byte, 64)
+	_, _ = resp.Body.Read(buf)
+	require.Eventually(t, func() bool { return hub.ClientCount() == 1 }, time.Second, 5*time.Millisecond)
+
+	// TCP を即クローズ。次の heartbeat 書き込みが失敗してハンドラが抜ける。
+	_ = resp.Body.Close()
+	require.Eventually(t, func() bool { return hub.ClientCount() == 0 }, 2*time.Second, 10*time.Millisecond,
+		"heartbeat write failure should end the handler")
+}
+
+// 上限寿命に達したら自発的に閉じることを検証。
+func TestSSEHub_ServeHTTP_MaxLifetime(t *testing.T) {
+	restore := zoom.SetSSEMaxLifetimeForTest(80 * time.Millisecond)
+	defer restore()
+
+	hub := zoom.NewSSEHub()
+	srv := httptest.NewServer(hub)
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/sse/calls?email=life@test.com")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Eventually(t, func() bool { return hub.ClientCount() == 1 }, time.Second, 5*time.Millisecond)
+
+	// クライアントは切断していないが、maxLifetime で server 側から閉じる。
+	require.Eventually(t, func() bool { return hub.ClientCount() == 0 }, 2*time.Second, 10*time.Millisecond,
+		"handler must close itself at max lifetime")
 }
 
 func TestWebhookHandler_PhoneEnded(t *testing.T) {

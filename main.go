@@ -537,10 +537,16 @@ func main() {
 	// CORSミドルウェアを適用
 	corsHandler := corsMiddleware(mux)
 
-	// HTTP/2対応のサーバーを作成
+	// HTTP/2対応のサーバーを作成。
+	// MaxConcurrentStreams: Cilium Gateway (Envoy) は複数リクエストを 1 本の
+	// h2c コネクションに多重化する。長命な SSE (/sse/calls) がストリームを
+	// 占有するため、既定 250 だと SSE が溜まった時に同じコネクション上の
+	// 通常 RPC が枯渇してブロックし得る。SSE 側の heartbeat/寿命でリークは
+	// 塞いだ (internal/zoom/sse.go) が、多重化の頭打ちを避けるため上限も上げる。
+	h2s := &http2.Server{MaxConcurrentStreams: 2000}
 	server := &http.Server{
 		Addr:    cfg.ConnectServerAddress,
-		Handler: h2c.NewHandler(corsHandler, &http2.Server{}),
+		Handler: h2c.NewHandler(corsHandler, h2s),
 	}
 
 	// サーバー起動とGraceful Shutdown
