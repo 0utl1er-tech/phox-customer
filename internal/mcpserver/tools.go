@@ -58,6 +58,15 @@ type statsIn struct {
 	OccurredTo   string `json:"occurred_to,omitempty" jsonschema:"exclusive upper bound, RFC3339; empty = unbounded"`
 }
 
+type sendCustomerEmailIn struct {
+	CustomerID string `json:"customer_id" jsonschema:"customer UUID — the email is recorded as an activity on this customer's timeline"`
+	MailTo     string `json:"mail_to" jsonschema:"recipient email address"`
+	MailCc     string `json:"mail_cc,omitempty" jsonschema:"optional CC address"`
+	Subject    string `json:"subject" jsonschema:"mail subject (required, min 1 char)"`
+	Body       string `json:"body,omitempty" jsonschema:"plain-text mail body"`
+	ContactID  string `json:"contact_id,omitempty" jsonschema:"optional contact UUID to associate the mail with"`
+}
+
 // ─── registration ───────────────────────────────────────────────
 
 func addTools(s *mcp.Server, deps Deps) {
@@ -153,6 +162,33 @@ func addTools(s *mcp.Server, deps Deps) {
 		}
 		resp, rpcErr := deps.Activity.GetCallStats(ctx, connect.NewRequest(req))
 		return protoResult(resp, rpcErr)
+	})
+
+	// 唯一の書き込み tool (v1.1)。既存 RPC CreateActivityEmailSent に委譲する
+	// ので、editor 権限チェック・SMTP 送信・Activity 記録・From 解決 (トークン
+	// の email claim) はすべてサービス層の挙動そのまま。
+	mcp.AddTool(s, &mcp.Tool{
+		Name: "send_customer_email",
+		Description: "Send an email to a customer through the configured SMTP relay and record it " +
+			"as an email_sent activity on their timeline. The From address is the authenticated " +
+			"user's email (Keycloak profile). Requires editor access to the customer's book. " +
+			"NOTE: this actually sends mail — on staging SMTP is a MailHog sink (nothing is " +
+			"delivered); in production it is real delivery.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in sendCustomerEmailIn) (*mcp.CallToolResult, any, error) {
+		req := &activityv1.CreateActivityEmailSentRequest{
+			CustomerId: in.CustomerID,
+			MailTo:     in.MailTo,
+			Subject:    in.Subject,
+			Body:       in.Body,
+		}
+		if in.MailCc != "" {
+			req.MailCc = proto.String(in.MailCc)
+		}
+		if in.ContactID != "" {
+			req.ContactId = proto.String(in.ContactID)
+		}
+		resp, err := deps.Activity.CreateActivityEmailSent(ctx, connect.NewRequest(req))
+		return protoResult(resp, err)
 	})
 
 	mcp.AddTool(s, &mcp.Tool{

@@ -56,10 +56,11 @@ Claude Code / Claude Desktop などの MCP クライアントから Phox CRM を
 | `list_customer_activities` | 顧客単位の活動履歴 |
 | `list_book_activities` | Book 横断の活動フィード (種別/担当者/期間フィルタ) |
 | `get_call_stats` / `get_mail_stats` | 担当者別のコール/メール集計 |
+| `send_customer_email` | 顧客へメール送信 + email_sent 活動記録 (唯一の書き込み tool。editor 権限必須) |
 
 設計:
 
-- **読み取り専用** (v1)。書き込み tool は必要になったら追加する。
+- v1 は読み取り専用で設計し、v1.1 で書き込み tool を `send_customer_email` の 1 つだけ追加した (SMTP 送信 + 活動記録; staging では MailHog シンクに溜まるだけで実配送されない)。
 - 認証は Connect RPC と完全に同一 — `Authorization: Bearer <Keycloak JWT>`
   (aud=phox-customer) を必須にし、`auth.Interceptor.Authenticate` を共用。
   tool は既存 service を in-process で呼ぶので Permit / role チェックも

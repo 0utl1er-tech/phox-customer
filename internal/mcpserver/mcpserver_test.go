@@ -145,6 +145,7 @@ func TestListTools(t *testing.T) {
 		"list_book_activities",
 		"get_call_stats",
 		"get_mail_stats",
+		"send_customer_email",
 	}, got)
 }
 
@@ -235,6 +236,41 @@ func TestToolsAgainstDB(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, res.IsError)
 		assert.Contains(t, textOf(t, res), "unknown activity type")
+	})
+
+	t.Run("send_customer_email は SMTP 未設定だと unavailable のツールエラー", func(t *testing.T) {
+		// newTestHandler は mailClient=nil で ActivityService を組むので、
+		// editor 権限を持つ owner でも送信は unavailable になる。email claim
+		// が無い stubAuth token では failed_precondition が先に出るため、
+		// ここでは「書き込み tool が認可・前提チェックを service 層から
+		// 引き継いでいる」ことをエラー種別で確認する。
+		session := connectClient(t, newTestHandler(t, q, owner.ID))
+		res, err := session.CallTool(ctx, &mcp.CallToolParams{
+			Name: "send_customer_email",
+			Arguments: map[string]any{
+				"customer_id": cust.ID.String(),
+				"mail_to":     "someone@example.com",
+				"subject":     "test",
+			},
+		})
+		require.NoError(t, err)
+		assert.True(t, res.IsError)
+		// stubAuth の token に email claim が無い → failed_precondition
+		assert.Contains(t, textOf(t, res), "failed_precondition")
+	})
+
+	t.Run("permit の無いユーザーは send_customer_email できない", func(t *testing.T) {
+		session := connectClient(t, newTestHandler(t, q, outsider.ID))
+		res, err := session.CallTool(ctx, &mcp.CallToolParams{
+			Name: "send_customer_email",
+			Arguments: map[string]any{
+				"customer_id": cust.ID.String(),
+				"mail_to":     "someone@example.com",
+				"subject":     "test",
+			},
+		})
+		require.NoError(t, err)
+		assert.True(t, res.IsError)
 	})
 
 	t.Run("search_customers は ES 未設定だと unavailable のツールエラー", func(t *testing.T) {
