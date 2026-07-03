@@ -513,13 +513,24 @@ func main() {
 	// (authInterceptor.Authenticate) — ツールは既存 service を in-process で
 	// 呼ぶので Permit / role チェックもそのまま適用される。
 	if cfg.MCPEnabled {
+		// OAuth discovery (RFC 9728): 公開 URL が分かる場合のみ有効化。
+		// resource_metadata 付きの 401 → クライアントが Keycloak を発見して
+		// 認可コードフロー + 自動リフレッシュに乗る。
+		metaURL := ""
+		apiBase := strings.TrimSuffix(cfg.APIPublicBaseURL, "/")
+		if apiBase != "" {
+			metaURL = apiBase + "/.well-known/oauth-protected-resource/mcp"
+			metaHandler := mcpserver.ProtectedResourceMetadataHandler(apiBase+"/mcp", cfg.JWTIssuerURL)
+			mux.Handle("/.well-known/oauth-protected-resource", metaHandler)
+			mux.Handle("/.well-known/oauth-protected-resource/mcp", metaHandler)
+		}
 		mux.Handle("/mcp", mcpserver.NewHandler(authInterceptor, mcpserver.Deps{
 			Book:     bookService,
 			Customer: customerService,
 			Search:   searchService,
 			Activity: activityService,
-		}))
-		log.Info().Msg("MCP server mounted at /mcp")
+		}, metaURL))
+		log.Info().Str("resource_metadata", metaURL).Msg("MCP server mounted at /mcp")
 	}
 
 	// Debug endpoint — GCal mock 呼び出し履歴を返す (GCAL_MODE=mock のみ)

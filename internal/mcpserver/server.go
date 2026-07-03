@@ -28,6 +28,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"connectrpc.com/connect"
@@ -64,8 +65,46 @@ type Deps struct {
 	Activity *activity.ActivityService
 }
 
+// ProtectedResourceMetadata is the RFC 9728 document served at
+// /.well-known/oauth-protected-resource(/mcp). OAuth-capable MCP clients
+// (Claude Code など) はこれを読んで authorization server (Keycloak) を発見し、
+// 認可コードフロー + refresh token でトークンを自動更新する — 静的 Bearer
+// ヘッダ運用だと 40 分で失効して "404 page not found" (discovery 先が無い)
+// で死ぬ問題 (実証 2026-07-03) の恒久解。
+type ProtectedResourceMetadata struct {
+	Resource               string   `json:"resource"`
+	AuthorizationServers   []string `json:"authorization_servers"`
+	BearerMethodsSupported []string `json:"bearer_methods_supported"`
+	ScopesSupported        []string `json:"scopes_supported"`
+}
+
+// ProtectedResourceMetadataHandler serves the RFC 9728 metadata JSON.
+// resourceURL は公開 MCP エンドポイント (例 https://.../mcp)、issuerURL は
+// Keycloak realm issuer (cfg.JWTIssuerURL と同一値)。
+func ProtectedResourceMetadataHandler(resourceURL, issuerURL string) http.Handler {
+	meta := ProtectedResourceMetadata{
+		Resource:               resourceURL,
+		AuthorizationServers:   []string{issuerURL},
+		BearerMethodsSupported: []string{"header"},
+		ScopesSupported:        []string{"openid", "profile", "email"},
+	}
+	body, err := json.Marshal(meta)
+	if err != nil {
+		panic(fmt.Sprintf("mcpserver: marshal protected resource metadata: %v", err))
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "public, max-age=3600")
+		_, _ = w.Write(body)
+	})
+}
+
 // NewHandler builds the authenticated /mcp http.Handler.
-func NewHandler(authn Authenticator, deps Deps) http.Handler {
+//
+// resourceMetadataURL (optional, "" で省略) は 401 応答の WWW-Authenticate に
+// RFC 9728 の resource_metadata パラメータとして載せ、クライアントの OAuth
+// discovery を誘導する。
+func NewHandler(authn Authenticator, deps Deps, resourceMetadataURL string) http.Handler {
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    serverName,
 		Title:   "Phox CRM",
@@ -86,13 +125,18 @@ func NewHandler(authn Authenticator, deps Deps) http.Handler {
 		},
 	)
 
-	return requireBearer(authn, streamable)
+	return requireBearer(authn, resourceMetadataURL, streamable)
 }
 
 // requireBearer authenticates every request with the shared Keycloak JWT
 // path before it reaches the MCP transport. On failure it replies 401 with
-// a JSON body (MCP clients surface the message).
-func requireBearer(authn Authenticator, next http.Handler) http.Handler {
+// a JSON body (MCP clients surface the message) and a WWW-Authenticate
+// header carrying the RFC 9728 resource_metadata pointer when configured.
+func requireBearer(authn Authenticator, resourceMetadataURL string, next http.Handler) http.Handler {
+	challenge := `Bearer realm="phox-crm"`
+	if resourceMetadataURL != "" {
+		challenge = fmt.Sprintf(`Bearer realm="phox-crm", resource_metadata=%q`, resourceMetadataURL)
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx, err := authn.Authenticate(r.Context(), r.Header.Get("Authorization"))
 		if err != nil {
@@ -101,7 +145,7 @@ func requireBearer(authn Authenticator, next http.Handler) http.Handler {
 			if errors.As(err, &cerr) {
 				msg = cerr.Message()
 			}
-			w.Header().Set("WWW-Authenticate", `Bearer realm="phox-crm"`)
+			w.Header().Set("WWW-Authenticate", challenge)
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)
 			_ = json.NewEncoder(w).Encode(map[string]string{"error": msg})

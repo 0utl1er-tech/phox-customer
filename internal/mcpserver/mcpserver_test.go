@@ -56,7 +56,7 @@ func newTestHandler(t *testing.T, q *db.Queries, sub string) http.Handler {
 		Customer: customer.NewCustomerService(q, nil),
 		Search:   search.NewSearchService(q, nil), // ES nil → search_customers はツールエラー
 		Activity: activity.NewActivityService(q, nil, nil),
-	})
+	}, "")
 }
 
 // connect spins an httptest server around h and returns an initialized MCP
@@ -104,7 +104,7 @@ func textOf(t *testing.T, res *mcp.CallToolResult) string {
 // 401: リクエストが認証を通らなければ MCP transport まで到達しない。
 func TestUnauthorized(t *testing.T) {
 	// DB 不要 — サービスは呼ばれない。
-	h := mcpserver.NewHandler(stubAuth{sub: "u"}, mcpserver.Deps{})
+	h := mcpserver.NewHandler(stubAuth{sub: "u"}, mcpserver.Deps{}, "https://example.test/.well-known/oauth-protected-resource/mcp")
 	srv := httptest.NewServer(h)
 	defer srv.Close()
 
@@ -118,6 +118,8 @@ func TestUnauthorized(t *testing.T) {
 
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	assert.Contains(t, resp.Header.Get("WWW-Authenticate"), "Bearer")
+	// RFC 9728: OAuth 対応クライアントの discovery 誘導
+	assert.Contains(t, resp.Header.Get("WWW-Authenticate"), "resource_metadata=")
 	var body map[string]string
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
 	assert.NotEmpty(t, body["error"])
@@ -127,7 +129,7 @@ func TestUnauthorized(t *testing.T) {
 func TestListTools(t *testing.T) {
 	// AddTool はスキーマ推論に失敗すると panic するので、handler 構築が
 	// 通ること自体もこのテストの検証対象。
-	h := mcpserver.NewHandler(stubAuth{sub: "u"}, mcpserver.Deps{})
+	h := mcpserver.NewHandler(stubAuth{sub: "u"}, mcpserver.Deps{}, "https://example.test/.well-known/oauth-protected-resource/mcp")
 	session := connectClient(t, h)
 
 	res, err := session.ListTools(context.Background(), nil)
