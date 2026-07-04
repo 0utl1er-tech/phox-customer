@@ -130,7 +130,13 @@ func (s *ActivityService) CreateActivityEmailSent(
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("create activity: %w", err))
 	}
 
+	// modelToProto は INSERT...RETURNING の生 Activity 行 (User JOIN 無し) を
+	// 変換するので user_name が空になる。送信者名は上で GetUser 済み
+	// (fromName) なので、レスポンスにも載せて呼び出し側 (UI の楽観的表示 /
+	// MCP send_customer_email) が担当者名を出せるようにする。
+	actProto := modelToProto(act)
+	actProto.UserName = fromName
 	return connect.NewResponse(&activityv1.CreateActivityEmailSentResponse{
-		Activity: modelToProto(act),
+		Activity: actProto,
 	}), nil
 }
