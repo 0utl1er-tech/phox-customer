@@ -237,15 +237,27 @@ func main() {
 	statusService := status.NewStatusService(queries)
 
 	// Phase 25: MailboxService — MAILBOX_SECRET_KEY 設定時のみ有効。
-	// 鍵はメールボックスパスワードの AES-GCM 暗号化に使う。
+	// 鍵はメールボックスパスワードの AES-GCM 暗号化に使う。cipher と共有 mailu
+	// SMTP 接続 (MailboxSender) は後段で activityService の実メールボックス
+	// 送信にも注入する。
 	var mailboxService *mailbox.MailboxService
+	var mailboxCipher *crypto.Cipher
+	var mailboxSender *mail.MailboxSender
 	if cfg.MailboxSecretKey != "" {
-		mailboxCipher, cerr := crypto.NewCipherFromBase64(cfg.MailboxSecretKey)
+		var cerr error
+		mailboxCipher, cerr = crypto.NewCipherFromBase64(cfg.MailboxSecretKey)
 		if cerr != nil {
 			log.Fatal().Err(cerr).Msg("Failed to decode MAILBOX_SECRET_KEY")
 		}
 		mailboxService = mailbox.NewMailboxService(queries, mailboxCipher)
-		log.Info().Msg("MailboxService enabled")
+		mailboxSender, cerr = mail.NewMailboxSender(cfg.MailuSMTPHost, cfg.MailuSMTPPort, cfg.MailuSMTPTLS)
+		if cerr != nil {
+			log.Fatal().Err(cerr).Msg("Failed to build mailbox sender")
+		}
+		log.Info().
+			Str("mailu_smtp", cfg.MailuSMTPHost).
+			Bool("sending_enabled", mailboxSender != nil).
+			Msg("MailboxService enabled")
 	} else {
 		log.Warn().Msg("MAILBOX_SECRET_KEY not set — MailboxService disabled")
 	}
@@ -386,6 +398,11 @@ func main() {
 
 	// Activity service — recording.Service を注入してから construct。
 	activityService := activity.NewActivityService(queries, mailClient, recordingSvc)
+	// Phase 25: 実メールボックス送信 (mailbox_id 指定の CreateActivityEmailSent)。
+	if mailboxSender != nil && mailboxCipher != nil {
+		activityService = activityService.WithMailboxSending(mailboxSender, mailboxCipher)
+		log.Info().Msg("Mailbox sending enabled for CreateActivityEmailSent")
+	}
 
 	// Phase 22: ActivityHandler — webhook event を Activity row に変換
 	zoomActivityHandler := zoom.NewActivityHandler(queries, recordingArchiver, "system")

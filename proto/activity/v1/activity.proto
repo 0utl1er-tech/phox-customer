@@ -75,6 +75,8 @@ message Activity {
   // リンク表示用。ListActivitiesByCustomerID では未設定。
   optional string customer_name = 23;
   optional string customer_corporation = 24;
+  // Phase 25: どのメールボックスで送受信したか (実メールボックス送信時のみ)。
+  optional string mailbox_id = 25;
 }
 
 message ListActivitiesByCustomerIDRequest {
@@ -163,6 +165,11 @@ message CreateActivityEmailSentRequest {
   string subject = 4 [(buf.validate.field).string.min_len = 1];
   string body = 5;
   optional string contact_id = 6;
+  // Phase 25: 指定すると「Phox が所有する実メールボックス」として送信する
+  // (From = そのアドレス、SMTP 認証もそのメールボックスの資格情報)。
+  // 呼び出しユーザーにそのメールボックスの editor 以上の MailboxPermit が必要。
+  // 省略時はレガシーのなりすまし送信 (トークンの email claim が From)。
+  optional string mailbox_id = 7;
 }
 message CreateActivityEmailSentResponse {
   Activity activity = 1;

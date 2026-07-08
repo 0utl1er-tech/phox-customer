@@ -4,6 +4,7 @@ package activity
 
 import (
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
+	"github.com/0utl1er-tech/phox-customer/internal/crypto"
 	"github.com/0utl1er-tech/phox-customer/internal/mail"
 	"github.com/0utl1er-tech/phox-customer/internal/recording"
 	"github.com/0utl1er-tech/phox-customer/internal/service/auth"
@@ -16,6 +17,11 @@ type ActivityService struct {
 	authorizer   *auth.Authorizer
 	mailClient   *mail.SMTPClient
 	recordingSvc *recording.Service
+
+	// Phase 25: 実メールボックス送信。両方 non-nil のときだけ
+	// CreateActivityEmailSent の mailbox_id 指定が使える。
+	mailboxSender *mail.MailboxSender
+	mailboxCipher *crypto.Cipher
 }
 
 // NewActivityService は必要な依存を組み立てて ActivityService を返す。
@@ -28,4 +34,13 @@ func NewActivityService(queries *db.Queries, mailClient *mail.SMTPClient, record
 		mailClient:   mailClient,
 		recordingSvc: recordingSvc,
 	}
+}
+
+// WithMailboxSending は実メールボックス送信 (Phase 25) を有効化する。
+// sender は共有 mailu 接続、cipher はメールボックスパスワードの復号に使う
+// (MailboxService と同じ鍵)。既存の呼び出し/テストを壊さない chainable setter。
+func (s *ActivityService) WithMailboxSending(sender *mail.MailboxSender, cipher *crypto.Cipher) *ActivityService {
+	s.mailboxSender = sender
+	s.mailboxCipher = cipher
+	return s
 }

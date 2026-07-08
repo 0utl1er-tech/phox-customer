@@ -66,6 +66,7 @@ type sendCustomerEmailIn struct {
 	Subject    string `json:"subject" jsonschema:"mail subject (required, min 1 char)"`
 	Body       string `json:"body,omitempty" jsonschema:"plain-text mail body"`
 	ContactID  string `json:"contact_id,omitempty" jsonschema:"optional contact UUID to associate the mail with"`
+	MailboxID  string `json:"mailbox_id,omitempty" jsonschema:"optional mailbox UUID (from list_mailboxes) to send as — the From address becomes that mailbox and replies flow back to it; requires editor role on the mailbox. Omit for the legacy send-as-yourself behaviour"`
 }
 
 // ─── registration ───────────────────────────────────────────────
@@ -199,6 +200,9 @@ func addTools(s *mcp.Server, deps Deps) {
 		}
 		if in.ContactID != "" {
 			req.ContactId = proto.String(in.ContactID)
+		}
+		if in.MailboxID != "" {
+			req.MailboxId = proto.String(in.MailboxID)
 		}
 		resp, err := deps.Activity.CreateActivityEmailSent(ctx, connect.NewRequest(req))
 		return protoResult(resp, err)

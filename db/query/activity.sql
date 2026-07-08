@@ -6,12 +6,14 @@ INSERT INTO "Activity" (
     id, customer_id, contact_id, type, user_id, status_id,
     phone, mail_from, mail_to, mail_cc, subject, body, message_id,
     occurred_at,
-    duration_seconds, recording_url, zoom_call_id
+    duration_seconds, recording_url, zoom_call_id,
+    mailbox_id
 ) VALUES (
     $1, $2, $3, $4, $5, $6,
     $7, $8, $9, $10, $11, $12, $13,
     $14,
-    $15, $16, $17
+    $15, $16, $17,
+    $18
 )
 RETURNING *;
 

@@ -51,12 +51,14 @@ INSERT INTO "Activity" (
     id, customer_id, contact_id, type, user_id, status_id,
     phone, mail_from, mail_to, mail_cc, subject, body, message_id,
     occurred_at,
-    duration_seconds, recording_url, zoom_call_id
+    duration_seconds, recording_url, zoom_call_id,
+    mailbox_id
 ) VALUES (
     $1, $2, $3, $4, $5, $6,
     $7, $8, $9, $10, $11, $12, $13,
     $14,
-    $15, $16, $17
+    $15, $16, $17,
+    $18
 )
 RETURNING id, customer_id, contact_id, type, user_id, status_id, phone, mail_from, mail_to, mail_cc, subject, body, message_id, occurred_at, created_at, updated_at, duration_seconds, recording_url, zoom_call_id, mailbox_id
 `
@@ -79,6 +81,7 @@ type CreateActivityParams struct {
 	DurationSeconds pgtype.Int4 `json:"duration_seconds"`
 	RecordingUrl    pgtype.Text `json:"recording_url"`
 	ZoomCallID      pgtype.Text `json:"zoom_call_id"`
+	MailboxID       pgtype.UUID `json:"mailbox_id"`
 }
 
 // duration_seconds / recording_url / zoom_call_id は call type で Zoom 連携時に
@@ -103,6 +106,7 @@ func (q *Queries) CreateActivity(ctx context.Context, arg CreateActivityParams) 
 		arg.DurationSeconds,
 		arg.RecordingUrl,
 		arg.ZoomCallID,
+		arg.MailboxID,
 	)
 	var i Activity
 	err := row.Scan(
