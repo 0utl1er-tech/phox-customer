@@ -1,0 +1,3 @@
+ALTER TABLE "Activity" DROP COLUMN IF EXISTS "mailbox_id";
+DROP TABLE IF EXISTS "MailboxPermit";
+DROP TABLE IF EXISTS "Mailbox";

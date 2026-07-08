@@ -32,22 +32,9 @@ func (s *ActivityService) ListActivitiesByCustomerID(
 		return nil, err
 	}
 
-	// proto enum → DB の type 文字列に変換
-	typeStrs := make([]string, 0, len(req.Msg.Types))
-	for _, t := range req.Msg.Types {
-		switch t {
-		case activityv1.ActivityType_ACTIVITY_TYPE_CALL:
-			typeStrs = append(typeStrs, "call")
-		case activityv1.ActivityType_ACTIVITY_TYPE_EMAIL_SENT:
-			typeStrs = append(typeStrs, "email_sent")
-		case activityv1.ActivityType_ACTIVITY_TYPE_EMAIL_RECEIVED:
-			typeStrs = append(typeStrs, "email_received")
-		}
-	}
-
 	rows, err := s.queries.ListActivitiesByCustomerID(ctx, db.ListActivitiesByCustomerIDParams{
 		CustomerID: customerID,
-		Types:      typeStrs,
+		Types:      typesToStrings(req.Msg.Types),
 	})
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("list activities: %w", err))

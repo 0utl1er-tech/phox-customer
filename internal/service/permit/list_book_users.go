@@ -9,7 +9,6 @@ import (
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
 	"github.com/0utl1er-tech/phox-customer/internal/service/auth"
 	"github.com/0utl1er-tech/phox-customer/internal/util"
-	"github.com/google/uuid"
 )
 
 func (server *PermitService) ListBookUsers(ctx context.Context, req *connect.Request[permitv1.ListBookUsersRequest]) (*connect.Response[permitv1.ListBookUsersResponse], error) {
@@ -19,7 +18,10 @@ func (server *PermitService) ListBookUsers(ctx context.Context, req *connect.Req
 	}
 	callerID := token.Subject()
 
-	bookID := uuid.MustParse(req.Msg.BookId)
+	bookID, err := util.ParseUUID("book_id", req.Msg.BookId)
+	if err != nil {
+		return nil, err
+	}
 
 	_, err = server.queries.CheckUserRoleForBook(ctx, db.CheckUserRoleForBookParams{
 		BookID: bookID,

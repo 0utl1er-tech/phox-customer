@@ -17,26 +17,26 @@ import (
 
 // IMAPWorkerConfig — 接続 + polling + 対象 mailbox の設定。
 //
-// - Host/Port/TLSMode/Username/Password は mailu / gmail / dovecot 等の
-//   IMAP サーバーを指す。
-// - SentMailbox は Phox ユーザーが「外部クライアントから送った」メールを拾う
-//   ための Sent フォルダ (例: "Sent" / "送信済み" / "INBOX.Sent")。
-// - InboxMailbox は受信メールフォルダ (例: "INBOX")。
-// - PollInterval は polling 間隔 ("30s" / "1m" / "5m" 等、time.ParseDuration 形式)。
-//   未指定時はデフォ 60 秒。
-// - IngestUserID は取込んだ Activity の user_id カラムに入れる値。基本は
-//   IMAP worker 起動時の "system" シード行 (000003 mig で挿入済) を使う。
+//   - Host/Port/TLSMode/Username/Password は mailu / gmail / dovecot 等の
+//     IMAP サーバーを指す。
+//   - SentMailbox は Phox ユーザーが「外部クライアントから送った」メールを拾う
+//     ための Sent フォルダ (例: "Sent" / "送信済み" / "INBOX.Sent")。
+//   - InboxMailbox は受信メールフォルダ (例: "INBOX")。
+//   - PollInterval は polling 間隔 ("30s" / "1m" / "5m" 等、time.ParseDuration 形式)。
+//     未指定時はデフォ 60 秒。
+//   - IngestUserID は取込んだ Activity の user_id カラムに入れる値。基本は
+//     IMAP worker 起動時の "system" シード行 (000003 mig で挿入済) を使う。
 type IMAPWorkerConfig struct {
-	Host         string
-	Port         int
-	TLSMode      IMAPTLSMode
+	Host                  string
+	Port                  int
+	TLSMode               IMAPTLSMode
 	TLSInsecureSkipVerify bool
-	Username     string
-	Password     string
-	SentMailbox  string
-	InboxMailbox string
-	PollInterval string
-	IngestUserID string
+	Username              string
+	Password              string
+	SentMailbox           string
+	InboxMailbox          string
+	PollInterval          string
+	IngestUserID          string
 }
 
 // IMAPWorker は mailu の Sent + INBOX を polling し、To/From が既存の
@@ -156,12 +156,20 @@ func (w *IMAPWorker) resolveSince(ctx context.Context) time.Time {
 	return time.Now().Add(-24 * time.Hour)
 }
 
-// ingestBatch は fetch 結果を 1 行ずつ DB に insert する。
-// - To / From を正規化して `FindCustomerByEmail` で Customer + Contact を解決
-//   - 解決できないメールは warn ログで skip (CRM 管理外)
-// - `CreateActivity` で insert。`message_id` UNIQUE INDEX が dedup を保証
-//   (既存なら duplicate key エラーになり ignore)
+// ingestBatch はレガシー単一メールボックス worker 用の薄いラッパ。
+// mailbox_id は付けない (env 単一アカウント = メールボックス管理対象外)。
 func (w *IMAPWorker) ingestBatch(ctx context.Context, msgs []ParsedMessage, activityType string) {
+	ingestMessages(ctx, w.queries, msgs, activityType, w.cfg.IngestUserID, pgtype.UUID{Valid: false})
+}
+
+// ingestMessages は fetch 結果を 1 行ずつ DB に insert する共通ロジック。
+// legacy IMAPWorker と DB 駆動の MailboxIMAPWorker の両方が使う。
+// - To / From を正規化して `FindCustomerByEmail` で Customer + Contact を解決
+//   - 解決できないメールは skip (CRM 管理外)
+//   - `CreateActivity` で insert。`message_id` UNIQUE INDEX が dedup を保証
+//   - mailboxID を渡すと Activity.mailbox_id に記録する (どのメールボックスで
+//     送受信したか)。
+func ingestMessages(ctx context.Context, queries *db.Queries, msgs []ParsedMessage, activityType, ingestUserID string, mailboxID pgtype.UUID) {
 	for _, m := range msgs {
 		if m.MessageID == "" {
 			// RFC5322 準拠ではないメールは skip
@@ -169,7 +177,7 @@ func (w *IMAPWorker) ingestBatch(ctx context.Context, msgs []ParsedMessage, acti
 		}
 
 		// 既に取込済みなら dedup (UNIQUE INDEX でも止まるが事前チェックでログを減らす)
-		if _, err := w.queries.GetActivityByMessageID(ctx, pgtype.Text{String: m.MessageID, Valid: true}); err == nil {
+		if _, err := queries.GetActivityByMessageID(ctx, pgtype.Text{String: m.MessageID, Valid: true}); err == nil {
 			continue
 		} else if !errors.Is(err, pgx.ErrNoRows) {
 			log.Warn().Err(err).Str("message_id", m.MessageID).Msg("IMAP worker: dedup lookup failed")
@@ -188,7 +196,7 @@ func (w *IMAPWorker) ingestBatch(ctx context.Context, msgs []ParsedMessage, acti
 			}
 		}
 
-		customer, contact, ok := w.resolveCustomer(ctx, matchAddrs)
+		customer, contact, ok := resolveCustomer(ctx, queries, matchAddrs)
 		if !ok {
 			log.Debug().
 				Strs("addrs", matchAddrs).
@@ -203,12 +211,13 @@ func (w *IMAPWorker) ingestBatch(ctx context.Context, msgs []ParsedMessage, acti
 			CustomerID: customer,
 			ContactID:  pgtype.UUID{Valid: false},
 			Type:       activityType,
-			UserID:     w.cfg.IngestUserID,
+			UserID:     ingestUserID,
 			StatusID:   pgtype.UUID{Valid: false},
 			MailFrom:   pgtype.Text{String: m.From, Valid: m.From != ""},
 			Subject:    pgtype.Text{String: m.Subject, Valid: m.Subject != ""},
 			MessageID:  pgtype.Text{String: m.MessageID, Valid: true},
 			OccurredAt: effectiveOccurredAt(m),
+			MailboxID:  mailboxID,
 		}
 		if contact != uuid.Nil {
 			params.ContactID = pgtype.UUID{Bytes: contact, Valid: true}
@@ -220,7 +229,7 @@ func (w *IMAPWorker) ingestBatch(ctx context.Context, msgs []ParsedMessage, acti
 			params.MailCc = pgtype.Text{String: strings.Join(m.Cc, ", "), Valid: true}
 		}
 
-		if _, err := w.queries.CreateActivity(ctx, params); err != nil {
+		if _, err := queries.CreateActivity(ctx, params); err != nil {
 			// UNIQUE 違反は正常 (dedup)
 			if isUniqueViolation(err) {
 				continue
@@ -240,13 +249,13 @@ func (w *IMAPWorker) ingestBatch(ctx context.Context, msgs []ParsedMessage, acti
 // Customer (+ 任意の Contact) を返す。
 // FindCustomerByEmail は Customer.mail と Contact.mail の両方を UNION で引く
 // (Phase 9 で追加済) ので、どちらにヒットしても OK。
-func (w *IMAPWorker) resolveCustomer(ctx context.Context, addrs []string) (uuid.UUID, uuid.UUID, bool) {
+func resolveCustomer(ctx context.Context, queries *db.Queries, addrs []string) (uuid.UUID, uuid.UUID, bool) {
 	for _, a := range addrs {
 		addr := normalizeEmail(a)
 		if addr == "" {
 			continue
 		}
-		row, err := w.queries.FindCustomerByEmail(ctx, addr)
+		row, err := queries.FindCustomerByEmail(ctx, addr)
 		if err != nil {
 			continue
 		}

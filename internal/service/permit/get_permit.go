@@ -9,7 +9,6 @@ import (
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
 	"github.com/0utl1er-tech/phox-customer/internal/service/auth"
 	"github.com/0utl1er-tech/phox-customer/internal/util"
-	"github.com/google/uuid"
 )
 
 func (server *PermitService) GetPermit(ctx context.Context, req *connect.Request[permitv1.GetPermitRequest]) (*connect.Response[permitv1.GetPermitResponse], error) {
@@ -19,7 +18,10 @@ func (server *PermitService) GetPermit(ctx context.Context, req *connect.Request
 	}
 	userID := token.Subject()
 
-	bookID := uuid.MustParse(req.Msg.BookId)
+	bookID, err := util.ParseUUID("book_id", req.Msg.BookId)
+	if err != nil {
+		return nil, err
+	}
 
 	// ユーザーがbookに権限を持っているかチェック
 	_, err = server.queries.GetBookByIDAndUserID(ctx, db.GetBookByIDAndUserIDParams{
@@ -38,12 +40,7 @@ func (server *PermitService) GetPermit(ctx context.Context, req *connect.Request
 
 	permitsResponse := make([]*permitv1.Permit, len(permits))
 	for i, permit := range permits {
-		permitsResponse[i] = &permitv1.Permit{
-			Id:     permit.ID.String(),
-			BookId: permit.BookID.String(),
-			UserId: permit.UserID,
-			Role:   util.ConvertDBRoleToProtoRole(permit.Role),
-		}
+		permitsResponse[i] = modelToProto(permit)
 	}
 
 	return connect.NewResponse(&permitv1.GetPermitResponse{

@@ -6,12 +6,14 @@ INSERT INTO "Activity" (
     id, customer_id, contact_id, type, user_id, status_id,
     phone, mail_from, mail_to, mail_cc, subject, body, message_id,
     occurred_at,
-    duration_seconds, recording_url, zoom_call_id
+    duration_seconds, recording_url, zoom_call_id,
+    mailbox_id
 ) VALUES (
     $1, $2, $3, $4, $5, $6,
     $7, $8, $9, $10, $11, $12, $13,
     $14,
-    $15, $16, $17
+    $15, $16, $17,
+    $18
 )
 RETURNING *;
 
@@ -59,6 +61,128 @@ LEFT JOIN "Status" s ON s.id = a.status_id
 WHERE a.customer_id = $1
   AND (cardinality(@types::text[]) = 0 OR a.type = ANY(@types::text[]))
 ORDER BY a.occurred_at DESC;
+
+-- name: ListActivitiesByBookID :many
+-- Book 内の全 Activity を横断で返す (活動フィード用)。
+-- types が空配列のときは全 type。filter_user_id が空文字のときは全担当者。
+-- from_time / to_time は呼び出し側で必ず埋める (未指定はサービス層で
+-- epoch 〜 遠未来のセンチネルに展開する)。
+SELECT
+    a.id,
+    a.customer_id,
+    a.contact_id,
+    a.type,
+    a.user_id,
+    u.name AS user_name,
+    a.status_id,
+    s.name AS status_name,
+    s.priority AS status_priority,
+    s.effective AS status_effective,
+    s.ng AS status_ng,
+    a.phone,
+    a.mail_from,
+    a.mail_to,
+    a.mail_cc,
+    a.subject,
+    a.body,
+    a.message_id,
+    a.duration_seconds,
+    a.recording_url,
+    a.zoom_call_id,
+    a.occurred_at,
+    a.created_at,
+    a.updated_at,
+    c.name AS customer_name,
+    c.corporation AS customer_corporation
+FROM "Activity" a
+JOIN "Customer" c ON c.id = a.customer_id
+JOIN "User" u ON u.id = a.user_id
+LEFT JOIN "Status" s ON s.id = a.status_id
+WHERE c.book_id = $1
+  AND (cardinality(@types::text[]) = 0 OR a.type = ANY(@types::text[]))
+  AND (@filter_user_id::varchar = '' OR a.user_id = @filter_user_id::varchar)
+  AND a.occurred_at >= @from_time::timestamptz
+  AND a.occurred_at < @to_time::timestamptz
+ORDER BY a.occurred_at DESC
+LIMIT $2 OFFSET $3;
+
+-- name: CountActivitiesByBookID :one
+-- ListActivitiesByBookID のページネーション用 total。フィルタ条件は同一に保つこと。
+SELECT COUNT(*)
+FROM "Activity" a
+JOIN "Customer" c ON c.id = a.customer_id
+WHERE c.book_id = $1
+  AND (cardinality(@types::text[]) = 0 OR a.type = ANY(@types::text[]))
+  AND (@filter_user_id::varchar = '' OR a.user_id = @filter_user_id::varchar)
+  AND a.occurred_at >= @from_time::timestamptz
+  AND a.occurred_at < @to_time::timestamptz;
+
+-- name: GetCallStatsByBook :many
+-- 担当者 × コール結果 (Status) のクロス集計。UI 側でピボットする前提の
+-- ロングフォーマット (1 行 = 1 セル)。status_id が NULL の行は
+-- 「Status 削除済み / 未設定」のコールを表す。
+SELECT
+    a.user_id,
+    u.name AS user_name,
+    a.status_id,
+    s.name AS status_name,
+    s.priority AS status_priority,
+    COUNT(*) AS call_count,
+    COALESCE(SUM(a.duration_seconds), 0)::bigint AS total_duration_seconds
+FROM "Activity" a
+JOIN "Customer" c ON c.id = a.customer_id
+JOIN "User" u ON u.id = a.user_id
+LEFT JOIN "Status" s ON s.id = a.status_id
+WHERE c.book_id = $1
+  AND a.type = 'call'
+  AND a.occurred_at >= @from_time::timestamptz
+  AND a.occurred_at < @to_time::timestamptz
+GROUP BY a.user_id, u.name, a.status_id, s.name, s.priority
+ORDER BY u.name, s.priority NULLS LAST;
+
+-- name: GetMailSentStatsByBook :many
+-- 担当者ごとの送信メール数。
+SELECT
+    a.user_id,
+    u.name AS user_name,
+    COUNT(*) AS sent_count
+FROM "Activity" a
+JOIN "Customer" c ON c.id = a.customer_id
+JOIN "User" u ON u.id = a.user_id
+WHERE c.book_id = $1
+  AND a.type = 'email_sent'
+  AND a.occurred_at >= @from_time::timestamptz
+  AND a.occurred_at < @to_time::timestamptz
+GROUP BY a.user_id, u.name
+ORDER BY u.name;
+
+-- name: GetMailReplyStatsByBook :many
+-- email_received を「その顧客に最後に email_sent した担当者」に帰属させて
+-- 返信数を集計する。Activity には in_reply_to が無くスレッド追跡が
+-- できないため、顧客単位の近似で十分という判断 (1 顧客 1 担当が通常運用)。
+-- 先行する email_sent が無い受信メールは attributed_user_id = NULL の行に
+-- まとまる (UI では「担当なし」として表示する)。
+SELECT
+    COALESCE(sender.user_id, '')::varchar   AS attributed_user_id,
+    COALESCE(sender.user_name, '')::varchar AS attributed_user_name,
+    COUNT(*)                                AS reply_count
+FROM "Activity" recv
+JOIN "Customer" c ON c.id = recv.customer_id
+LEFT JOIN LATERAL (
+    SELECT s.user_id, su.name AS user_name
+    FROM "Activity" s
+    JOIN "User" su ON su.id = s.user_id
+    WHERE s.customer_id = recv.customer_id
+      AND s.type = 'email_sent'
+      AND s.occurred_at <= recv.occurred_at
+    ORDER BY s.occurred_at DESC
+    LIMIT 1
+) sender ON true
+WHERE c.book_id = $1
+  AND recv.type = 'email_received'
+  AND recv.occurred_at >= @from_time::timestamptz
+  AND recv.occurred_at < @to_time::timestamptz
+GROUP BY sender.user_id, sender.user_name;
 
 -- name: UpdateActivityStatus :one
 UPDATE "Activity"

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"embed"
 	"encoding/json"
 	"net/http"
 	"os"
@@ -15,21 +16,25 @@ import (
 	customerv1connect "github.com/0utl1er-tech/phox-customer/gen/pb/customer/v1/customerv1connect"
 	googleoauthv1connect "github.com/0utl1er-tech/phox-customer/gen/pb/googleoauth/v1/googleoauthv1connect"
 	icalfeedv1connect "github.com/0utl1er-tech/phox-customer/gen/pb/icalfeed/v1/icalfeedv1connect"
+	mailboxv1connect "github.com/0utl1er-tech/phox-customer/gen/pb/mailbox/v1/mailboxv1connect"
 	mailtemplatev1connect "github.com/0utl1er-tech/phox-customer/gen/pb/mailtemplate/v1/mailtemplatev1connect"
 	permitv1connect "github.com/0utl1er-tech/phox-customer/gen/pb/permit/v1/permitv1connect"
 	redialv1connect "github.com/0utl1er-tech/phox-customer/gen/pb/redial/v1/redialv1connect"
-	zoomphonev1connect "github.com/0utl1er-tech/phox-customer/gen/pb/zoomphone/v1/zoomphonev1connect"
 	"github.com/0utl1er-tech/phox-customer/gen/pb/search/v1/searchv1connect"
 	statusv1connect "github.com/0utl1er-tech/phox-customer/gen/pb/status/v1/statusv1connect"
 	userv1connect "github.com/0utl1er-tech/phox-customer/gen/pb/user/v1/userv1connect"
+	zoomphonev1connect "github.com/0utl1er-tech/phox-customer/gen/pb/zoomphone/v1/zoomphonev1connect"
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
 	"github.com/0utl1er-tech/phox-customer/internal/crypto"
 	"github.com/0utl1er-tech/phox-customer/internal/gcal"
 	"github.com/0utl1er-tech/phox-customer/internal/ical"
 	"github.com/0utl1er-tech/phox-customer/internal/keycloakadmin"
 	"github.com/0utl1er-tech/phox-customer/internal/mail"
+	"github.com/0utl1er-tech/phox-customer/internal/mailu"
+	"github.com/0utl1er-tech/phox-customer/internal/mcpserver"
 	oauthsvc "github.com/0utl1er-tech/phox-customer/internal/oauth"
 	"github.com/0utl1er-tech/phox-customer/internal/recording"
+	"github.com/0utl1er-tech/phox-customer/internal/schemaguard"
 	"github.com/0utl1er-tech/phox-customer/internal/search"
 	"github.com/0utl1er-tech/phox-customer/internal/service/activity"
 	"github.com/0utl1er-tech/phox-customer/internal/service/auth"
@@ -38,15 +43,16 @@ import (
 	"github.com/0utl1er-tech/phox-customer/internal/service/customer"
 	"github.com/0utl1er-tech/phox-customer/internal/service/googleoauth"
 	"github.com/0utl1er-tech/phox-customer/internal/service/icalfeed"
+	"github.com/0utl1er-tech/phox-customer/internal/service/mailbox"
 	"github.com/0utl1er-tech/phox-customer/internal/service/mailtemplate"
 	"github.com/0utl1er-tech/phox-customer/internal/service/permit"
 	"github.com/0utl1er-tech/phox-customer/internal/service/redial"
 	searchsvc "github.com/0utl1er-tech/phox-customer/internal/service/search"
-	zoomphoneservice "github.com/0utl1er-tech/phox-customer/internal/service/zoomphone"
-	"github.com/0utl1er-tech/phox-customer/internal/zoom"
 	"github.com/0utl1er-tech/phox-customer/internal/service/status"
 	"github.com/0utl1er-tech/phox-customer/internal/service/user"
+	zoomphoneservice "github.com/0utl1er-tech/phox-customer/internal/service/zoomphone"
 	"github.com/0utl1er-tech/phox-customer/internal/util"
+	"github.com/0utl1er-tech/phox-customer/internal/zoom"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/minio/minio-go/v7"
 	"github.com/redis/go-redis/v9"
@@ -58,6 +64,13 @@ import (
 	"golang.org/x/sync/errgroup"
 	googlecalendar "google.golang.org/api/calendar/v3"
 )
+
+// migrationFS はスキーマ版ズレ検出 (schemaguard) 用に migration ファイル名を
+// バイナリへ埋め込む。実行されるのはあくまで start.sh / CI の migrate CLI で、
+// ここでは「バイナリが期待する最新 version」を知るためだけに使う。
+//
+//go:embed db/migration/*.up.sql
+var migrationFS embed.FS
 
 // safePrefix は ログ用に文字列の先頭 N 文字を返す。機密値を ***** で隠す。
 func safePrefix(s string, n int) string {
@@ -129,6 +142,13 @@ func main() {
 	}
 
 	log.Info().Msg("Database connection established successfully")
+
+	// スキーマ版ズレの fail-fast。migrate を実行しない直起動 (go run . / air)
+	// が古い DB に当たると初回 INSERT まで 42703 が遅延して出るため、
+	// 起動時点で検出して修正コマンド付きで止める。
+	if err := schemaguard.Verify(ctx, connPool, migrationFS, "db/migration"); err != nil {
+		log.Fatal().Err(err).Msg("DB schema version check failed")
+	}
 
 	queries := db.New(connPool)
 
@@ -216,6 +236,50 @@ func main() {
 	permitService := permit.NewPermitService(queries)
 	contactService := contact.NewContactService(queries)
 	statusService := status.NewStatusService(queries)
+
+	// Phase 25: MailboxService — MAILBOX_SECRET_KEY 設定時のみ有効。
+	// 鍵はメールボックスパスワードの AES-GCM 暗号化に使う。cipher と共有 mailu
+	// SMTP 接続 (MailboxSender) は後段で activityService の実メールボックス
+	// 送信にも注入する。
+	var mailboxService *mailbox.MailboxService
+	var mailboxCipher *crypto.Cipher
+	var mailboxSender *mail.MailboxSender
+	if cfg.MailboxSecretKey != "" {
+		var cerr error
+		mailboxCipher, cerr = crypto.NewCipherFromBase64(cfg.MailboxSecretKey)
+		if cerr != nil {
+			log.Fatal().Err(cerr).Msg("Failed to decode MAILBOX_SECRET_KEY")
+		}
+		// Phase 25/D: mailu 管理 API クライアント (両 env 揃うと自動作成有効)。
+		mailuClient := mailu.NewClient(cfg.MailuAPIBase, cfg.MailuAPIToken)
+		mailboxService = mailbox.NewMailboxService(queries, mailboxCipher, mailuClient)
+		mailboxSender, cerr = mail.NewMailboxSender(cfg.MailuSMTPHost, cfg.MailuSMTPPort, cfg.MailuSMTPTLS)
+		if cerr != nil {
+			log.Fatal().Err(cerr).Msg("Failed to build mailbox sender")
+		}
+		log.Info().
+			Str("mailu_smtp", cfg.MailuSMTPHost).
+			Bool("sending_enabled", mailboxSender != nil).
+			Bool("auto_provision", mailuClient != nil).
+			Msg("MailboxService enabled")
+	} else {
+		log.Warn().Msg("MAILBOX_SECRET_KEY not set — MailboxService disabled")
+	}
+
+	// Phase 25/C: DB 駆動のマルチメールボックス IMAP worker。
+	// MAILU_IMAP_HOST + MAILBOX_SECRET_KEY (mailboxCipher) が揃うと有効。
+	// DB の active な Mailbox を全て polling し、Activity.mailbox_id を記録する。
+	mailboxIMAPWorker := mail.NewMailboxIMAPWorker(
+		mail.IMAPConnBase{
+			Host:                  cfg.MailuIMAPHost,
+			Port:                  cfg.MailuIMAPPort,
+			TLSMode:               mail.IMAPTLSMode(cfg.MailuIMAPTLS),
+			TLSInsecureSkipVerify: cfg.IMAPTLSInsecureSkipVerify,
+		},
+		cfg.IMAPSentMailbox, cfg.IMAPInboxMailbox, cfg.IMAPPollInterval, cfg.IMAPIngestUserID,
+		queries, mailboxCipher,
+	)
+
 	userService := user.NewUserService(queries, keycloakAdmin, connPool)
 	searchService := searchsvc.NewSearchService(queries, esClient)
 	// Activity service — Phase 11 で SMTPClient を注入済み。
@@ -353,6 +417,11 @@ func main() {
 
 	// Activity service — recording.Service を注入してから construct。
 	activityService := activity.NewActivityService(queries, mailClient, recordingSvc)
+	// Phase 25: 実メールボックス送信 (mailbox_id 指定の CreateActivityEmailSent)。
+	if mailboxSender != nil && mailboxCipher != nil {
+		activityService = activityService.WithMailboxSending(mailboxSender, mailboxCipher)
+		log.Info().Msg("Mailbox sending enabled for CreateActivityEmailSent")
+	}
 
 	// Phase 22: ActivityHandler — webhook event を Activity row に変換
 	zoomActivityHandler := zoom.NewActivityHandler(queries, recordingArchiver, "system")
@@ -451,6 +520,10 @@ func main() {
 	customerPath, customerHandler := customerv1connect.NewCustomerServiceHandler(customerService, interceptors)
 	bookPath, bookHandler := bookv1connect.NewBookServiceHandler(bookService, interceptors)
 	permitPath, permitHandler := permitv1connect.NewPermitServiceHandler(permitService, interceptors)
+	if mailboxService != nil {
+		mailboxPath, mailboxHandler := mailboxv1connect.NewMailboxServiceHandler(mailboxService, interceptors)
+		mux.Handle(mailboxPath, mailboxHandler)
+	}
 	contactPath, contactHandler := contactv1connect.NewContactServiceHandler(contactService, interceptors)
 	statusPath, statusHandler := statusv1connect.NewStatusServiceHandler(statusService, interceptors)
 	userPath, userHandler := userv1connect.NewUserServiceHandler(userService, interceptors)
@@ -492,6 +565,31 @@ func main() {
 	// に直接渡す形で再生する。disabled でも mux 登録はしておく (handler 側で 503)。
 	mux.Handle("GET /recordings/{activity_id}", recordingSvc)
 
+	// Phase 24: MCP server (Streamable HTTP)。認証は Connect RPC と同一
+	// (authInterceptor.Authenticate) — ツールは既存 service を in-process で
+	// 呼ぶので Permit / role チェックもそのまま適用される。
+	if cfg.MCPEnabled {
+		// OAuth discovery (RFC 9728): 公開 URL が分かる場合のみ有効化。
+		// resource_metadata 付きの 401 → クライアントが Keycloak を発見して
+		// 認可コードフロー + 自動リフレッシュに乗る。
+		metaURL := ""
+		apiBase := strings.TrimSuffix(cfg.APIPublicBaseURL, "/")
+		if apiBase != "" {
+			metaURL = apiBase + "/.well-known/oauth-protected-resource/mcp"
+			metaHandler := mcpserver.ProtectedResourceMetadataHandler(apiBase+"/mcp", cfg.JWTIssuerURL)
+			mux.Handle("/.well-known/oauth-protected-resource", metaHandler)
+			mux.Handle("/.well-known/oauth-protected-resource/mcp", metaHandler)
+		}
+		mux.Handle("/mcp", mcpserver.NewHandler(authInterceptor, mcpserver.Deps{
+			Book:     bookService,
+			Customer: customerService,
+			Search:   searchService,
+			Activity: activityService,
+			Mailbox:  mailboxService, // nil 可 (機能無効時は list_mailboxes 非登録)
+		}, metaURL))
+		log.Info().Str("resource_metadata", metaURL).Msg("MCP server mounted at /mcp")
+	}
+
 	// Debug endpoint — GCal mock 呼び出し履歴を返す (GCAL_MODE=mock のみ)
 	if gcalMock != nil {
 		mux.HandleFunc("/debug/gcal/calls", func(w http.ResponseWriter, r *http.Request) {
@@ -507,10 +605,16 @@ func main() {
 	// CORSミドルウェアを適用
 	corsHandler := corsMiddleware(mux)
 
-	// HTTP/2対応のサーバーを作成
+	// HTTP/2対応のサーバーを作成。
+	// MaxConcurrentStreams: Cilium Gateway (Envoy) は複数リクエストを 1 本の
+	// h2c コネクションに多重化する。長命な SSE (/sse/calls) がストリームを
+	// 占有するため、既定 250 だと SSE が溜まった時に同じコネクション上の
+	// 通常 RPC が枯渇してブロックし得る。SSE 側の heartbeat/寿命でリークは
+	// 塞いだ (internal/zoom/sse.go) が、多重化の頭打ちを避けるため上限も上げる。
+	h2s := &http2.Server{MaxConcurrentStreams: 2000}
 	server := &http.Server{
 		Addr:    cfg.ConnectServerAddress,
-		Handler: h2c.NewHandler(corsHandler, &http2.Server{}),
+		Handler: h2c.NewHandler(corsHandler, h2s),
 	}
 
 	// サーバー起動とGraceful Shutdown
@@ -520,6 +624,13 @@ func main() {
 	if imapWorker.Enabled() {
 		waitGroup.Go(func() error {
 			return imapWorker.Run(ctx)
+		})
+	}
+
+	// Phase 25/C: DB 駆動のマルチメールボックス IMAP worker。
+	if mailboxIMAPWorker != nil {
+		waitGroup.Go(func() error {
+			return mailboxIMAPWorker.Run(ctx)
 		})
 	}
 

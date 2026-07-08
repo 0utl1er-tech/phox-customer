@@ -6,44 +6,28 @@ import (
 	"connectrpc.com/connect"
 	contactv1 "github.com/0utl1er-tech/phox-customer/gen/pb/contact/v1"
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/0utl1er-tech/phox-customer/internal/util"
 )
 
 func (server *ContactService) UpdateContact(ctx context.Context, req *connect.Request[contactv1.UpdateContactRequest]) (*connect.Response[contactv1.UpdateContactResponse], error) {
-	params := db.UpdateContactParams{
-		ID: uuid.MustParse(req.Msg.Id),
+	id, err := util.ParseUUID("id", req.Msg.Id)
+	if err != nil {
+		return nil, err
 	}
 
-	if req.Msg.Name != nil {
-		params.Name = pgtype.Text{String: *req.Msg.Name, Valid: true}
-	}
-	if req.Msg.Sex != nil {
-		params.Sex = pgtype.Text{String: *req.Msg.Sex, Valid: true}
-	}
-	if req.Msg.Phone != nil {
-		params.Phone = pgtype.Text{String: *req.Msg.Phone, Valid: true}
-	}
-	if req.Msg.Mail != nil {
-		params.Mail = pgtype.Text{String: *req.Msg.Mail, Valid: true}
-	}
-	if req.Msg.Fax != nil {
-		params.Fax = pgtype.Text{String: *req.Msg.Fax, Valid: true}
-	}
-
-	result, err := server.queries.UpdateContact(ctx, params)
+	// 空文字列は「未指定」として既存値を保持する (util.OptionalText の doc 参照)
+	result, err := server.queries.UpdateContact(ctx, db.UpdateContactParams{
+		ID:    id,
+		Name:  util.OptionalText(req.Msg.Name),
+		Sex:   util.OptionalText(req.Msg.Sex),
+		Phone: util.OptionalText(req.Msg.Phone),
+		Mail:  util.OptionalText(req.Msg.Mail),
+		Fax:   util.OptionalText(req.Msg.Fax),
+	})
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	return connect.NewResponse(&contactv1.UpdateContactResponse{
-		UpdatedContact: &contactv1.Contact{
-			Id:         result.ID.String(),
-			CustomerId: result.CustomerID.String(),
-			Name:       result.Name,
-			Sex:        result.Sex,
-			Phone:      result.Phone,
-			Mail:       result.Mail,
-			Fax:        result.Fax,
-		},
+		UpdatedContact: modelToProto(result),
 	}), nil
 }

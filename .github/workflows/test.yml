@@ -61,3 +61,6 @@ jobs:
         run: go test -v -cover -count=1 ./...
         env:
           DB_SOURCE: postgresql://root:secret@postgres:5432/phox-customer?sslmode=disable
+          # testutil.SetupTestDB は TEST_DB_SOURCE を読む (無ければ localhost に
+          # フォールバックして DB テストが全て silent skip になる)。
+          TEST_DB_SOURCE: postgresql://root:secret@postgres:5432/phox-customer?sslmode=disable

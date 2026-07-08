@@ -31,15 +31,7 @@ func (s *ContactService) ListContact(
 
 	contactList := make([]*contactv1.Contact, 0, len(contacts))
 	for _, contact := range contacts {
-		contactList = append(contactList, &contactv1.Contact{
-			Id:         contact.ID.String(),
-			CustomerId: contact.CustomerID.String(),
-			Name:       contact.Name,
-			Sex:        contact.Sex,
-			Phone:      contact.Phone,
-			Mail:       contact.Mail,
-			Fax:        contact.Fax,
-		})
+		contactList = append(contactList, modelToProto(contact))
 	}
 
 	return connect.NewResponse(&contactv1.ListContactResponse{

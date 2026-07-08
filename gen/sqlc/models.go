@@ -76,6 +76,7 @@ type Activity struct {
 	DurationSeconds pgtype.Int4 `json:"duration_seconds"`
 	RecordingUrl    pgtype.Text `json:"recording_url"`
 	ZoomCallID      pgtype.Text `json:"zoom_call_id"`
+	MailboxID       pgtype.UUID `json:"mailbox_id"`
 }
 
 type Book struct {
@@ -124,6 +125,27 @@ type MailTemplate struct {
 	Name      string    `json:"name"`
 	Subject   string    `json:"subject"`
 	Body      string    `json:"body"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type Mailbox struct {
+	ID           uuid.UUID `json:"id"`
+	CompanyID    uuid.UUID `json:"company_id"`
+	Address      string    `json:"address"`
+	DisplayName  string    `json:"display_name"`
+	SmtpUsername string    `json:"smtp_username"`
+	PasswordEnc  []byte    `json:"password_enc"`
+	Active       bool      `json:"active"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+type MailboxPermit struct {
+	ID        uuid.UUID `json:"id"`
+	MailboxID uuid.UUID `json:"mailbox_id"`
+	UserID    string    `json:"user_id"`
+	Role      Role      `json:"role"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }

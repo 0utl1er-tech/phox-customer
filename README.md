@@ -43,6 +43,71 @@ Keycloak 標準では access token の `aud` は `"account"` になる。phox-cu
 `oidc-audience-mapper` を仕込んで `phox-customer` を `aud` 配列に追加する。
 この設定は `phox-manifest/keycloak/realm-phox.json` に同梱されている。
 
+## MCP サーバー (Phase 24)
+
+`/mcp` に MCP (Model Context Protocol) サーバーを Streamable HTTP で公開している。
+Claude Code / Claude Desktop などの MCP クライアントから Phox CRM を読める:
+
+| tool | 内容 |
+|---|---|
+| `list_books` | アクセス可能な顧客リスト一覧 |
+| `search_customers` | 顧客全文検索 (ES / kuromoji、都道府県フィルタ付き) |
+| `get_customer` | 顧客 1 件の詳細 |
+| `list_customer_activities` | 顧客単位の活動履歴 |
+| `list_book_activities` | Book 横断の活動フィード (種別/担当者/期間フィルタ) |
+| `get_call_stats` / `get_mail_stats` | 担当者別のコール/メール集計 |
+| `send_customer_email` | 顧客へメール送信 + email_sent 活動記録 (唯一の書き込み tool。editor 権限必須) |
+
+設計:
+
+- v1 は読み取り専用で設計し、v1.1 で書き込み tool を `send_customer_email` の 1 つだけ追加した (SMTP 送信 + 活動記録; staging では MailHog シンクに溜まるだけで実配送されない)。
+- 認証は Connect RPC と完全に同一 — `Authorization: Bearer <Keycloak JWT>`
+  (aud=phox-customer) を必須にし、`auth.Interceptor.Authenticate` を共用。
+  tool は既存 service を in-process で呼ぶので Permit / role チェックも
+  そのまま効く。認可の実装が二重化しない。
+- transport は **Stateless + JSONResponse** — セッション親和性が不要なので
+  replicas > 1 でも安全、curl でも叩ける。
+- `MCP_ENABLED=false` でエンドポイントごと無効化 (既定 true)。
+
+Claude Code からの接続例 (staging):
+
+```bash
+TOKEN=$(curl -s https://auth.0utl1er.tech/realms/company/protocol/openid-connect/token \
+  -d grant_type=password -d client_id=phox-mcp \
+  -d client_secret=$PHOX_MCP_CLIENT_SECRET \
+  -d username=e2e-bot -d password=$E2E_PW | jq -r .access_token)
+
+claude mcp add --transport http phox https://phox-api-staging.0utl1er.tech/mcp \
+  --header "Authorization: Bearer $TOKEN"
+```
+
+(`phox-mcp` は password grant 用の confidential client。kuki-dc の
+`phox/bootstrap/keycloak-mcp-client.sh` で作成する。token は realm 設定の
+lifetime で失効する点に注意 — 長時間使うなら都度取得すること。)
+
+実装: `internal/mcpserver/` (tool 定義とテストは同 package)。
+
+## メールボックス (Phase 25)
+
+Phox が **実 mailu アカウントを複数所有**し、Book と同型の RBAC
+(owner/editor/viewer) で「誰がどのメールボックスを使えるか」を制御する。
+従来のなりすまし送信 (From 差し替え + Reply-To 固定) の返信取りこぼしを解消する。
+
+- 登録/メンバー管理: UI 設定画面の「メールボックス」カード、または
+  `mailbox.v1.MailboxService` (パスワードは AES-GCM 暗号化保存・レスポンス非公開)
+- 送信: `CreateActivityEmailSent` に `mailbox_id` を渡すと、そのメールボックスの
+  資格情報で SMTP 認証し From もそのアドレスになる (editor 以上が必要、
+  Reply-To なし = 返信は同じ口へ)。省略時はレガシーのなりすまし送信
+- MCP: `list_mailboxes` / `send_customer_email(mailbox_id)`
+- env: `MAILBOX_SECRET_KEY` (base64 32byte、無ければ機能ごと無効) と
+  共有 mailu 接続 `MAILU_SMTP_HOST/PORT/TLS_MODE` (+ Phase C で `MAILU_IMAP_*`)
+- mailu 側: アカウントは admin UI で作成して Phox に登録 (v1 は API 連携なし)。
+  なりすまし送信を使い続ける場合のみ従来の sender restriction 解除が必要で、
+  メールボックス送信だけなら不要
+
+実装: `internal/service/mailbox/`, `internal/mail/mailbox_sender.go`,
+migration `000011_mailboxes`。
+
 ## ローカル開発
 
 ```bash

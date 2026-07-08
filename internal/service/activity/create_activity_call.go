@@ -73,7 +73,13 @@ func (s *ActivityService) CreateActivityCall(
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("create activity: %w", err))
 	}
 
+	// modelToProto は User JOIN 無しの生行なので user_name が空になる。
+	// 呼び出し側 (活動フィードの楽観的表示等) 用に担当者名を載せる。
+	callProto := modelToProto(act)
+	if u, uerr := s.queries.GetUser(ctx, userID); uerr == nil {
+		callProto.UserName = u.Name
+	}
 	return connect.NewResponse(&activityv1.CreateActivityCallResponse{
-		Activity: modelToProto(act),
+		Activity: callProto,
 	}), nil
 }

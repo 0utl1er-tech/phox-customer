@@ -45,26 +45,48 @@ func (a *Authorizer) CheckPermission(ctx context.Context, bookID uuid.UUID, requ
 		return connect.NewError(connect.CodePermissionDenied, errors.New("you do not have access to this book"))
 	}
 
-	// Hierarchical role check
-	hasPermission := false
-	switch requiredRole {
-	case db.RoleOwner:
-		if permit.Role == db.RoleOwner {
-			hasPermission = true
-		}
-	case db.RoleEditor:
-		if permit.Role == db.RoleOwner || permit.Role == db.RoleEditor {
-			hasPermission = true
-		}
-	case db.RoleViewer:
-		if permit.Role == db.RoleOwner || permit.Role == db.RoleEditor || permit.Role == db.RoleViewer {
-			hasPermission = true
-		}
-	}
-
-	if !hasPermission {
+	if !roleSatisfies(permit.Role, requiredRole) {
 		return connect.NewError(connect.CodePermissionDenied, errors.New("you do not have the required permission for this action"))
 	}
 
 	return nil
+}
+
+// CheckMailboxPermission mirrors CheckPermission for the Mailbox resource:
+// the caller must hold a MailboxPermit whose role is >= requiredRole
+// (hierarchical: owner > editor > viewer).
+func (a *Authorizer) CheckMailboxPermission(ctx context.Context, mailboxID uuid.UUID, requiredRole db.Role) error {
+	token, err := AuthorizeUser(ctx)
+	if err != nil {
+		return err
+	}
+
+	permit, err := a.Queries.GetMailboxPermitByMailboxIDAndUserID(ctx, db.GetMailboxPermitByMailboxIDAndUserIDParams{
+		MailboxID: mailboxID,
+		UserID:    token.Subject(),
+	})
+	if err != nil {
+		return connect.NewError(connect.CodePermissionDenied, errors.New("you do not have access to this mailbox"))
+	}
+
+	if !roleSatisfies(permit.Role, requiredRole) {
+		return connect.NewError(connect.CodePermissionDenied, errors.New("you do not have the required permission for this action"))
+	}
+
+	return nil
+}
+
+// roleSatisfies reports whether `have` meets or exceeds `required` under the
+// hierarchy owner > editor > viewer.
+func roleSatisfies(have, required db.Role) bool {
+	switch required {
+	case db.RoleOwner:
+		return have == db.RoleOwner
+	case db.RoleEditor:
+		return have == db.RoleOwner || have == db.RoleEditor
+	case db.RoleViewer:
+		return have == db.RoleOwner || have == db.RoleEditor || have == db.RoleViewer
+	default:
+		return false
+	}
 }

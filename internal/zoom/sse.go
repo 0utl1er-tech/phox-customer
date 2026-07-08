@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"sync"
 	"time"
@@ -12,9 +13,16 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// SSE 接続の keep-alive / 上限寿命。var にしているのはテストが短い値に
+// 差し替えて heartbeat・deadline 経路を高速に検証できるようにするため。
+var (
+	sseHeartbeatInterval = 15 * time.Second
+	sseMaxLifetime       = 30 * time.Minute
+)
+
 // CallNotification は phox-ui に SSE で push する着信通知。
 type CallNotification struct {
-	Type         string `json:"type"`          // "ringing" | "answered" | "ended"
+	Type         string `json:"type"` // "ringing" | "answered" | "ended"
 	CallID       string `json:"call_id"`
 	CallerNumber string `json:"caller_number"`
 	CallerName   string `json:"caller_name"`   // Zoom 側の名前
@@ -202,21 +210,79 @@ func (h *SSEHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer h.Unsubscribe(userEmail, ch)
 
 	// 接続直後に ping を送って SSE 接続を確立
-	fmt.Fprintf(w, "event: ping\ndata: {\"time\":\"%s\"}\n\n", time.Now().Format(time.RFC3339))
+	if _, err := fmt.Fprintf(w, "event: ping\ndata: {\"time\":\"%s\"}\n\n", time.Now().Format(time.RFC3339)); err != nil {
+		return
+	}
 	flusher.Flush()
+
+	// ── なぜ heartbeat が要るか ─────────────────────────────────────
+	// このハンドラは r.Context().Done() だけでクライアント切断を検知して
+	// いたが、Cilium Gateway (Envoy) → backend が h2c で多重化される経路
+	// では、ブラウザが去っても Envoy が upstream ストリームを即クローズ
+	// しないことがあり、Done() が発火せず goroutine と HTTP/2 ストリームが
+	// リークする。ストリームが Go http2 の MaxConcurrentStreams (既定 250)
+	// に達すると、その接続上の新規 RPC が全てブロックする (実証 2026-07-02,
+	// phox-e2e フルスイート後半が軒並みタイムアウト; 280 SSE で backend RSS
+	// が増えたまま戻らないことを確認)。
+	//
+	// 対策: 定期的に comment ping を書き、書き込みエラー (= 相手がいない)
+	// で確実に抜ける。さらに絶対上限寿命を設けて「永遠に生きる接続」を無く
+	// す (UI 側の EventSource が自動再接続するので UX 影響なし)。
+	heartbeat := time.NewTicker(sseHeartbeatInterval)
+	defer heartbeat.Stop()
+	deadline := time.NewTimer(sseMaxLifetime)
+	defer deadline.Stop()
 
 	ctx := r.Context()
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-deadline.C:
+			// 上限到達。クライアントは EventSource の自動再接続で張り直す。
+			return
+		case <-heartbeat.C:
+			// SSE コメント行 (":") は仕様上クライアントに無視される keep-alive。
+			// 書き込みが失敗したら相手はもういない → 抜けて Unsubscribe。
+			if _, err := io.WriteString(w, ": ping\n\n"); err != nil {
+				return
+			}
+			flusher.Flush()
 		case n, ok := <-ch:
 			if !ok {
 				return
 			}
 			data, _ := json.Marshal(n)
-			fmt.Fprintf(w, "event: call\ndata: %s\n\n", string(data))
+			if _, err := fmt.Fprintf(w, "event: call\ndata: %s\n\n", string(data)); err != nil {
+				return
+			}
 			flusher.Flush()
 		}
 	}
+}
+
+// SetSSEHeartbeatIntervalForTest は heartbeat 間隔を一時的に差し替え、元に
+// 戻す restore 関数を返す (外部テストパッケージ用)。
+func SetSSEHeartbeatIntervalForTest(d time.Duration) func() {
+	old := sseHeartbeatInterval
+	sseHeartbeatInterval = d
+	return func() { sseHeartbeatInterval = old }
+}
+
+// SetSSEMaxLifetimeForTest は上限寿命を一時的に差し替える (外部テスト用)。
+func SetSSEMaxLifetimeForTest(d time.Duration) func() {
+	old := sseMaxLifetime
+	sseMaxLifetime = d
+	return func() { sseMaxLifetime = old }
+}
+
+// ClientCount は現在購読中の SSE クライアント総数を返す (テスト・観測用)。
+func (h *SSEHub) ClientCount() int {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	total := 0
+	for _, set := range h.clients {
+		total += len(set)
+	}
+	return total
 }

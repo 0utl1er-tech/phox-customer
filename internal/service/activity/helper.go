@@ -127,5 +127,6 @@ func modelToProto(a db.Activity) *activityv1.Activity {
 		MessageId:  textPtr(a.MessageID),
 		OccurredAt: timestamppb.New(a.OccurredAt),
 		CreatedAt:  timestamppb.New(a.CreatedAt),
+		MailboxId:  uuidPtrString(a.MailboxID),
 	}
 }

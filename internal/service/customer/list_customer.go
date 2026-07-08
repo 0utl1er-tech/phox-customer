@@ -7,30 +7,24 @@ import (
 	"connectrpc.com/connect"
 	customerv1 "github.com/0utl1er-tech/phox-customer/gen/pb/customer/v1"
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
-	"github.com/0utl1er-tech/phox-customer/internal/service/auth"
-	"github.com/google/uuid"
+	"github.com/0utl1er-tech/phox-customer/internal/util"
 )
 
 func (s *CustomerService) ListCustomer(
 	ctx context.Context,
 	req *connect.Request[customerv1.ListCustomerRequest],
 ) (*connect.Response[customerv1.ListCustomerResponse], error) {
-	token, err := auth.AuthorizeUser(ctx)
+	bookID, err := util.ParseUUID("book_id", req.Msg.BookId)
 	if err != nil {
 		return nil, err
 	}
-	userID := token.Subject()
 
-	_, err = s.queries.GetBookByIDAndUserID(ctx, db.GetBookByIDAndUserIDParams{
-		ID:     uuid.MustParse(req.Msg.BookId),
-		UserID: userID,
-	})
-	if err != nil {
-		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("このbookにアクセスする権限がありません: %w", err))
+	if err := s.authorizer.CheckPermission(ctx, bookID, db.RoleViewer); err != nil {
+		return nil, err
 	}
 
 	customers, err := s.queries.ListCustomers(ctx, db.ListCustomersParams{
-		BookID: uuid.MustParse(req.Msg.BookId),
+		BookID: bookID,
 		Limit:  req.Msg.Limit,
 		Offset: req.Msg.Offset,
 	})
@@ -38,21 +32,9 @@ func (s *CustomerService) ListCustomer(
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("customerの取得に失敗しました: %w", err))
 	}
 
-	// レスポンス用のcustomer一覧を作成
 	customerList := make([]*customerv1.Customer, 0, len(customers))
-
 	for _, customer := range customers {
-		customerList = append(customerList, &customerv1.Customer{
-			Id:          customer.ID.String(),
-			BookId:      customer.BookID.String(),
-			Phone:       customer.Phone,
-			Category:    customer.Category,
-			Name:        customer.Name,
-			Corporation: customer.Corporation,
-			Address:     customer.Address,
-			Memo:        customer.Memo,
-			Mail:        customer.Mail,
-		})
+		customerList = append(customerList, listRowToProto(customer))
 	}
 
 	return connect.NewResponse(&customerv1.ListCustomerResponse{

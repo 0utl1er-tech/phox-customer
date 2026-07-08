@@ -1,0 +1,118 @@
+syntax = "proto3";
+
+package mailbox.v1;
+
+import "buf/validate/validate.proto";
+import "permit/v1/permit.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/0utl1er-tech/phox-customer/gen/pb/mailbox/v1;mailboxv1";
+
+// MailboxService — Phox が所有する実メールアドレス (mailu アカウント) を
+// 会社共有プールとして管理する。Book/Permit と同型の RBAC。
+// パスワードは書き込み専用: どのレスポンスにも平文/暗号文を返さない。
+service MailboxService {
+  // 自分がアクセスできるメールボックス一覧 (自分のロール付き)。
+  rpc ListMailboxes(ListMailboxesRequest) returns (ListMailboxesResponse);
+  // 新規メールボックス登録。作成者は自動で owner MailboxPermit を得る。
+  rpc CreateMailbox(CreateMailboxRequest) returns (CreateMailboxResponse);
+  // 表示名 / パスワード / active 更新 (owner)。
+  rpc UpdateMailbox(UpdateMailboxRequest) returns (UpdateMailboxResponse);
+  // 削除 (owner)。
+  rpc DeleteMailbox(DeleteMailboxRequest) returns (DeleteMailboxResponse);
+
+  // メンバー管理 (Book の Permit RPC と同型)。
+  rpc AddMailboxUser(AddMailboxUserRequest) returns (AddMailboxUserResponse);
+  rpc ListMailboxUsers(ListMailboxUsersRequest) returns (ListMailboxUsersResponse);
+  rpc UpdateMailboxUser(UpdateMailboxUserRequest) returns (UpdateMailboxUserResponse);
+  rpc RemoveMailboxUser(RemoveMailboxUserRequest) returns (RemoveMailboxUserResponse);
+}
+
+// パスワードは含めない。
+message Mailbox {
+  string id = 1;
+  string address = 2;
+  string display_name = 3;
+  string smtp_username = 4;
+  bool active = 5;
+  permit.v1.Role role = 6; // 呼び出しユーザーのこのメールボックスに対するロール
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp updated_at = 8;
+}
+
+message ListMailboxesRequest {}
+message ListMailboxesResponse {
+  repeated Mailbox mailboxes = 1;
+}
+
+message CreateMailboxRequest {
+  string address = 1 [(buf.validate.field).string.min_len = 3];
+  // Phase 25/D: mailu 自動プロビジョニング時は空でよい (Phox がランダム生成)。
+  // 既存アカウント登録モード (mailu API 未設定) では必須。
+  string password = 2;
+  string display_name = 3;
+  // 省略時は address を smtp_username に使う。
+  string smtp_username = 4;
+}
+message CreateMailboxResponse {
+  Mailbox mailbox = 1;
+}
+
+message UpdateMailboxRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+  optional string display_name = 2;
+  // 空/未指定ならパスワードは変更しない。
+  optional string password = 3;
+  optional bool active = 4;
+}
+message UpdateMailboxResponse {
+  Mailbox mailbox = 1;
+}
+
+message DeleteMailboxRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+message DeleteMailboxResponse {
+  string id = 1;
+}
+
+message MailboxUser {
+  string permit_id = 1;
+  string user_id = 2;
+  string user_name = 3;
+  permit.v1.Role role = 4;
+}
+
+message AddMailboxUserRequest {
+  string mailbox_id = 1 [(buf.validate.field).string.uuid = true];
+  string user_id = 2 [(buf.validate.field).string.min_len = 1];
+  permit.v1.Role role = 3;
+}
+message AddMailboxUserResponse {
+  MailboxUser user = 1;
+}
+
+message ListMailboxUsersRequest {
+  string mailbox_id = 1 [(buf.validate.field).string.uuid = true];
+}
+message ListMailboxUsersResponse {
+  repeated MailboxUser users = 1;
+}
+
+message UpdateMailboxUserRequest {
+  string mailbox_id = 1 [(buf.validate.field).string.uuid = true];
+  string user_id = 2 [(buf.validate.field).string.min_len = 1];
+  permit.v1.Role role = 3 [(buf.validate.field).enum.defined_only = true];
+}
+message UpdateMailboxUserResponse {
+  MailboxUser user = 1;
+}
+
+message RemoveMailboxUserRequest {
+  string mailbox_id = 1 [(buf.validate.field).string.uuid = true];
+  string user_id = 2 [(buf.validate.field).string.min_len = 1];
+}
+message RemoveMailboxUserResponse {
+  string mailbox_id = 1;
+  string user_id = 2;
+}

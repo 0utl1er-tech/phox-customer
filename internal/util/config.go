@@ -64,11 +64,11 @@ type Config struct {
 	// Phase 20: Google Calendar 連携 (Redial)。
 	// GCalMode: "real" = 実 GCal API, "mock" = dev/E2E 用フェイク (debug endpoint 有効)
 	// GCalTokenKey: AES-GCM 暗号化鍵 (base64 32 byte)。mock mode でも必須 (OAuth フローで使う)
-	GCalMode             string `mapstructure:"GCAL_MODE"`
-	GCalTokenKey         string `mapstructure:"GCAL_TOKEN_KEY"`
-	GoogleOAuthClientID  string `mapstructure:"GOOGLE_OAUTH_CLIENT_ID"`
-	GoogleOAuthSecret    string `mapstructure:"GOOGLE_OAUTH_CLIENT_SECRET"`
-	GoogleOAuthRedirect  string `mapstructure:"GOOGLE_OAUTH_REDIRECT_URL"`
+	GCalMode            string `mapstructure:"GCAL_MODE"`
+	GCalTokenKey        string `mapstructure:"GCAL_TOKEN_KEY"`
+	GoogleOAuthClientID string `mapstructure:"GOOGLE_OAUTH_CLIENT_ID"`
+	GoogleOAuthSecret   string `mapstructure:"GOOGLE_OAUTH_CLIENT_SECRET"`
+	GoogleOAuthRedirect string `mapstructure:"GOOGLE_OAUTH_REDIRECT_URL"`
 	// Phox の顧客詳細 URL のベース (GCal イベントの description 内に貼る)。
 	// 例: http://localhost:3000
 	PhoxBaseURL string `mapstructure:"PHOX_BASE_URL"`
@@ -111,6 +111,29 @@ type Config struct {
 	// 例 dev: http://localhost:8082  /  prod: https://phox-api.example.com
 	// 未設定時は main.go で `http://{CONNECT_SERVER_ADDRESS}` にフォールバック。
 	ICalFeedBaseURL string `mapstructure:"ICAL_FEED_BASE_URL"`
+
+	// Phase 24: MCP (Model Context Protocol) server — Streamable HTTP を
+	// /mcp にマウントする。認証は Connect RPC と同一の Keycloak JWT。
+	// false でエンドポイントごと無効化。
+	MCPEnabled bool `mapstructure:"MCP_ENABLED"`
+
+	// Phase 25: メールボックスパスワードの暗号化鍵 (base64 32 byte AES-256)。
+	// 未設定なら MailboxService は登録されない (機能ごと無効化)。
+	MailboxSecretKey string `mapstructure:"MAILBOX_SECRET_KEY"`
+
+	// Phase 25: 全メールボックス共通の mailu 接続先。Mailbox 単位の資格情報
+	// (DB, 暗号化) と組み合わせて送受信する。個別 SMTP_*/IMAP_* は後方互換で残す。
+	MailuSMTPHost string `mapstructure:"MAILU_SMTP_HOST"`
+	MailuSMTPPort int    `mapstructure:"MAILU_SMTP_PORT"`
+	MailuSMTPTLS  string `mapstructure:"MAILU_SMTP_TLS_MODE"`
+	MailuIMAPHost string `mapstructure:"MAILU_IMAP_HOST"`
+	MailuIMAPPort int    `mapstructure:"MAILU_IMAP_PORT"`
+	MailuIMAPTLS  string `mapstructure:"MAILU_IMAP_TLS_MODE"`
+
+	// Phase 25/D: mailu 管理 API。両方揃うと CreateMailbox がアカウントを
+	// 自動プロビジョニングする (空なら「既存アカウントを登録」モード)。
+	MailuAPIBase  string `mapstructure:"MAILU_API_BASE"`
+	MailuAPIToken string `mapstructure:"MAILU_API_TOKEN"`
 }
 
 // LoadConfig reads configuration from `app.env` and (if present) layers

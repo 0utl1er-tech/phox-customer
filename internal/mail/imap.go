@@ -43,7 +43,7 @@ func (c IMAPConnectConfig) addr() string {
 // 取込むのに必要な最小限のフィールド。
 type ParsedMessage struct {
 	UID       imap.UID
-	MessageID string   // RFC822 Message-ID (`<xxx@yyy>` 形式)。dedup キー。
+	MessageID string // RFC822 Message-ID (`<xxx@yyy>` 形式)。dedup キー。
 	Date      time.Time
 	Subject   string
 	From      string   // 最初の差出人アドレス (email 部分のみ)

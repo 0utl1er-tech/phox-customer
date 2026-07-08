@@ -13,19 +13,54 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countActivitiesByBookID = `-- name: CountActivitiesByBookID :one
+SELECT COUNT(*)
+FROM "Activity" a
+JOIN "Customer" c ON c.id = a.customer_id
+WHERE c.book_id = $1
+  AND (cardinality($2::text[]) = 0 OR a.type = ANY($2::text[]))
+  AND ($3::varchar = '' OR a.user_id = $3::varchar)
+  AND a.occurred_at >= $4::timestamptz
+  AND a.occurred_at < $5::timestamptz
+`
+
+type CountActivitiesByBookIDParams struct {
+	BookID       uuid.UUID `json:"book_id"`
+	Types        []string  `json:"types"`
+	FilterUserID string    `json:"filter_user_id"`
+	FromTime     time.Time `json:"from_time"`
+	ToTime       time.Time `json:"to_time"`
+}
+
+// ListActivitiesByBookID のページネーション用 total。フィルタ条件は同一に保つこと。
+func (q *Queries) CountActivitiesByBookID(ctx context.Context, arg CountActivitiesByBookIDParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countActivitiesByBookID,
+		arg.BookID,
+		arg.Types,
+		arg.FilterUserID,
+		arg.FromTime,
+		arg.ToTime,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createActivity = `-- name: CreateActivity :one
 INSERT INTO "Activity" (
     id, customer_id, contact_id, type, user_id, status_id,
     phone, mail_from, mail_to, mail_cc, subject, body, message_id,
     occurred_at,
-    duration_seconds, recording_url, zoom_call_id
+    duration_seconds, recording_url, zoom_call_id,
+    mailbox_id
 ) VALUES (
     $1, $2, $3, $4, $5, $6,
     $7, $8, $9, $10, $11, $12, $13,
     $14,
-    $15, $16, $17
+    $15, $16, $17,
+    $18
 )
-RETURNING id, customer_id, contact_id, type, user_id, status_id, phone, mail_from, mail_to, mail_cc, subject, body, message_id, occurred_at, created_at, updated_at, duration_seconds, recording_url, zoom_call_id
+RETURNING id, customer_id, contact_id, type, user_id, status_id, phone, mail_from, mail_to, mail_cc, subject, body, message_id, occurred_at, created_at, updated_at, duration_seconds, recording_url, zoom_call_id, mailbox_id
 `
 
 type CreateActivityParams struct {
@@ -46,6 +81,7 @@ type CreateActivityParams struct {
 	DurationSeconds pgtype.Int4 `json:"duration_seconds"`
 	RecordingUrl    pgtype.Text `json:"recording_url"`
 	ZoomCallID      pgtype.Text `json:"zoom_call_id"`
+	MailboxID       pgtype.UUID `json:"mailbox_id"`
 }
 
 // duration_seconds / recording_url / zoom_call_id は call type で Zoom 連携時に
@@ -70,6 +106,7 @@ func (q *Queries) CreateActivity(ctx context.Context, arg CreateActivityParams) 
 		arg.DurationSeconds,
 		arg.RecordingUrl,
 		arg.ZoomCallID,
+		arg.MailboxID,
 	)
 	var i Activity
 	err := row.Scan(
@@ -92,6 +129,7 @@ func (q *Queries) CreateActivity(ctx context.Context, arg CreateActivityParams) 
 		&i.DurationSeconds,
 		&i.RecordingUrl,
 		&i.ZoomCallID,
+		&i.MailboxID,
 	)
 	return i, err
 }
@@ -207,7 +245,7 @@ func (q *Queries) FindCustomersByPhoneDigits(ctx context.Context, dollar_1 strin
 }
 
 const getActivity = `-- name: GetActivity :one
-SELECT id, customer_id, contact_id, type, user_id, status_id, phone, mail_from, mail_to, mail_cc, subject, body, message_id, occurred_at, created_at, updated_at, duration_seconds, recording_url, zoom_call_id FROM "Activity" WHERE id = $1
+SELECT id, customer_id, contact_id, type, user_id, status_id, phone, mail_from, mail_to, mail_cc, subject, body, message_id, occurred_at, created_at, updated_at, duration_seconds, recording_url, zoom_call_id, mailbox_id FROM "Activity" WHERE id = $1
 `
 
 func (q *Queries) GetActivity(ctx context.Context, id uuid.UUID) (Activity, error) {
@@ -233,12 +271,13 @@ func (q *Queries) GetActivity(ctx context.Context, id uuid.UUID) (Activity, erro
 		&i.DurationSeconds,
 		&i.RecordingUrl,
 		&i.ZoomCallID,
+		&i.MailboxID,
 	)
 	return i, err
 }
 
 const getActivityByMessageID = `-- name: GetActivityByMessageID :one
-SELECT id, customer_id, contact_id, type, user_id, status_id, phone, mail_from, mail_to, mail_cc, subject, body, message_id, occurred_at, created_at, updated_at, duration_seconds, recording_url, zoom_call_id FROM "Activity" WHERE message_id = $1
+SELECT id, customer_id, contact_id, type, user_id, status_id, phone, mail_from, mail_to, mail_cc, subject, body, message_id, occurred_at, created_at, updated_at, duration_seconds, recording_url, zoom_call_id, mailbox_id FROM "Activity" WHERE message_id = $1
 `
 
 func (q *Queries) GetActivityByMessageID(ctx context.Context, messageID pgtype.Text) (Activity, error) {
@@ -264,12 +303,13 @@ func (q *Queries) GetActivityByMessageID(ctx context.Context, messageID pgtype.T
 		&i.DurationSeconds,
 		&i.RecordingUrl,
 		&i.ZoomCallID,
+		&i.MailboxID,
 	)
 	return i, err
 }
 
 const getActivityByZoomCallID = `-- name: GetActivityByZoomCallID :one
-SELECT id, customer_id, contact_id, type, user_id, status_id, phone, mail_from, mail_to, mail_cc, subject, body, message_id, occurred_at, created_at, updated_at, duration_seconds, recording_url, zoom_call_id FROM "Activity" WHERE zoom_call_id = $1
+SELECT id, customer_id, contact_id, type, user_id, status_id, phone, mail_from, mail_to, mail_cc, subject, body, message_id, occurred_at, created_at, updated_at, duration_seconds, recording_url, zoom_call_id, mailbox_id FROM "Activity" WHERE zoom_call_id = $1
 `
 
 // recording_completed webhook で受け取った call_id から既存 Activity を逆引き。
@@ -297,8 +337,187 @@ func (q *Queries) GetActivityByZoomCallID(ctx context.Context, zoomCallID pgtype
 		&i.DurationSeconds,
 		&i.RecordingUrl,
 		&i.ZoomCallID,
+		&i.MailboxID,
 	)
 	return i, err
+}
+
+const getCallStatsByBook = `-- name: GetCallStatsByBook :many
+SELECT
+    a.user_id,
+    u.name AS user_name,
+    a.status_id,
+    s.name AS status_name,
+    s.priority AS status_priority,
+    COUNT(*) AS call_count,
+    COALESCE(SUM(a.duration_seconds), 0)::bigint AS total_duration_seconds
+FROM "Activity" a
+JOIN "Customer" c ON c.id = a.customer_id
+JOIN "User" u ON u.id = a.user_id
+LEFT JOIN "Status" s ON s.id = a.status_id
+WHERE c.book_id = $1
+  AND a.type = 'call'
+  AND a.occurred_at >= $2::timestamptz
+  AND a.occurred_at < $3::timestamptz
+GROUP BY a.user_id, u.name, a.status_id, s.name, s.priority
+ORDER BY u.name, s.priority NULLS LAST
+`
+
+type GetCallStatsByBookParams struct {
+	BookID   uuid.UUID `json:"book_id"`
+	FromTime time.Time `json:"from_time"`
+	ToTime   time.Time `json:"to_time"`
+}
+
+type GetCallStatsByBookRow struct {
+	UserID               string      `json:"user_id"`
+	UserName             string      `json:"user_name"`
+	StatusID             pgtype.UUID `json:"status_id"`
+	StatusName           pgtype.Text `json:"status_name"`
+	StatusPriority       pgtype.Int4 `json:"status_priority"`
+	CallCount            int64       `json:"call_count"`
+	TotalDurationSeconds int64       `json:"total_duration_seconds"`
+}
+
+// 担当者 × コール結果 (Status) のクロス集計。UI 側でピボットする前提の
+// ロングフォーマット (1 行 = 1 セル)。status_id が NULL の行は
+// 「Status 削除済み / 未設定」のコールを表す。
+func (q *Queries) GetCallStatsByBook(ctx context.Context, arg GetCallStatsByBookParams) ([]GetCallStatsByBookRow, error) {
+	rows, err := q.db.Query(ctx, getCallStatsByBook, arg.BookID, arg.FromTime, arg.ToTime)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetCallStatsByBookRow{}
+	for rows.Next() {
+		var i GetCallStatsByBookRow
+		if err := rows.Scan(
+			&i.UserID,
+			&i.UserName,
+			&i.StatusID,
+			&i.StatusName,
+			&i.StatusPriority,
+			&i.CallCount,
+			&i.TotalDurationSeconds,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getMailReplyStatsByBook = `-- name: GetMailReplyStatsByBook :many
+SELECT
+    COALESCE(sender.user_id, '')::varchar   AS attributed_user_id,
+    COALESCE(sender.user_name, '')::varchar AS attributed_user_name,
+    COUNT(*)                                AS reply_count
+FROM "Activity" recv
+JOIN "Customer" c ON c.id = recv.customer_id
+LEFT JOIN LATERAL (
+    SELECT s.user_id, su.name AS user_name
+    FROM "Activity" s
+    JOIN "User" su ON su.id = s.user_id
+    WHERE s.customer_id = recv.customer_id
+      AND s.type = 'email_sent'
+      AND s.occurred_at <= recv.occurred_at
+    ORDER BY s.occurred_at DESC
+    LIMIT 1
+) sender ON true
+WHERE c.book_id = $1
+  AND recv.type = 'email_received'
+  AND recv.occurred_at >= $2::timestamptz
+  AND recv.occurred_at < $3::timestamptz
+GROUP BY sender.user_id, sender.user_name
+`
+
+type GetMailReplyStatsByBookParams struct {
+	BookID   uuid.UUID `json:"book_id"`
+	FromTime time.Time `json:"from_time"`
+	ToTime   time.Time `json:"to_time"`
+}
+
+type GetMailReplyStatsByBookRow struct {
+	AttributedUserID   string `json:"attributed_user_id"`
+	AttributedUserName string `json:"attributed_user_name"`
+	ReplyCount         int64  `json:"reply_count"`
+}
+
+// email_received を「その顧客に最後に email_sent した担当者」に帰属させて
+// 返信数を集計する。Activity には in_reply_to が無くスレッド追跡が
+// できないため、顧客単位の近似で十分という判断 (1 顧客 1 担当が通常運用)。
+// 先行する email_sent が無い受信メールは attributed_user_id = NULL の行に
+// まとまる (UI では「担当なし」として表示する)。
+func (q *Queries) GetMailReplyStatsByBook(ctx context.Context, arg GetMailReplyStatsByBookParams) ([]GetMailReplyStatsByBookRow, error) {
+	rows, err := q.db.Query(ctx, getMailReplyStatsByBook, arg.BookID, arg.FromTime, arg.ToTime)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetMailReplyStatsByBookRow{}
+	for rows.Next() {
+		var i GetMailReplyStatsByBookRow
+		if err := rows.Scan(&i.AttributedUserID, &i.AttributedUserName, &i.ReplyCount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getMailSentStatsByBook = `-- name: GetMailSentStatsByBook :many
+SELECT
+    a.user_id,
+    u.name AS user_name,
+    COUNT(*) AS sent_count
+FROM "Activity" a
+JOIN "Customer" c ON c.id = a.customer_id
+JOIN "User" u ON u.id = a.user_id
+WHERE c.book_id = $1
+  AND a.type = 'email_sent'
+  AND a.occurred_at >= $2::timestamptz
+  AND a.occurred_at < $3::timestamptz
+GROUP BY a.user_id, u.name
+ORDER BY u.name
+`
+
+type GetMailSentStatsByBookParams struct {
+	BookID   uuid.UUID `json:"book_id"`
+	FromTime time.Time `json:"from_time"`
+	ToTime   time.Time `json:"to_time"`
+}
+
+type GetMailSentStatsByBookRow struct {
+	UserID    string `json:"user_id"`
+	UserName  string `json:"user_name"`
+	SentCount int64  `json:"sent_count"`
+}
+
+// 担当者ごとの送信メール数。
+func (q *Queries) GetMailSentStatsByBook(ctx context.Context, arg GetMailSentStatsByBookParams) ([]GetMailSentStatsByBookRow, error) {
+	rows, err := q.db.Query(ctx, getMailSentStatsByBook, arg.BookID, arg.FromTime, arg.ToTime)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetMailSentStatsByBookRow{}
+	for rows.Next() {
+		var i GetMailSentStatsByBookRow
+		if err := rows.Scan(&i.UserID, &i.UserName, &i.SentCount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getMostRecentActivityForCustomer = `-- name: GetMostRecentActivityForCustomer :one
@@ -335,6 +554,145 @@ func (q *Queries) GetMostRecentActivityForCustomer(ctx context.Context, arg GetM
 		&i.OccurredAt,
 	)
 	return i, err
+}
+
+const listActivitiesByBookID = `-- name: ListActivitiesByBookID :many
+SELECT
+    a.id,
+    a.customer_id,
+    a.contact_id,
+    a.type,
+    a.user_id,
+    u.name AS user_name,
+    a.status_id,
+    s.name AS status_name,
+    s.priority AS status_priority,
+    s.effective AS status_effective,
+    s.ng AS status_ng,
+    a.phone,
+    a.mail_from,
+    a.mail_to,
+    a.mail_cc,
+    a.subject,
+    a.body,
+    a.message_id,
+    a.duration_seconds,
+    a.recording_url,
+    a.zoom_call_id,
+    a.occurred_at,
+    a.created_at,
+    a.updated_at,
+    c.name AS customer_name,
+    c.corporation AS customer_corporation
+FROM "Activity" a
+JOIN "Customer" c ON c.id = a.customer_id
+JOIN "User" u ON u.id = a.user_id
+LEFT JOIN "Status" s ON s.id = a.status_id
+WHERE c.book_id = $1
+  AND (cardinality($4::text[]) = 0 OR a.type = ANY($4::text[]))
+  AND ($5::varchar = '' OR a.user_id = $5::varchar)
+  AND a.occurred_at >= $6::timestamptz
+  AND a.occurred_at < $7::timestamptz
+ORDER BY a.occurred_at DESC
+LIMIT $2 OFFSET $3
+`
+
+type ListActivitiesByBookIDParams struct {
+	BookID       uuid.UUID `json:"book_id"`
+	Limit        int32     `json:"limit"`
+	Offset       int32     `json:"offset"`
+	Types        []string  `json:"types"`
+	FilterUserID string    `json:"filter_user_id"`
+	FromTime     time.Time `json:"from_time"`
+	ToTime       time.Time `json:"to_time"`
+}
+
+type ListActivitiesByBookIDRow struct {
+	ID                  uuid.UUID   `json:"id"`
+	CustomerID          uuid.UUID   `json:"customer_id"`
+	ContactID           pgtype.UUID `json:"contact_id"`
+	Type                string      `json:"type"`
+	UserID              string      `json:"user_id"`
+	UserName            string      `json:"user_name"`
+	StatusID            pgtype.UUID `json:"status_id"`
+	StatusName          pgtype.Text `json:"status_name"`
+	StatusPriority      pgtype.Int4 `json:"status_priority"`
+	StatusEffective     pgtype.Bool `json:"status_effective"`
+	StatusNg            pgtype.Bool `json:"status_ng"`
+	Phone               pgtype.Text `json:"phone"`
+	MailFrom            pgtype.Text `json:"mail_from"`
+	MailTo              pgtype.Text `json:"mail_to"`
+	MailCc              pgtype.Text `json:"mail_cc"`
+	Subject             pgtype.Text `json:"subject"`
+	Body                pgtype.Text `json:"body"`
+	MessageID           pgtype.Text `json:"message_id"`
+	DurationSeconds     pgtype.Int4 `json:"duration_seconds"`
+	RecordingUrl        pgtype.Text `json:"recording_url"`
+	ZoomCallID          pgtype.Text `json:"zoom_call_id"`
+	OccurredAt          time.Time   `json:"occurred_at"`
+	CreatedAt           time.Time   `json:"created_at"`
+	UpdatedAt           time.Time   `json:"updated_at"`
+	CustomerName        string      `json:"customer_name"`
+	CustomerCorporation string      `json:"customer_corporation"`
+}
+
+// Book 内の全 Activity を横断で返す (活動フィード用)。
+// types が空配列のときは全 type。filter_user_id が空文字のときは全担当者。
+// from_time / to_time は呼び出し側で必ず埋める (未指定はサービス層で
+// epoch 〜 遠未来のセンチネルに展開する)。
+func (q *Queries) ListActivitiesByBookID(ctx context.Context, arg ListActivitiesByBookIDParams) ([]ListActivitiesByBookIDRow, error) {
+	rows, err := q.db.Query(ctx, listActivitiesByBookID,
+		arg.BookID,
+		arg.Limit,
+		arg.Offset,
+		arg.Types,
+		arg.FilterUserID,
+		arg.FromTime,
+		arg.ToTime,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListActivitiesByBookIDRow{}
+	for rows.Next() {
+		var i ListActivitiesByBookIDRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CustomerID,
+			&i.ContactID,
+			&i.Type,
+			&i.UserID,
+			&i.UserName,
+			&i.StatusID,
+			&i.StatusName,
+			&i.StatusPriority,
+			&i.StatusEffective,
+			&i.StatusNg,
+			&i.Phone,
+			&i.MailFrom,
+			&i.MailTo,
+			&i.MailCc,
+			&i.Subject,
+			&i.Body,
+			&i.MessageID,
+			&i.DurationSeconds,
+			&i.RecordingUrl,
+			&i.ZoomCallID,
+			&i.OccurredAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.CustomerName,
+			&i.CustomerCorporation,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listActivitiesByCustomerID = `-- name: ListActivitiesByCustomerID :many
@@ -475,7 +833,7 @@ SET
     status_id = $2,
     updated_at = now()
 WHERE id = $1
-RETURNING id, customer_id, contact_id, type, user_id, status_id, phone, mail_from, mail_to, mail_cc, subject, body, message_id, occurred_at, created_at, updated_at, duration_seconds, recording_url, zoom_call_id
+RETURNING id, customer_id, contact_id, type, user_id, status_id, phone, mail_from, mail_to, mail_cc, subject, body, message_id, occurred_at, created_at, updated_at, duration_seconds, recording_url, zoom_call_id, mailbox_id
 `
 
 type UpdateActivityStatusParams struct {
@@ -506,6 +864,7 @@ func (q *Queries) UpdateActivityStatus(ctx context.Context, arg UpdateActivitySt
 		&i.DurationSeconds,
 		&i.RecordingUrl,
 		&i.ZoomCallID,
+		&i.MailboxID,
 	)
 	return i, err
 }

@@ -13,6 +13,16 @@ option go_package = "github.com/0utl1er-tech/phox-customer/gen/pb/activity/v1;ac
 service ActivityService {
   rpc ListActivitiesByCustomerID(ListActivitiesByCustomerIDRequest)
       returns (ListActivitiesByCustomerIDResponse);
+  // Book 内の全顧客の Activity を横断して返す活動フィード。
+  // 種別 / 担当者 / 期間でフィルタでき、occurred_at 降順 + offset ページング。
+  rpc ListActivitiesByBookID(ListActivitiesByBookIDRequest)
+      returns (ListActivitiesByBookIDResponse);
+  // 担当者 × コール結果 (Status) のクロス集計。ロングフォーマットの
+  // セル (user, status, count) を返し、ピボットは UI 側で行う。
+  rpc GetCallStats(GetCallStatsRequest) returns (GetCallStatsResponse);
+  // 担当者ごとのメール送信数と返信数。返信は「その顧客に最後に送信した
+  // 担当者」への帰属で近似する (スレッド追跡は未実装)。
+  rpc GetMailStats(GetMailStatsRequest) returns (GetMailStatsResponse);
   rpc CreateActivityCall(CreateActivityCallRequest)
       returns (CreateActivityCallResponse);
   rpc CreateActivityEmailSent(CreateActivityEmailSentRequest)
@@ -61,6 +71,12 @@ message Activity {
   // type の Activity でのみ意味を持つ。
   bool has_recording = 21;
   optional int32 duration_seconds = 22;
+  // Book 横断フィード (ListActivitiesByBookID) でのみ埋まる。顧客詳細への
+  // リンク表示用。ListActivitiesByCustomerID では未設定。
+  optional string customer_name = 23;
+  optional string customer_corporation = 24;
+  // Phase 25: どのメールボックスで送受信したか (実メールボックス送信時のみ)。
+  optional string mailbox_id = 25;
 }
 
 message ListActivitiesByCustomerIDRequest {
@@ -70,6 +86,64 @@ message ListActivitiesByCustomerIDRequest {
 }
 message ListActivitiesByCustomerIDResponse {
   repeated Activity activities = 1;
+}
+
+message ListActivitiesByBookIDRequest {
+  string book_id = 1 [(buf.validate.field).string.uuid = true];
+  // 空配列なら全 type を返す
+  repeated ActivityType types = 2;
+  // 指定すると担当者で絞り込む (User.id = Keycloak sub)
+  optional string user_id = 3;
+  // 期間フィルタ。occurred_from <= occurred_at < occurred_to。
+  // どちらも省略可 (省略側は無制限)。
+  optional google.protobuf.Timestamp occurred_from = 4;
+  optional google.protobuf.Timestamp occurred_to = 5;
+  // 1 ページの件数。0 または未指定はサーバ既定値 (50)、上限 200。
+  int32 limit = 6;
+  int32 offset = 7;
+}
+message ListActivitiesByBookIDResponse {
+  repeated Activity activities = 1;
+  // フィルタ適用後の総件数 (ページネーション用)
+  int64 total_count = 2;
+}
+
+message GetCallStatsRequest {
+  string book_id = 1 [(buf.validate.field).string.uuid = true];
+  optional google.protobuf.Timestamp occurred_from = 2;
+  optional google.protobuf.Timestamp occurred_to = 3;
+}
+// クロス集計の 1 セル = (担当者, コール結果) の組み合わせ。
+message CallStatsCell {
+  string user_id = 1;
+  string user_name = 2;
+  // NULL (未設定) は Status 削除済み等のコール。UI では「未設定」列。
+  optional string status_id = 3;
+  optional string status_name = 4;
+  optional int32 status_priority = 5;
+  int64 count = 6;
+  // Zoom 通話の合計通話秒数 (手動記録は duration が無いので含まれない)
+  int64 total_duration_seconds = 7;
+}
+message GetCallStatsResponse {
+  repeated CallStatsCell cells = 1;
+}
+
+message GetMailStatsRequest {
+  string book_id = 1 [(buf.validate.field).string.uuid = true];
+  optional google.protobuf.Timestamp occurred_from = 2;
+  optional google.protobuf.Timestamp occurred_to = 3;
+}
+message MailStatsRow {
+  // 帰属先不明の返信 (先行する送信メールが無い受信) は user_id = "" の
+  // 行に集約される。
+  string user_id = 1;
+  string user_name = 2;
+  int64 sent_count = 3;
+  int64 reply_count = 4;
+}
+message GetMailStatsResponse {
+  repeated MailStatsRow rows = 1;
 }
 
 message CreateActivityCallRequest {
@@ -91,6 +165,11 @@ message CreateActivityEmailSentRequest {
   string subject = 4 [(buf.validate.field).string.min_len = 1];
   string body = 5;
   optional string contact_id = 6;
+  // Phase 25: 指定すると「Phox が所有する実メールボックス」として送信する
+  // (From = そのアドレス、SMTP 認証もそのメールボックスの資格情報)。
+  // 呼び出しユーザーにそのメールボックスの editor 以上の MailboxPermit が必要。
+  // 省略時はレガシーのなりすまし送信 (トークンの email claim が From)。
+  optional string mailbox_id = 7;
 }
 message CreateActivityEmailSentResponse {
   Activity activity = 1;
