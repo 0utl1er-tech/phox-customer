@@ -47,7 +47,9 @@ message ListMailboxesResponse {
 
 message CreateMailboxRequest {
   string address = 1 [(buf.validate.field).string.min_len = 3];
-  string password = 2 [(buf.validate.field).string.min_len = 1];
+  // Phase 25/D: mailu 自動プロビジョニング時は空でよい (Phox がランダム生成)。
+  // 既存アカウント登録モード (mailu API 未設定) では必須。
+  string password = 2;
   string display_name = 3;
   // 省略時は address を smtp_username に使う。
   string smtp_username = 4;

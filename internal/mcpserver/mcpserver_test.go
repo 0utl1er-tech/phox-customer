@@ -60,7 +60,7 @@ func newTestHandler(t *testing.T, q *db.Queries, sub string) http.Handler {
 		Customer: customer.NewCustomerService(q, nil),
 		Search:   search.NewSearchService(q, nil), // ES nil → search_customers はツールエラー
 		Activity: activity.NewActivityService(q, nil, nil),
-		Mailbox:  mailbox.NewMailboxService(q, cipher),
+		Mailbox:  mailbox.NewMailboxService(q, cipher, nil),
 	}, "")
 }
 

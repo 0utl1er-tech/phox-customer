@@ -30,6 +30,7 @@ import (
 	"github.com/0utl1er-tech/phox-customer/internal/ical"
 	"github.com/0utl1er-tech/phox-customer/internal/keycloakadmin"
 	"github.com/0utl1er-tech/phox-customer/internal/mail"
+	"github.com/0utl1er-tech/phox-customer/internal/mailu"
 	"github.com/0utl1er-tech/phox-customer/internal/mcpserver"
 	oauthsvc "github.com/0utl1er-tech/phox-customer/internal/oauth"
 	"github.com/0utl1er-tech/phox-customer/internal/recording"
@@ -249,7 +250,9 @@ func main() {
 		if cerr != nil {
 			log.Fatal().Err(cerr).Msg("Failed to decode MAILBOX_SECRET_KEY")
 		}
-		mailboxService = mailbox.NewMailboxService(queries, mailboxCipher)
+		// Phase 25/D: mailu 管理 API クライアント (両 env 揃うと自動作成有効)。
+		mailuClient := mailu.NewClient(cfg.MailuAPIBase, cfg.MailuAPIToken)
+		mailboxService = mailbox.NewMailboxService(queries, mailboxCipher, mailuClient)
 		mailboxSender, cerr = mail.NewMailboxSender(cfg.MailuSMTPHost, cfg.MailuSMTPPort, cfg.MailuSMTPTLS)
 		if cerr != nil {
 			log.Fatal().Err(cerr).Msg("Failed to build mailbox sender")
@@ -257,6 +260,7 @@ func main() {
 		log.Info().
 			Str("mailu_smtp", cfg.MailuSMTPHost).
 			Bool("sending_enabled", mailboxSender != nil).
+			Bool("auto_provision", mailuClient != nil).
 			Msg("MailboxService enabled")
 	} else {
 		log.Warn().Msg("MAILBOX_SECRET_KEY not set — MailboxService disabled")

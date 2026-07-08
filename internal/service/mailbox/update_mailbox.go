@@ -32,12 +32,23 @@ func (s *MailboxService) UpdateMailbox(
 	if req.Msg.Active != nil {
 		params.Active = pgtype.Bool{Bool: *req.Msg.Active, Valid: true}
 	}
-	if req.Msg.Password != nil && *req.Msg.Password != "" {
+	rotating := req.Msg.Password != nil && *req.Msg.Password != ""
+	if rotating {
 		enc, err := s.cipher.EncryptString(*req.Msg.Password)
 		if err != nil {
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to encrypt password: %w", err))
 		}
 		params.PasswordEnc = enc
+		// mailu 側のパスワードも先に更新 (失敗したら DB は変えない)。
+		if s.provisioner != nil {
+			cur, gerr := s.queries.GetMailbox(ctx, mailboxID)
+			if gerr != nil {
+				return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("mailbox not found: %w", gerr))
+			}
+			if perr := s.provisioner.SetPassword(ctx, cur.Address, *req.Msg.Password); perr != nil {
+				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("mailu set password: %w", perr))
+			}
+		}
 	}
 
 	mb, err := s.queries.UpdateMailbox(ctx, params)

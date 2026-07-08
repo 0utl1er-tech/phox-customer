@@ -129,6 +129,11 @@ type Config struct {
 	MailuIMAPHost string `mapstructure:"MAILU_IMAP_HOST"`
 	MailuIMAPPort int    `mapstructure:"MAILU_IMAP_PORT"`
 	MailuIMAPTLS  string `mapstructure:"MAILU_IMAP_TLS_MODE"`
+
+	// Phase 25/D: mailu 管理 API。両方揃うと CreateMailbox がアカウントを
+	// 自動プロビジョニングする (空なら「既存アカウントを登録」モード)。
+	MailuAPIBase  string `mapstructure:"MAILU_API_BASE"`
+	MailuAPIToken string `mapstructure:"MAILU_API_TOKEN"`
 }
 
 // LoadConfig reads configuration from `app.env` and (if present) layers

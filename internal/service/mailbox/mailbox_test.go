@@ -30,7 +30,7 @@ func newFixture(t *testing.T) (*mailbox.MailboxService, *db.Queries, db.User, db
 	other := testutil.TestUser(t, q, "mb-other-"+uuid.NewString(), cid)
 	cipher, err := crypto.NewCipherFromBase64(testKeyB64)
 	require.NoError(t, err)
-	return mailbox.NewMailboxService(q, cipher), q, owner, other
+	return mailbox.NewMailboxService(q, cipher, nil), q, owner, other
 }
 
 func uniqAddr(prefix string) string { return prefix + "-" + uuid.NewString() + "@0utl1er.tech" }
