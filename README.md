@@ -87,6 +87,27 @@ lifetime で失効する点に注意 — 長時間使うなら都度取得する
 
 実装: `internal/mcpserver/` (tool 定義とテストは同 package)。
 
+## メールボックス (Phase 25)
+
+Phox が **実 mailu アカウントを複数所有**し、Book と同型の RBAC
+(owner/editor/viewer) で「誰がどのメールボックスを使えるか」を制御する。
+従来のなりすまし送信 (From 差し替え + Reply-To 固定) の返信取りこぼしを解消する。
+
+- 登録/メンバー管理: UI 設定画面の「メールボックス」カード、または
+  `mailbox.v1.MailboxService` (パスワードは AES-GCM 暗号化保存・レスポンス非公開)
+- 送信: `CreateActivityEmailSent` に `mailbox_id` を渡すと、そのメールボックスの
+  資格情報で SMTP 認証し From もそのアドレスになる (editor 以上が必要、
+  Reply-To なし = 返信は同じ口へ)。省略時はレガシーのなりすまし送信
+- MCP: `list_mailboxes` / `send_customer_email(mailbox_id)`
+- env: `MAILBOX_SECRET_KEY` (base64 32byte、無ければ機能ごと無効) と
+  共有 mailu 接続 `MAILU_SMTP_HOST/PORT/TLS_MODE` (+ Phase C で `MAILU_IMAP_*`)
+- mailu 側: アカウントは admin UI で作成して Phox に登録 (v1 は API 連携なし)。
+  なりすまし送信を使い続ける場合のみ従来の sender restriction 解除が必要で、
+  メールボックス送信だけなら不要
+
+実装: `internal/service/mailbox/`, `internal/mail/mailbox_sender.go`,
+migration `000011_mailboxes`。
+
 ## ローカル開発
 
 ```bash
