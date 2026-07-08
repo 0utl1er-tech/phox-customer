@@ -37,6 +37,7 @@ import (
 	"github.com/0utl1er-tech/phox-customer/internal/service/activity"
 	"github.com/0utl1er-tech/phox-customer/internal/service/book"
 	"github.com/0utl1er-tech/phox-customer/internal/service/customer"
+	"github.com/0utl1er-tech/phox-customer/internal/service/mailbox"
 	"github.com/0utl1er-tech/phox-customer/internal/service/search"
 )
 
@@ -63,6 +64,7 @@ type Deps struct {
 	Customer *customer.CustomerService
 	Search   *search.SearchService
 	Activity *activity.ActivityService
+	Mailbox  *mailbox.MailboxService // nil 可 (MAILBOX_SECRET_KEY 未設定時)
 }
 
 // ProtectedResourceMetadata is the RFC 9728 document served at

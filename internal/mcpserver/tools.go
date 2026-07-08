@@ -15,6 +15,7 @@ import (
 	activityv1 "github.com/0utl1er-tech/phox-customer/gen/pb/activity/v1"
 	bookv1 "github.com/0utl1er-tech/phox-customer/gen/pb/book/v1"
 	customerv1 "github.com/0utl1er-tech/phox-customer/gen/pb/customer/v1"
+	mailboxv1 "github.com/0utl1er-tech/phox-customer/gen/pb/mailbox/v1"
 	searchv1 "github.com/0utl1er-tech/phox-customer/gen/pb/search/v1"
 )
 
@@ -70,6 +71,18 @@ type sendCustomerEmailIn struct {
 // ─── registration ───────────────────────────────────────────────
 
 func addTools(s *mcp.Server, deps Deps) {
+	if deps.Mailbox != nil {
+		mcp.AddTool(s, &mcp.Tool{
+			Name: "list_mailboxes",
+			Description: "List the mailboxes (real email addresses Phox owns) the authenticated " +
+				"user can send from or read. Returns each mailbox's id, address and your role " +
+				"(viewer/editor/owner); editor or owner is required to send from it.",
+		}, func(ctx context.Context, _ *mcp.CallToolRequest, _ emptyIn) (*mcp.CallToolResult, any, error) {
+			resp, err := deps.Mailbox.ListMailboxes(ctx, connect.NewRequest(&mailboxv1.ListMailboxesRequest{}))
+			return protoResult(resp, err)
+		})
+	}
+
 	mcp.AddTool(s, &mcp.Tool{
 		Name: "list_books",
 		Description: "List the customer books (顧客リスト) the authenticated user can access. " +

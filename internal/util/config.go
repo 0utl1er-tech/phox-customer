@@ -116,6 +116,19 @@ type Config struct {
 	// /mcp にマウントする。認証は Connect RPC と同一の Keycloak JWT。
 	// false でエンドポイントごと無効化。
 	MCPEnabled bool `mapstructure:"MCP_ENABLED"`
+
+	// Phase 25: メールボックスパスワードの暗号化鍵 (base64 32 byte AES-256)。
+	// 未設定なら MailboxService は登録されない (機能ごと無効化)。
+	MailboxSecretKey string `mapstructure:"MAILBOX_SECRET_KEY"`
+
+	// Phase 25: 全メールボックス共通の mailu 接続先。Mailbox 単位の資格情報
+	// (DB, 暗号化) と組み合わせて送受信する。個別 SMTP_*/IMAP_* は後方互換で残す。
+	MailuSMTPHost string `mapstructure:"MAILU_SMTP_HOST"`
+	MailuSMTPPort int    `mapstructure:"MAILU_SMTP_PORT"`
+	MailuSMTPTLS  string `mapstructure:"MAILU_SMTP_TLS_MODE"`
+	MailuIMAPHost string `mapstructure:"MAILU_IMAP_HOST"`
+	MailuIMAPPort int    `mapstructure:"MAILU_IMAP_PORT"`
+	MailuIMAPTLS  string `mapstructure:"MAILU_IMAP_TLS_MODE"`
 }
 
 // LoadConfig reads configuration from `app.env` and (if present) layers

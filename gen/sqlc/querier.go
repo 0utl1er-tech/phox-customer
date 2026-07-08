@@ -14,6 +14,7 @@ import (
 type Querier interface {
 	CheckUserAccessToBook(ctx context.Context, arg CheckUserAccessToBookParams) (bool, error)
 	CheckUserRoleForBook(ctx context.Context, arg CheckUserRoleForBookParams) (Role, error)
+	CheckUserRoleForMailbox(ctx context.Context, arg CheckUserRoleForMailboxParams) (Role, error)
 	ClearRedialGcalSync(ctx context.Context, id uuid.UUID) (Redial, error)
 	// ListActivitiesByBookID のページネーション用 total。フィルタ条件は同一に保つこと。
 	CountActivitiesByBookID(ctx context.Context, arg CountActivitiesByBookIDParams) (int64, error)
@@ -26,6 +27,8 @@ type Querier interface {
 	CreateContact(ctx context.Context, arg CreateContactParams) (Contact, error)
 	CreateCustomer(ctx context.Context, arg CreateCustomerParams) (Customer, error)
 	CreateMailTemplate(ctx context.Context, arg CreateMailTemplateParams) (MailTemplate, error)
+	CreateMailbox(ctx context.Context, arg CreateMailboxParams) (Mailbox, error)
+	CreateMailboxPermit(ctx context.Context, arg CreateMailboxPermitParams) (MailboxPermit, error)
 	CreatePermit(ctx context.Context, arg CreatePermitParams) (Permit, error)
 	// Phase 20: 再設計された Redial テーブルの CRUD。
 	// 旧の CreateRedial (date+time 引数) は削除、start_at/end_at + note + gcal_event_id。
@@ -38,6 +41,8 @@ type Querier interface {
 	DeleteContact(ctx context.Context, id uuid.UUID) error
 	DeleteCustomer(ctx context.Context, id uuid.UUID) error
 	DeleteMailTemplate(ctx context.Context, id uuid.UUID) error
+	DeleteMailbox(ctx context.Context, id uuid.UUID) error
+	DeleteMailboxPermit(ctx context.Context, arg DeleteMailboxPermitParams) error
 	DeletePermit(ctx context.Context, id uuid.UUID) error
 	DeleteRedial(ctx context.Context, id uuid.UUID) error
 	DeleteStatus(ctx context.Context, id uuid.UUID) error
@@ -86,6 +91,8 @@ type Querier interface {
 	// 担当者ごとの送信メール数。
 	GetMailSentStatsByBook(ctx context.Context, arg GetMailSentStatsByBookParams) ([]GetMailSentStatsByBookRow, error)
 	GetMailTemplate(ctx context.Context, id uuid.UUID) (MailTemplate, error)
+	GetMailbox(ctx context.Context, id uuid.UUID) (Mailbox, error)
+	GetMailboxPermitByMailboxIDAndUserID(ctx context.Context, arg GetMailboxPermitByMailboxIDAndUserIDParams) (MailboxPermit, error)
 	GetMaxStatusPriority(ctx context.Context, bookID uuid.UUID) (interface{}, error)
 	// Zoom Phone webhook の caller/callee マッチで複数 Customer 候補が出た時に
 	// 「最も最近 Activity がある Customer」を選ぶための補助 query。
@@ -99,6 +106,8 @@ type Querier interface {
 	GetUser(ctx context.Context, id string) (User, error)
 	GetUserGoogleToken(ctx context.Context, userID string) (UserGoogleToken, error)
 	GetUserICalFeed(ctx context.Context, userID string) (UserICalFeed, error)
+	// IMAP worker が polling 対象を DB から引くためのクエリ (password_enc 込み)。
+	ListActiveMailboxesByCompany(ctx context.Context, companyID uuid.UUID) ([]Mailbox, error)
 	// Book 内の全 Activity を横断で返す (活動フィード用)。
 	// types が空配列のときは全 type。filter_user_id が空文字のときは全担当者。
 	// from_time / to_time は呼び出し側で必ず埋める (未指定はサービス層で
@@ -106,12 +115,17 @@ type Querier interface {
 	ListActivitiesByBookID(ctx context.Context, arg ListActivitiesByBookIDParams) ([]ListActivitiesByBookIDRow, error)
 	// types が空配列 or NULL のときは全件、非空のときは type IN (types) で絞り込む。
 	ListActivitiesByCustomerID(ctx context.Context, arg ListActivitiesByCustomerIDParams) ([]ListActivitiesByCustomerIDRow, error)
+	// 全 company の active メールボックス (単一テナント運用では company フィルタ不要)。
+	ListAllActiveMailboxes(ctx context.Context) ([]Mailbox, error)
 	ListAllContacts(ctx context.Context, arg ListAllContactsParams) ([]ListAllContactsRow, error)
 	ListAllCustomers(ctx context.Context) ([]ListAllCustomersRow, error)
 	ListCompanies(ctx context.Context) ([]Company, error)
 	ListContacts(ctx context.Context, customerID uuid.UUID) ([]Contact, error)
 	ListCustomers(ctx context.Context, arg ListCustomersParams) ([]ListCustomersRow, error)
 	ListMailTemplatesByBook(ctx context.Context, bookID uuid.UUID) ([]MailTemplate, error)
+	ListMailboxPermitsWithUserInfo(ctx context.Context, mailboxID uuid.UUID) ([]ListMailboxPermitsWithUserInfoRow, error)
+	// 呼び出しユーザーが MailboxPermit を持つメールボックス一覧 (自分のロール付き)。
+	ListMailboxesByUserID(ctx context.Context, userID string) ([]ListMailboxesByUserIDRow, error)
 	ListPermits(ctx context.Context, bookID uuid.UUID) ([]Permit, error)
 	ListPermitsWithUserInfo(ctx context.Context, bookID uuid.UUID) ([]ListPermitsWithUserInfoRow, error)
 	ListRedialsByCustomer(ctx context.Context, customerID uuid.UUID) ([]Redial, error)
@@ -134,6 +148,9 @@ type Querier interface {
 	UpdateContact(ctx context.Context, arg UpdateContactParams) (Contact, error)
 	UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) (Customer, error)
 	UpdateMailTemplate(ctx context.Context, arg UpdateMailTemplateParams) (MailTemplate, error)
+	// password_enc は narg。nil を渡せば既存パスワードを維持する。
+	UpdateMailbox(ctx context.Context, arg UpdateMailboxParams) (Mailbox, error)
+	UpdateMailboxPermitRole(ctx context.Context, arg UpdateMailboxPermitRoleParams) (MailboxPermit, error)
 	UpdatePermit(ctx context.Context, arg UpdatePermitParams) (Permit, error)
 	UpdateRedial(ctx context.Context, arg UpdateRedialParams) (Redial, error)
 	UpdateStatus(ctx context.Context, arg UpdateStatusParams) (Status, error)

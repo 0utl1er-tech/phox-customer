@@ -16,6 +16,7 @@ import (
 	customerv1connect "github.com/0utl1er-tech/phox-customer/gen/pb/customer/v1/customerv1connect"
 	googleoauthv1connect "github.com/0utl1er-tech/phox-customer/gen/pb/googleoauth/v1/googleoauthv1connect"
 	icalfeedv1connect "github.com/0utl1er-tech/phox-customer/gen/pb/icalfeed/v1/icalfeedv1connect"
+	mailboxv1connect "github.com/0utl1er-tech/phox-customer/gen/pb/mailbox/v1/mailboxv1connect"
 	mailtemplatev1connect "github.com/0utl1er-tech/phox-customer/gen/pb/mailtemplate/v1/mailtemplatev1connect"
 	permitv1connect "github.com/0utl1er-tech/phox-customer/gen/pb/permit/v1/permitv1connect"
 	redialv1connect "github.com/0utl1er-tech/phox-customer/gen/pb/redial/v1/redialv1connect"
@@ -41,6 +42,7 @@ import (
 	"github.com/0utl1er-tech/phox-customer/internal/service/customer"
 	"github.com/0utl1er-tech/phox-customer/internal/service/googleoauth"
 	"github.com/0utl1er-tech/phox-customer/internal/service/icalfeed"
+	"github.com/0utl1er-tech/phox-customer/internal/service/mailbox"
 	"github.com/0utl1er-tech/phox-customer/internal/service/mailtemplate"
 	"github.com/0utl1er-tech/phox-customer/internal/service/permit"
 	"github.com/0utl1er-tech/phox-customer/internal/service/redial"
@@ -233,6 +235,20 @@ func main() {
 	permitService := permit.NewPermitService(queries)
 	contactService := contact.NewContactService(queries)
 	statusService := status.NewStatusService(queries)
+
+	// Phase 25: MailboxService — MAILBOX_SECRET_KEY 設定時のみ有効。
+	// 鍵はメールボックスパスワードの AES-GCM 暗号化に使う。
+	var mailboxService *mailbox.MailboxService
+	if cfg.MailboxSecretKey != "" {
+		mailboxCipher, cerr := crypto.NewCipherFromBase64(cfg.MailboxSecretKey)
+		if cerr != nil {
+			log.Fatal().Err(cerr).Msg("Failed to decode MAILBOX_SECRET_KEY")
+		}
+		mailboxService = mailbox.NewMailboxService(queries, mailboxCipher)
+		log.Info().Msg("MailboxService enabled")
+	} else {
+		log.Warn().Msg("MAILBOX_SECRET_KEY not set — MailboxService disabled")
+	}
 	userService := user.NewUserService(queries, keycloakAdmin, connPool)
 	searchService := searchsvc.NewSearchService(queries, esClient)
 	// Activity service — Phase 11 で SMTPClient を注入済み。
@@ -468,6 +484,10 @@ func main() {
 	customerPath, customerHandler := customerv1connect.NewCustomerServiceHandler(customerService, interceptors)
 	bookPath, bookHandler := bookv1connect.NewBookServiceHandler(bookService, interceptors)
 	permitPath, permitHandler := permitv1connect.NewPermitServiceHandler(permitService, interceptors)
+	if mailboxService != nil {
+		mailboxPath, mailboxHandler := mailboxv1connect.NewMailboxServiceHandler(mailboxService, interceptors)
+		mux.Handle(mailboxPath, mailboxHandler)
+	}
 	contactPath, contactHandler := contactv1connect.NewContactServiceHandler(contactService, interceptors)
 	statusPath, statusHandler := statusv1connect.NewStatusServiceHandler(statusService, interceptors)
 	userPath, userHandler := userv1connect.NewUserServiceHandler(userService, interceptors)
@@ -529,6 +549,7 @@ func main() {
 			Customer: customerService,
 			Search:   searchService,
 			Activity: activityService,
+			Mailbox:  mailboxService, // nil 可 (機能無効時は list_mailboxes 非登録)
 		}, metaURL))
 		log.Info().Str("resource_metadata", metaURL).Msg("MCP server mounted at /mcp")
 	}

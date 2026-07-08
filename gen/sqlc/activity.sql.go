@@ -58,7 +58,7 @@ INSERT INTO "Activity" (
     $14,
     $15, $16, $17
 )
-RETURNING id, customer_id, contact_id, type, user_id, status_id, phone, mail_from, mail_to, mail_cc, subject, body, message_id, occurred_at, created_at, updated_at, duration_seconds, recording_url, zoom_call_id
+RETURNING id, customer_id, contact_id, type, user_id, status_id, phone, mail_from, mail_to, mail_cc, subject, body, message_id, occurred_at, created_at, updated_at, duration_seconds, recording_url, zoom_call_id, mailbox_id
 `
 
 type CreateActivityParams struct {
@@ -125,6 +125,7 @@ func (q *Queries) CreateActivity(ctx context.Context, arg CreateActivityParams) 
 		&i.DurationSeconds,
 		&i.RecordingUrl,
 		&i.ZoomCallID,
+		&i.MailboxID,
 	)
 	return i, err
 }
@@ -240,7 +241,7 @@ func (q *Queries) FindCustomersByPhoneDigits(ctx context.Context, dollar_1 strin
 }
 
 const getActivity = `-- name: GetActivity :one
-SELECT id, customer_id, contact_id, type, user_id, status_id, phone, mail_from, mail_to, mail_cc, subject, body, message_id, occurred_at, created_at, updated_at, duration_seconds, recording_url, zoom_call_id FROM "Activity" WHERE id = $1
+SELECT id, customer_id, contact_id, type, user_id, status_id, phone, mail_from, mail_to, mail_cc, subject, body, message_id, occurred_at, created_at, updated_at, duration_seconds, recording_url, zoom_call_id, mailbox_id FROM "Activity" WHERE id = $1
 `
 
 func (q *Queries) GetActivity(ctx context.Context, id uuid.UUID) (Activity, error) {
@@ -266,12 +267,13 @@ func (q *Queries) GetActivity(ctx context.Context, id uuid.UUID) (Activity, erro
 		&i.DurationSeconds,
 		&i.RecordingUrl,
 		&i.ZoomCallID,
+		&i.MailboxID,
 	)
 	return i, err
 }
 
 const getActivityByMessageID = `-- name: GetActivityByMessageID :one
-SELECT id, customer_id, contact_id, type, user_id, status_id, phone, mail_from, mail_to, mail_cc, subject, body, message_id, occurred_at, created_at, updated_at, duration_seconds, recording_url, zoom_call_id FROM "Activity" WHERE message_id = $1
+SELECT id, customer_id, contact_id, type, user_id, status_id, phone, mail_from, mail_to, mail_cc, subject, body, message_id, occurred_at, created_at, updated_at, duration_seconds, recording_url, zoom_call_id, mailbox_id FROM "Activity" WHERE message_id = $1
 `
 
 func (q *Queries) GetActivityByMessageID(ctx context.Context, messageID pgtype.Text) (Activity, error) {
@@ -297,12 +299,13 @@ func (q *Queries) GetActivityByMessageID(ctx context.Context, messageID pgtype.T
 		&i.DurationSeconds,
 		&i.RecordingUrl,
 		&i.ZoomCallID,
+		&i.MailboxID,
 	)
 	return i, err
 }
 
 const getActivityByZoomCallID = `-- name: GetActivityByZoomCallID :one
-SELECT id, customer_id, contact_id, type, user_id, status_id, phone, mail_from, mail_to, mail_cc, subject, body, message_id, occurred_at, created_at, updated_at, duration_seconds, recording_url, zoom_call_id FROM "Activity" WHERE zoom_call_id = $1
+SELECT id, customer_id, contact_id, type, user_id, status_id, phone, mail_from, mail_to, mail_cc, subject, body, message_id, occurred_at, created_at, updated_at, duration_seconds, recording_url, zoom_call_id, mailbox_id FROM "Activity" WHERE zoom_call_id = $1
 `
 
 // recording_completed webhook で受け取った call_id から既存 Activity を逆引き。
@@ -330,6 +333,7 @@ func (q *Queries) GetActivityByZoomCallID(ctx context.Context, zoomCallID pgtype
 		&i.DurationSeconds,
 		&i.RecordingUrl,
 		&i.ZoomCallID,
+		&i.MailboxID,
 	)
 	return i, err
 }
@@ -825,7 +829,7 @@ SET
     status_id = $2,
     updated_at = now()
 WHERE id = $1
-RETURNING id, customer_id, contact_id, type, user_id, status_id, phone, mail_from, mail_to, mail_cc, subject, body, message_id, occurred_at, created_at, updated_at, duration_seconds, recording_url, zoom_call_id
+RETURNING id, customer_id, contact_id, type, user_id, status_id, phone, mail_from, mail_to, mail_cc, subject, body, message_id, occurred_at, created_at, updated_at, duration_seconds, recording_url, zoom_call_id, mailbox_id
 `
 
 type UpdateActivityStatusParams struct {
@@ -856,6 +860,7 @@ func (q *Queries) UpdateActivityStatus(ctx context.Context, arg UpdateActivitySt
 		&i.DurationSeconds,
 		&i.RecordingUrl,
 		&i.ZoomCallID,
+		&i.MailboxID,
 	)
 	return i, err
 }

@@ -18,11 +18,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
+	"github.com/0utl1er-tech/phox-customer/internal/crypto"
 	"github.com/0utl1er-tech/phox-customer/internal/mcpserver"
 	"github.com/0utl1er-tech/phox-customer/internal/service/activity"
 	"github.com/0utl1er-tech/phox-customer/internal/service/auth"
 	"github.com/0utl1er-tech/phox-customer/internal/service/book"
 	"github.com/0utl1er-tech/phox-customer/internal/service/customer"
+	"github.com/0utl1er-tech/phox-customer/internal/service/mailbox"
 	"github.com/0utl1er-tech/phox-customer/internal/service/search"
 	"github.com/0utl1er-tech/phox-customer/internal/testutil"
 )
@@ -51,11 +53,14 @@ func (s stubAuth) Authenticate(ctx context.Context, header string) (context.Cont
 // newTestHandler builds the /mcp handler with real services on the test DB.
 func newTestHandler(t *testing.T, q *db.Queries, sub string) http.Handler {
 	t.Helper()
+	cipher, err := crypto.NewCipherFromBase64("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
+	require.NoError(t, err)
 	return mcpserver.NewHandler(stubAuth{sub: sub}, mcpserver.Deps{
 		Book:     book.NewBookService(q, nil),
 		Customer: customer.NewCustomerService(q, nil),
 		Search:   search.NewSearchService(q, nil), // ES nil → search_customers はツールエラー
 		Activity: activity.NewActivityService(q, nil, nil),
+		Mailbox:  mailbox.NewMailboxService(q, cipher),
 	}, "")
 }
 
@@ -186,6 +191,27 @@ func TestToolsAgainstDB(t *testing.T) {
 		require.NoError(t, err)
 		require.False(t, res.IsError, "unexpected tool error: %s", textOf(t, res))
 		assert.Contains(t, textOf(t, res), bk.ID.String())
+	})
+
+	t.Run("list_mailboxes returns a created mailbox", func(t *testing.T) {
+		// owner が所有するメールボックスを 1 件作る。
+		mbID := uuid.New()
+		enc := []byte("enc-placeholder")
+		_, err := q.CreateMailbox(ctx, db.CreateMailboxParams{
+			ID: mbID, CompanyID: cid, Address: "mcp-mb-" + mbID.String() + "@0utl1er.tech",
+			DisplayName: "MCP", SmtpUsername: "mcp@0utl1er.tech", PasswordEnc: enc, Active: true,
+		})
+		require.NoError(t, err)
+		_, err = q.CreateMailboxPermit(ctx, db.CreateMailboxPermitParams{
+			ID: uuid.New(), MailboxID: mbID, UserID: owner.ID, Role: db.RoleOwner,
+		})
+		require.NoError(t, err)
+
+		session := connectClient(t, newTestHandler(t, q, owner.ID))
+		res, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "list_mailboxes"})
+		require.NoError(t, err)
+		require.False(t, res.IsError, "unexpected tool error: %s", textOf(t, res))
+		assert.Contains(t, textOf(t, res), mbID.String())
 	})
 
 	t.Run("get_customer returns the customer", func(t *testing.T) {
