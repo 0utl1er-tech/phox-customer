@@ -60,7 +60,10 @@ func (m *MailboxSender) SendAs(
 	case "starttls":
 		opts = append(opts, gomail.WithTLSPolicy(gomail.TLSMandatory))
 	}
-	if smtpUsername != "" {
+	// SMTP 認証は暗号化接続でのみ付与する。go-mail は非暗号での AUTH を
+	// 拒否するし (SMTP AUTH failed: unencrypted connection)、none-TLS の
+	// 送信先は MailHog (staging シンク) で認証不要なため。
+	if smtpUsername != "" && m.tlsMode != "none" && m.tlsMode != "" {
 		opts = append(opts,
 			gomail.WithSMTPAuth(gomail.SMTPAuthPlain),
 			gomail.WithUsername(smtpUsername),

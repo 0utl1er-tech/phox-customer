@@ -261,6 +261,21 @@ func main() {
 	} else {
 		log.Warn().Msg("MAILBOX_SECRET_KEY not set — MailboxService disabled")
 	}
+
+	// Phase 25/C: DB 駆動のマルチメールボックス IMAP worker。
+	// MAILU_IMAP_HOST + MAILBOX_SECRET_KEY (mailboxCipher) が揃うと有効。
+	// DB の active な Mailbox を全て polling し、Activity.mailbox_id を記録する。
+	mailboxIMAPWorker := mail.NewMailboxIMAPWorker(
+		mail.IMAPConnBase{
+			Host:                  cfg.MailuIMAPHost,
+			Port:                  cfg.MailuIMAPPort,
+			TLSMode:               mail.IMAPTLSMode(cfg.MailuIMAPTLS),
+			TLSInsecureSkipVerify: cfg.IMAPTLSInsecureSkipVerify,
+		},
+		cfg.IMAPSentMailbox, cfg.IMAPInboxMailbox, cfg.IMAPPollInterval, cfg.IMAPIngestUserID,
+		queries, mailboxCipher,
+	)
+
 	userService := user.NewUserService(queries, keycloakAdmin, connPool)
 	searchService := searchsvc.NewSearchService(queries, esClient)
 	// Activity service — Phase 11 で SMTPClient を注入済み。
@@ -605,6 +620,13 @@ func main() {
 	if imapWorker.Enabled() {
 		waitGroup.Go(func() error {
 			return imapWorker.Run(ctx)
+		})
+	}
+
+	// Phase 25/C: DB 駆動のマルチメールボックス IMAP worker。
+	if mailboxIMAPWorker != nil {
+		waitGroup.Go(func() error {
+			return mailboxIMAPWorker.Run(ctx)
 		})
 	}
 
