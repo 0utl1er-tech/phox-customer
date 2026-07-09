@@ -88,7 +88,10 @@ func ProtectedResourceMetadataHandler(resourceURL, issuerURL string) http.Handle
 		Resource:               resourceURL,
 		AuthorizationServers:   []string{issuerURL},
 		BearerMethodsSupported: []string{"header"},
-		ScopesSupported:        []string{"openid", "profile", "email"},
+		// offline_access: これが無いと refresh token が Keycloak の SSO セッション
+		// (idle 30 分) に紐付き、放置後の自動更新が "Token is not active" で恒久
+		// 失敗する (実証 2026-07-09)。offline token 化で idle 30 日に伸ばす。
+		ScopesSupported: []string{"openid", "profile", "email", "offline_access"},
 	}
 	body, err := json.Marshal(meta)
 	if err != nil {
