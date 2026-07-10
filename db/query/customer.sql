@@ -103,3 +103,19 @@ SELECT COUNT(*) FROM "Customer" WHERE book_id = $1 AND address = $2;
 
 -- name: GetCustomerCountByDate :one
 SELECT COUNT(*) FROM "Customer" WHERE book_id = $1 AND created_at >= $2 AND created_at <= $3;
+
+-- name: FindCustomerByBookAndEmail :one
+-- MCP create_customer の upsert 判定用。book 内で Customer.mail / Contact.mail の
+-- どちらかが一致する最初の Customer を返す。
+SELECT customer_id FROM (
+    SELECT c.id AS customer_id, 1 AS priority
+    FROM "Customer" c
+    WHERE c.book_id = $1 AND c.mail = $2 AND c.mail <> ''
+    UNION ALL
+    SELECT ct.customer_id, 2 AS priority
+    FROM "Contact" ct
+    JOIN "Customer" c ON c.id = ct.customer_id
+    WHERE c.book_id = $1 AND ct.mail = $2 AND ct.mail <> ''
+) hits
+ORDER BY priority
+LIMIT 1;

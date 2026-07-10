@@ -130,15 +130,32 @@ type MailTemplate struct {
 }
 
 type Mailbox struct {
-	ID           uuid.UUID `json:"id"`
-	CompanyID    uuid.UUID `json:"company_id"`
-	Address      string    `json:"address"`
-	DisplayName  string    `json:"display_name"`
-	SmtpUsername string    `json:"smtp_username"`
-	PasswordEnc  []byte    `json:"password_enc"`
-	Active       bool      `json:"active"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID           uuid.UUID          `json:"id"`
+	CompanyID    uuid.UUID          `json:"company_id"`
+	Address      string             `json:"address"`
+	DisplayName  string             `json:"display_name"`
+	SmtpUsername string             `json:"smtp_username"`
+	PasswordEnc  []byte             `json:"password_enc"`
+	Active       bool               `json:"active"`
+	CreatedAt    time.Time          `json:"created_at"`
+	UpdatedAt    time.Time          `json:"updated_at"`
+	SyncedAt     pgtype.Timestamptz `json:"synced_at"`
+}
+
+type MailboxMessage struct {
+	ID              uuid.UUID   `json:"id"`
+	MailboxID       uuid.UUID   `json:"mailbox_id"`
+	Folder          string      `json:"folder"`
+	MessageID       string      `json:"message_id"`
+	FromAddr        string      `json:"from_addr"`
+	ToAddrs         string      `json:"to_addrs"`
+	CcAddrs         string      `json:"cc_addrs"`
+	Subject         string      `json:"subject"`
+	BodyText        string      `json:"body_text"`
+	AttachmentNames string      `json:"attachment_names"`
+	CustomerID      pgtype.UUID `json:"customer_id"`
+	OccurredAt      time.Time   `json:"occurred_at"`
+	CreatedAt       time.Time   `json:"created_at"`
 }
 
 type MailboxPermit struct {

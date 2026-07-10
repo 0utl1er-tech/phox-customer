@@ -74,3 +74,74 @@ func TestIngestMessages_SkipsUnknownCustomer(t *testing.T) {
 	_, err := q.GetActivityByMessageID(ctx, pgtype.Text{String: msgID, Valid: true})
 	assert.Error(t, err, "未知顧客のメールは取込まれない")
 }
+
+// Phase 26: 管理対象メールボックス経由なら、未知の差出人でも MailboxMessage に
+// 全件保存される (Activity は作られない)。既知顧客なら customer_id も付く。
+func TestIngestMessages_StoresAllMailboxMessages(t *testing.T) {
+	_, q := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	cid := testutil.TestCompanyID(t, q)
+	owner := testutil.TestUser(t, q, "ingest-mm-"+uuid.NewString(), cid)
+	bk := testutil.TestBook(t, q, owner.ID)
+
+	custMail := "known-" + uuid.NewString()[:8] + "@example.com"
+	cust, err := q.CreateCustomer(ctx, db.CreateCustomerParams{
+		ID: uuid.New(), BookID: bk.ID, Name: "既知顧客", Phone: "03-1111-1111", Mail: custMail,
+	})
+	require.NoError(t, err)
+
+	mbID := uuid.New()
+	_, err = q.CreateMailbox(ctx, db.CreateMailboxParams{
+		ID: mbID, CompanyID: cid, Address: "mm-" + mbID.String() + "@0utl1er.tech",
+		SmtpUsername: "mm@0utl1er.tech", PasswordEnc: []byte("x"), Active: true,
+	})
+	require.NoError(t, err)
+
+	unknownID := "<" + uuid.NewString() + "@example.com>"
+	knownID := "<" + uuid.NewString() + "@example.com>"
+	msgs := []ParsedMessage{
+		{
+			MessageID: unknownID, Date: time.Now(), Subject: "新規のお問い合わせ",
+			From: "prospect-" + uuid.NewString()[:8] + "@nowhere.test", To: []string{"mm@0utl1er.tech"},
+			Body:            "はじめまして。サービスについて教えてください。",
+			AttachmentNames: []string{"会社概要.pdf"},
+		},
+		{
+			MessageID: knownID, Date: time.Now(), Subject: "既知顧客からの返信",
+			From: custMail, To: []string{"mm@0utl1er.tech"},
+			Body: "先日の件、承知しました。",
+		},
+	}
+	ingestMessages(ctx, q, msgs, "email_received", "system", pgtype.UUID{Bytes: mbID, Valid: true})
+
+	rows, err := q.ListMailboxMessages(ctx, db.ListMailboxMessagesParams{MailboxID: mbID, Limit: 10})
+	require.NoError(t, err)
+	require.Len(t, rows, 2, "既知/未知どちらのメールも MailboxMessage に保存されるべき")
+
+	byMsgID := map[string]db.ListMailboxMessagesRow{}
+	for _, r := range rows {
+		byMsgID[r.MessageID] = r
+	}
+	un := byMsgID[unknownID]
+	assert.False(t, un.CustomerID.Valid, "未知差出人は customer_id なし")
+	assert.Equal(t, "INBOX", un.Folder)
+	assert.Contains(t, un.AttachmentNames, "会社概要.pdf")
+	kn := byMsgID[knownID]
+	require.True(t, kn.CustomerID.Valid, "既知顧客は customer_id 付き")
+	assert.Equal(t, cust.ID, uuid.UUID(kn.CustomerID.Bytes))
+
+	// 本文は Get で取れる。
+	full, err := q.GetMailboxMessage(ctx, un.ID)
+	require.NoError(t, err)
+	assert.Contains(t, full.BodyText, "サービスについて")
+
+	// 未知差出人の Activity は作られない。
+	_, err = q.GetActivityByMessageID(ctx, pgtype.Text{String: unknownID, Valid: true})
+	assert.Error(t, err)
+
+	// 再取込みしても重複しない (mailbox_id+message_id UNIQUE)。
+	ingestMessages(ctx, q, msgs, "email_received", "system", pgtype.UUID{Bytes: mbID, Valid: true})
+	rows, err = q.ListMailboxMessages(ctx, db.ListMailboxMessagesParams{MailboxID: mbID, Limit: 10})
+	require.NoError(t, err)
+	assert.Len(t, rows, 2)
+}

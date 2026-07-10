@@ -97,25 +97,39 @@ func (w *MailboxIMAPWorker) Run(ctx context.Context) error {
 }
 
 // tick は DB の active な Mailbox を全て取り、それぞれ polling する。
+// synced_at が NULL のメールボックスは初回全履歴バックフィル (since ゼロ値 =
+// IMAP SEARCH に SINCE を付けない = 全件)。成功したら synced_at を刻み、
+// 以降は直近 24h の incremental (dedup は UNIQUE INDEX が保証)。
 func (w *MailboxIMAPWorker) tick(ctx context.Context) error {
 	mailboxes, err := w.queries.ListAllActiveMailboxes(ctx)
 	if err != nil {
 		return fmt.Errorf("list active mailboxes: %w", err)
 	}
-	since := time.Now().Add(-24 * time.Hour)
+	incremental := time.Now().Add(-24 * time.Hour)
 	for _, mb := range mailboxes {
-		w.pollOne(ctx, mb, since)
+		since := incremental
+		backfill := !mb.SyncedAt.Valid
+		if backfill {
+			since = time.Time{} // 全履歴
+			log.Info().Str("mailbox", mb.Address).Msg("Mailbox IMAP worker: first sync — full backfill")
+		}
+		if ok := w.pollOne(ctx, mb, since); ok && backfill {
+			if err := w.queries.SetMailboxSyncedAt(ctx, mb.ID); err != nil {
+				log.Warn().Err(err).Str("mailbox", mb.Address).Msg("Mailbox IMAP worker: set synced_at")
+			}
+		}
 	}
 	return nil
 }
 
 // pollOne は 1 メールボックスに接続して Sent/INBOX を取込む。
 // 1 つのメールボックスの失敗が他をブロックしないよう、エラーは log のみ。
-func (w *MailboxIMAPWorker) pollOne(ctx context.Context, mb db.Mailbox, since time.Time) {
+// 戻り値は両フォルダの fetch が成功したかどうか (バックフィル完了判定用)。
+func (w *MailboxIMAPWorker) pollOne(ctx context.Context, mb db.Mailbox, since time.Time) bool {
 	password, err := w.cipher.DecryptString(mb.PasswordEnc)
 	if err != nil {
 		log.Warn().Err(err).Str("mailbox", mb.Address).Msg("Mailbox IMAP worker: decrypt password")
-		return
+		return false
 	}
 	client, err := DialIMAP(IMAPConnectConfig{
 		Host:                  w.conn.Host,
@@ -127,20 +141,24 @@ func (w *MailboxIMAPWorker) pollOne(ctx context.Context, mb db.Mailbox, since ti
 	})
 	if err != nil {
 		log.Warn().Err(err).Str("mailbox", mb.Address).Msg("Mailbox IMAP worker: dial")
-		return
+		return false
 	}
 	defer func() { _ = client.Close() }()
 
 	mailboxID := pgtype.UUID{Bytes: mb.ID, Valid: true}
+	allOK := true
 
-	if msgs, ferr := client.FetchSince(w.sentMailbox, since); ferr != nil {
+	if msgs, ferr := client.FetchSinceFull(w.sentMailbox, since); ferr != nil {
 		log.Warn().Err(ferr).Str("mailbox", mb.Address).Str("folder", w.sentMailbox).Msg("Mailbox IMAP worker: sent fetch")
+		allOK = false
 	} else {
 		ingestMessages(ctx, w.queries, msgs, "email_sent", w.ingestUserID, mailboxID)
 	}
-	if msgs, ferr := client.FetchSince(w.inboxMailbox, since); ferr != nil {
+	if msgs, ferr := client.FetchSinceFull(w.inboxMailbox, since); ferr != nil {
 		log.Warn().Err(ferr).Str("mailbox", mb.Address).Str("folder", w.inboxMailbox).Msg("Mailbox IMAP worker: inbox fetch")
+		allOK = false
 	} else {
 		ingestMessages(ctx, w.queries, msgs, "email_received", w.ingestUserID, mailboxID)
 	}
+	return allOK
 }

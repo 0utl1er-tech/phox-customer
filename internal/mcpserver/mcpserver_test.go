@@ -61,6 +61,7 @@ func newTestHandler(t *testing.T, q *db.Queries, sub string) http.Handler {
 		Search:   search.NewSearchService(q, nil), // ES nil → search_customers はツールエラー
 		Activity: activity.NewActivityService(q, nil, nil),
 		Mailbox:  mailbox.NewMailboxService(q, cipher, nil),
+		Queries:  q,
 	}, "")
 }
 
@@ -153,6 +154,7 @@ func TestListTools(t *testing.T) {
 		"get_call_stats",
 		"get_mail_stats",
 		"send_customer_email",
+		"create_customer",
 	}, got)
 }
 
@@ -212,6 +214,91 @@ func TestToolsAgainstDB(t *testing.T) {
 		require.NoError(t, err)
 		require.False(t, res.IsError, "unexpected tool error: %s", textOf(t, res))
 		assert.Contains(t, textOf(t, res), mbID.String())
+
+		// Phase 26: メッセージを 1 件 seed して list → get の順で読む。
+		msgID := uuid.New()
+		_, err = q.CreateMailboxMessage(ctx, db.CreateMailboxMessageParams{
+			ID: msgID, MailboxID: mbID, Folder: "INBOX",
+			MessageID: "mcp-test-" + msgID.String(), FromAddr: "prospect@example.com",
+			ToAddrs: "mcp@0utl1er.tech", Subject: "新規のお問い合わせ",
+			BodyText: "御社サービスについて詳しく知りたいです。", OccurredAt: time.Now(),
+		})
+		require.NoError(t, err)
+
+		res, err = session.CallTool(ctx, &mcp.CallToolParams{
+			Name:      "list_mailbox_messages",
+			Arguments: map[string]any{"mailbox_id": mbID.String()},
+		})
+		require.NoError(t, err)
+		require.False(t, res.IsError, "unexpected tool error: %s", textOf(t, res))
+		listText := textOf(t, res)
+		assert.Contains(t, listText, "prospect@example.com")
+		assert.NotContains(t, listText, "詳しく知りたい", "list は本文を返さない")
+
+		res, err = session.CallTool(ctx, &mcp.CallToolParams{
+			Name:      "get_mailbox_message",
+			Arguments: map[string]any{"message_id": msgID.String()},
+		})
+		require.NoError(t, err)
+		require.False(t, res.IsError, "unexpected tool error: %s", textOf(t, res))
+		assert.Contains(t, textOf(t, res), "詳しく知りたい", "get は本文を返す")
+
+		// permit の無い outsider には見えない。
+		xsession := connectClient(t, newTestHandler(t, q, outsider.ID))
+		res, err = xsession.CallTool(ctx, &mcp.CallToolParams{
+			Name:      "list_mailbox_messages",
+			Arguments: map[string]any{"mailbox_id": mbID.String()},
+		})
+		require.NoError(t, err)
+		assert.True(t, res.IsError, "permit なしは permission_denied になるべき")
+	})
+
+	t.Run("create_customer creates then upserts by mail", func(t *testing.T) {
+		session := connectClient(t, newTestHandler(t, q, owner.ID))
+		mail := "inquiry-" + uuid.NewString() + "@example.com"
+
+		res, err := session.CallTool(ctx, &mcp.CallToolParams{
+			Name: "create_customer",
+			Arguments: map[string]any{
+				"book_id": bk.ID.String(), "name": "問い合わせ 太郎", "mail": mail,
+				"memo": "メールからの新規問い合わせ",
+			},
+		})
+		require.NoError(t, err)
+		require.False(t, res.IsError, "unexpected tool error: %s", textOf(t, res))
+		first := textOf(t, res)
+
+		// 同じ mail でもう一度 → 新規作成ではなく既存を返す (id が同じ)。
+		res, err = session.CallTool(ctx, &mcp.CallToolParams{
+			Name: "create_customer",
+			Arguments: map[string]any{
+				"book_id": bk.ID.String(), "name": "別名で再作成しようとする", "mail": mail,
+			},
+		})
+		require.NoError(t, err)
+		require.False(t, res.IsError, "unexpected tool error: %s", textOf(t, res))
+		second := textOf(t, res)
+		assert.Contains(t, second, "問い合わせ 太郎", "既存顧客がそのまま返るべき (上書きしない)")
+
+		var f1, f2 struct {
+			Customer struct {
+				Id string `json:"id"`
+			} `json:"customer"`
+		}
+		require.NoError(t, json.Unmarshal([]byte(first), &f1))
+		require.NoError(t, json.Unmarshal([]byte(second), &f2))
+		assert.Equal(t, f1.Customer.Id, f2.Customer.Id, "同一 mail は同一顧客に upsert")
+
+		// editor 権限の無い outsider は作れない。
+		xsession := connectClient(t, newTestHandler(t, q, outsider.ID))
+		res, err = xsession.CallTool(ctx, &mcp.CallToolParams{
+			Name: "create_customer",
+			Arguments: map[string]any{
+				"book_id": bk.ID.String(), "name": "無権限", "mail": "x-" + uuid.NewString() + "@example.com",
+			},
+		})
+		require.NoError(t, err)
+		assert.True(t, res.IsError, "editor なしは permission_denied になるべき")
 	})
 
 	t.Run("get_customer returns the customer", func(t *testing.T) {

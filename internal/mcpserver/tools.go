@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"connectrpc.com/connect"
@@ -12,11 +13,14 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/google/uuid"
+
 	activityv1 "github.com/0utl1er-tech/phox-customer/gen/pb/activity/v1"
 	bookv1 "github.com/0utl1er-tech/phox-customer/gen/pb/book/v1"
 	customerv1 "github.com/0utl1er-tech/phox-customer/gen/pb/customer/v1"
 	mailboxv1 "github.com/0utl1er-tech/phox-customer/gen/pb/mailbox/v1"
 	searchv1 "github.com/0utl1er-tech/phox-customer/gen/pb/search/v1"
+	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
 )
 
 // ─── input types ────────────────────────────────────────────────
@@ -59,6 +63,28 @@ type statsIn struct {
 	OccurredTo   string `json:"occurred_to,omitempty" jsonschema:"exclusive upper bound, RFC3339; empty = unbounded"`
 }
 
+type listMailboxMessagesIn struct {
+	MailboxID string `json:"mailbox_id" jsonschema:"mailbox UUID (from list_mailboxes)"`
+	Folder    string `json:"folder,omitempty" jsonschema:"'INBOX' (received) or 'Sent'; omit for both"`
+	Limit     int32  `json:"limit,omitempty" jsonschema:"max messages to return (1-200, default 50)"`
+	Offset    int32  `json:"offset,omitempty" jsonschema:"pagination offset"`
+}
+
+type getMailboxMessageIn struct {
+	MessageID string `json:"message_id" jsonschema:"MailboxMessage UUID (the 'id' field from list_mailbox_messages, NOT the RFC822 message_id)"`
+}
+
+type createCustomerIn struct {
+	BookID      string `json:"book_id" jsonschema:"book UUID to add the customer to (requires editor role)"`
+	Name        string `json:"name" jsonschema:"customer (person) name"`
+	Mail        string `json:"mail,omitempty" jsonschema:"email address — if a customer with this mail already exists in the book, that customer is returned instead of creating a duplicate"`
+	Phone       string `json:"phone,omitempty" jsonschema:"phone number"`
+	Corporation string `json:"corporation,omitempty" jsonschema:"company/organisation name"`
+	Category    string `json:"category,omitempty" jsonschema:"business category"`
+	Address     string `json:"address,omitempty" jsonschema:"postal address"`
+	Memo        string `json:"memo,omitempty" jsonschema:"free-form memo, e.g. summary of the inquiry email this customer was created from"`
+}
+
 type sendCustomerEmailIn struct {
 	CustomerID string `json:"customer_id" jsonschema:"customer UUID — the email is recorded as an activity on this customer's timeline"`
 	MailTo     string `json:"mail_to" jsonschema:"recipient email address"`
@@ -82,7 +108,76 @@ func addTools(s *mcp.Server, deps Deps) {
 			resp, err := deps.Mailbox.ListMailboxes(ctx, connect.NewRequest(&mailboxv1.ListMailboxesRequest{}))
 			return protoResult(resp, err)
 		})
+
+		mcp.AddTool(s, &mcp.Tool{
+			Name: "list_mailbox_messages",
+			Description: "List ingested emails of a mailbox (both received and sent), newest first — " +
+				"including mail from senders that are NOT yet customers (new inquiries). Returns metadata " +
+				"only (from/to/subject/date, customer_id when the sender is a known customer); fetch the " +
+				"body with get_mailbox_message. Requires viewer access to the mailbox.",
+		}, func(ctx context.Context, _ *mcp.CallToolRequest, in listMailboxMessagesIn) (*mcp.CallToolResult, any, error) {
+			req := &mailboxv1.ListMailboxMessagesRequest{MailboxId: in.MailboxID}
+			if in.Folder != "" {
+				req.Folder = proto.String(in.Folder)
+			}
+			if in.Limit > 0 {
+				req.Limit = proto.Int32(in.Limit)
+			}
+			if in.Offset > 0 {
+				req.Offset = proto.Int32(in.Offset)
+			}
+			resp, err := deps.Mailbox.ListMailboxMessages(ctx, connect.NewRequest(req))
+			return protoResult(resp, err)
+		})
+
+		mcp.AddTool(s, &mcp.Tool{
+			Name: "get_mailbox_message",
+			Description: "Fetch one ingested email including its plain-text body and attachment " +
+				"filenames. Use the 'id' from list_mailbox_messages. Requires viewer access to the mailbox.",
+		}, func(ctx context.Context, _ *mcp.CallToolRequest, in getMailboxMessageIn) (*mcp.CallToolResult, any, error) {
+			resp, err := deps.Mailbox.GetMailboxMessage(ctx, connect.NewRequest(&mailboxv1.GetMailboxMessageRequest{
+				Id: in.MessageID,
+			}))
+			return protoResult(resp, err)
+		})
 	}
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name: "create_customer",
+		Description: "Create a customer in a book (e.g. from an inquiry email found via " +
+			"list_mailbox_messages). Upsert-safe: if 'mail' is given and a customer with that email " +
+			"already exists in the book, the existing customer is returned unchanged instead of " +
+			"creating a duplicate. Requires editor access to the book.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in createCustomerIn) (*mcp.CallToolResult, any, error) {
+		// upsert 判定: mail 一致の既存顧客がいれば作らずにそれを返す。
+		// 生クエリの結果は必ず authz 付きの GetCustomer を通して返す。
+		if in.Mail != "" && deps.Queries != nil {
+			bookID, perr := uuid.Parse(in.BookID)
+			if perr != nil {
+				return nil, nil, fmt.Errorf("book_id: %w", perr)
+			}
+			if existing, ferr := deps.Queries.FindCustomerByBookAndEmail(ctx, db.FindCustomerByBookAndEmailParams{
+				BookID: bookID,
+				Mail:   strings.ToLower(strings.TrimSpace(in.Mail)),
+			}); ferr == nil {
+				resp, gerr := deps.Customer.GetCustomer(ctx, connect.NewRequest(&customerv1.GetCustomerRequest{
+					Id: existing.String(),
+				}))
+				return protoResult(resp, gerr)
+			}
+		}
+		resp, err := deps.Customer.CreateCustomer(ctx, connect.NewRequest(&customerv1.CreateCustomerRequest{
+			BookId:      in.BookID,
+			Name:        in.Name,
+			Mail:        in.Mail,
+			Phone:       in.Phone,
+			Corporation: in.Corporation,
+			Category:    in.Category,
+			Address:     in.Address,
+			Memo:        in.Memo,
+		}))
+		return protoResult(resp, err)
+	})
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name: "list_books",

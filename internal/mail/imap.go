@@ -49,8 +49,10 @@ type ParsedMessage struct {
 	From      string   // 最初の差出人アドレス (email 部分のみ)
 	To        []string // 全宛先アドレス (email 部分のみ)
 	Cc        []string
-	// Body の取得はコストが高いので Phase 14 では取らない (message_id で dedup
-	// されるので、後から別途 fetch する拡張も可能)。
+	// Body/AttachmentNames は FetchSinceFull でのみ埋まる (FetchSince は
+	// envelope のみで軽量なまま — Phase 14 の設計を維持)。
+	Body            string   // text/plain (無ければ HTML のタグ除去)
+	AttachmentNames []string // 添付ファイル名 (中身は取らない)
 }
 
 // IMAPClient は imapclient.Client を phox 用途にラップする。
@@ -125,6 +127,17 @@ func (ic *IMAPClient) Close() error {
 // Note: IMAP の SEARCH SINCE は「日付単位」で比較するので、分単位で絞りたい
 // 場合でも当日の 00:00 まで遡ることになる。phox 側で dedup されるので実害なし。
 func (ic *IMAPClient) FetchSince(mailbox string, since time.Time) ([]ParsedMessage, error) {
+	return ic.fetchSince(mailbox, since, false)
+}
+
+// FetchSinceFull は FetchSince に加えて本文 (text/plain、無ければ HTML の
+// タグ除去) と添付ファイル名も取得する。BODY[] を丸ごと取るぶん envelope-only
+// より重いので、MailboxMessage 取込み (Phase 26) 専用。
+func (ic *IMAPClient) FetchSinceFull(mailbox string, since time.Time) ([]ParsedMessage, error) {
+	return ic.fetchSince(mailbox, since, true)
+}
+
+func (ic *IMAPClient) fetchSince(mailbox string, since time.Time, withBody bool) ([]ParsedMessage, error) {
 	if ic == nil || ic.c == nil {
 		return nil, errors.New("imap: client not connected")
 	}
@@ -150,10 +163,16 @@ func (ic *IMAPClient) FetchSince(mailbox string, since time.Time) ([]ParsedMessa
 	for _, u := range uids {
 		uidSet.AddNum(u)
 	}
-	fetchCmd := ic.c.Fetch(uidSet, &imap.FetchOptions{
+	fetchOpts := &imap.FetchOptions{
 		Envelope: true,
 		UID:      true,
-	})
+	}
+	var bodySection *imap.FetchItemBodySection
+	if withBody {
+		bodySection = &imap.FetchItemBodySection{} // BODY[] = ヘッダ含む全文
+		fetchOpts.BodySection = []*imap.FetchItemBodySection{bodySection}
+	}
+	fetchCmd := ic.c.Fetch(uidSet, fetchOpts)
 	defer fetchCmd.Close()
 
 	msgs := make([]ParsedMessage, 0, len(uids))
@@ -186,6 +205,13 @@ func (ic *IMAPClient) FetchSince(mailbox string, since time.Time) ([]ParsedMessa
 		for _, a := range buf.Envelope.Cc {
 			if addr := a.Addr(); addr != "" {
 				pm.Cc = append(pm.Cc, addr)
+			}
+		}
+		if withBody {
+			if raw := buf.FindBodySection(bodySection); len(raw) > 0 {
+				body, atts := parseBodyAndAttachments(raw)
+				pm.Body = body
+				pm.AttachmentNames = atts
 			}
 		}
 		msgs = append(msgs, pm)
