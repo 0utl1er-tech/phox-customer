@@ -127,6 +127,14 @@ func main() {
 		return
 	}
 
+	// CLI subcommand: `phox-customer reconcile-mailbox` — link already-ingested
+	// MailboxMessages to matching customers (Activity + customer_id). Idempotent.
+	// See reconcile_mailbox.go.
+	if len(os.Args) > 1 && os.Args[1] == "reconcile-mailbox" {
+		runReconcileMailbox(cfg)
+		return
+	}
+
 	connPool, err := pgxpool.New(context.Background(), cfg.DBSource)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to create connection pool")
