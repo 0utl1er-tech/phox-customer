@@ -45,9 +45,9 @@ WITH matched AS (
 ),
 ins AS (
   INSERT INTO "Activity"
-    (id, customer_id, type, user_id, mail_from, mail_to, mail_cc,
+    (id, customer_id, contact_id, type, user_id, mail_from, mail_to, mail_cc,
      subject, body, message_id, occurred_at, mailbox_id)
-  SELECT gen_random_uuid(), @customer_id,
+  SELECT gen_random_uuid(), @customer_id, sqlc.narg('contact_id'),
          CASE WHEN m.folder = 'Sent' THEN 'email_sent' ELSE 'email_received' END,
          'system', m.from_addr, m.to_addrs, m.cc_addrs,
          m.subject, m.body_text, m.message_id, m.occurred_at, m.mailbox_id

@@ -70,12 +70,24 @@ func (s *CustomerService) BackfillMailboxTimeline(ctx context.Context, bookID, c
 // Activity 化する (best-effort、失敗しても顧客作成は成功扱い)。冪等なので
 // create_customer の upsert 経路など何度呼んでも安全。
 func BackfillCustomerMail(ctx context.Context, q *db.Queries, customerID uuid.UUID, mail string) {
+	backfillMail(ctx, q, customerID, pgtype.UUID{}, mail)
+}
+
+// BackfillContactMail は contact の mail に一致する未紐付けメールを、その顧客の
+// タイムラインに Activity 化する (contact_id 付き)。複数アドレスを持つ取引先を
+// contact として束ねると、各アドレスの履歴が顧客に集約される。
+func BackfillContactMail(ctx context.Context, q *db.Queries, customerID, contactID uuid.UUID, mail string) {
+	backfillMail(ctx, q, customerID, pgtype.UUID{Bytes: contactID, Valid: true}, mail)
+}
+
+func backfillMail(ctx context.Context, q *db.Queries, customerID uuid.UUID, contactID pgtype.UUID, mail string) {
 	if mail == "" {
 		return
 	}
 	n, err := q.BackfillActivitiesForCustomerEmail(ctx, db.BackfillActivitiesForCustomerEmailParams{
 		Email:      mail,
 		CustomerID: pgtype.UUID{Bytes: customerID, Valid: true},
+		ContactID:  contactID,
 	})
 	if err != nil {
 		log.Warn().Err(err).Str("mail", mail).Str("customer_id", customerID.String()).

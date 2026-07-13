@@ -37,6 +37,7 @@ import (
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
 	"github.com/0utl1er-tech/phox-customer/internal/service/activity"
 	"github.com/0utl1er-tech/phox-customer/internal/service/book"
+	"github.com/0utl1er-tech/phox-customer/internal/service/contact"
 	"github.com/0utl1er-tech/phox-customer/internal/service/customer"
 	"github.com/0utl1er-tech/phox-customer/internal/service/mailbox"
 	"github.com/0utl1er-tech/phox-customer/internal/service/search"
@@ -63,6 +64,7 @@ type Authenticator interface {
 type Deps struct {
 	Book     *book.BookService
 	Customer *customer.CustomerService
+	Contact  *contact.ContactService
 	Search   *search.SearchService
 	Activity *activity.ActivityService
 	Mailbox  *mailbox.MailboxService // nil 可 (MAILBOX_SECRET_KEY 未設定時)

@@ -591,6 +591,7 @@ func main() {
 		mux.Handle("/mcp", mcpserver.NewHandler(authInterceptor, mcpserver.Deps{
 			Book:     bookService,
 			Customer: customerService,
+			Contact:  contactService,
 			Search:   searchService,
 			Activity: activityService,
 			Mailbox:  mailboxService, // nil 可 (機能無効時は list_mailboxes 非登録)
