@@ -17,10 +17,12 @@ import (
 
 	activityv1 "github.com/0utl1er-tech/phox-customer/gen/pb/activity/v1"
 	bookv1 "github.com/0utl1er-tech/phox-customer/gen/pb/book/v1"
+	contactv1 "github.com/0utl1er-tech/phox-customer/gen/pb/contact/v1"
 	customerv1 "github.com/0utl1er-tech/phox-customer/gen/pb/customer/v1"
 	mailboxv1 "github.com/0utl1er-tech/phox-customer/gen/pb/mailbox/v1"
 	searchv1 "github.com/0utl1er-tech/phox-customer/gen/pb/search/v1"
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
+	"github.com/0utl1er-tech/phox-customer/internal/service/customer"
 )
 
 // ─── input types ────────────────────────────────────────────────
@@ -74,6 +76,12 @@ type getMailboxMessageIn struct {
 	MessageID string `json:"message_id" jsonschema:"MailboxMessage UUID (the 'id' field from list_mailbox_messages, NOT the RFC822 message_id)"`
 }
 
+type createCustomerContactIn struct {
+	Mail  string `json:"mail" jsonschema:"contact email address — past and future mailbox messages from/to this address are linked to the customer's timeline"`
+	Name  string `json:"name,omitempty" jsonschema:"contact person name"`
+	Phone string `json:"phone,omitempty" jsonschema:"contact phone number"`
+}
+
 type createCustomerIn struct {
 	BookID      string `json:"book_id" jsonschema:"book UUID to add the customer to (requires editor role)"`
 	Name        string `json:"name" jsonschema:"customer (person) name"`
@@ -83,6 +91,9 @@ type createCustomerIn struct {
 	Category    string `json:"category,omitempty" jsonschema:"business category"`
 	Address     string `json:"address,omitempty" jsonschema:"postal address"`
 	Memo        string `json:"memo,omitempty" jsonschema:"free-form memo, e.g. summary of the inquiry email this customer was created from"`
+	// 同一取引先が複数アドレスを持つ場合 (例: 会社の担当者ごとのメール) に、
+	// それぞれを contact として登録し履歴を顧客に集約する。冪等 (同一 mail は再作成しない)。
+	Contacts []createCustomerContactIn `json:"contacts,omitempty" jsonschema:"additional contacts (email addresses) belonging to this customer, e.g. multiple people/addresses at the same company; each becomes a contact and its mailbox history is linked to the customer"`
 }
 
 type sendCustomerEmailIn struct {
@@ -164,6 +175,9 @@ func addTools(s *mcp.Server, deps Deps) {
 				if berr := deps.Customer.BackfillMailboxTimeline(ctx, bookID, existing, in.Mail); berr != nil {
 					return nil, nil, berr
 				}
+				if cerr := syncCustomerContacts(ctx, deps, existing, in.Contacts); cerr != nil {
+					return nil, nil, cerr
+				}
 				resp, gerr := deps.Customer.GetCustomer(ctx, connect.NewRequest(&customerv1.GetCustomerRequest{
 					Id: existing.String(),
 				}))
@@ -180,6 +194,14 @@ func addTools(s *mcp.Server, deps Deps) {
 			Address:     in.Address,
 			Memo:        in.Memo,
 		}))
+		if err != nil {
+			return protoResult(resp, err)
+		}
+		if newID, perr := uuid.Parse(resp.Msg.Customer.Id); perr == nil {
+			if cerr := syncCustomerContacts(ctx, deps, newID, in.Contacts); cerr != nil {
+				return nil, nil, cerr
+			}
+		}
 		return protoResult(resp, err)
 	})
 
@@ -323,6 +345,57 @@ func addTools(s *mcp.Server, deps Deps) {
 		resp, rpcErr := deps.Activity.GetMailStats(ctx, connect.NewRequest(req))
 		return protoResult(resp, rpcErr)
 	})
+}
+
+// syncCustomercontacts は create_customer の contacts を顧客配下に登録する。
+// 同一 mail の contact が既にあれば作らず (冪等)、各 contact の mail に一致する
+// 未紐付けメールを顧客タイムラインに contact_id 付きでバックフィルする。
+func syncCustomerContacts(ctx context.Context, deps Deps, customerID uuid.UUID, contacts []createCustomerContactIn) error {
+	if len(contacts) == 0 || deps.Contact == nil || deps.Queries == nil {
+		return nil
+	}
+	// 既存 contact を mail で index (冪等判定用)。
+	existing, err := deps.Queries.ListContacts(ctx, customerID)
+	if err != nil {
+		return err
+	}
+	byMail := map[string]uuid.UUID{}
+	for _, c := range existing {
+		if c.Mail != "" {
+			byMail[strings.ToLower(strings.TrimSpace(c.Mail))] = c.ID
+		}
+	}
+
+	for _, in := range contacts {
+		mail := strings.ToLower(strings.TrimSpace(in.Mail))
+		if mail == "" {
+			continue
+		}
+		contactID, ok := byMail[mail]
+		if !ok {
+			req := &contactv1.CreateContactRequest{
+				CustomerId: customerID.String(),
+				Name:       in.Name,
+				Mail:       proto.String(in.Mail),
+			}
+			if in.Phone != "" {
+				req.Phone = proto.String(in.Phone)
+			}
+			resp, cerr := deps.Contact.CreateContact(ctx, connect.NewRequest(req))
+			if cerr != nil {
+				return cerr
+			}
+			cid, perr := uuid.Parse(resp.Msg.CreatedContact.Id)
+			if perr != nil {
+				return perr
+			}
+			contactID = cid
+			byMail[mail] = contactID
+		}
+		// この contact の mail に一致する過去メールを顧客タイムラインへ (contact_id 付き)。
+		customer.BackfillContactMail(ctx, deps.Queries, customerID, contactID, in.Mail)
+	}
+	return nil
 }
 
 // ─── helpers ────────────────────────────────────────────────────

@@ -23,6 +23,7 @@ import (
 	"github.com/0utl1er-tech/phox-customer/internal/service/activity"
 	"github.com/0utl1er-tech/phox-customer/internal/service/auth"
 	"github.com/0utl1er-tech/phox-customer/internal/service/book"
+	"github.com/0utl1er-tech/phox-customer/internal/service/contact"
 	"github.com/0utl1er-tech/phox-customer/internal/service/customer"
 	"github.com/0utl1er-tech/phox-customer/internal/service/mailbox"
 	"github.com/0utl1er-tech/phox-customer/internal/service/search"
@@ -58,6 +59,7 @@ func newTestHandler(t *testing.T, q *db.Queries, sub string) http.Handler {
 	return mcpserver.NewHandler(stubAuth{sub: sub}, mcpserver.Deps{
 		Book:     book.NewBookService(q, nil),
 		Customer: customer.NewCustomerService(q, nil),
+		Contact:  contact.NewContactService(q),
 		Search:   search.NewSearchService(q, nil), // ES nil → search_customers はツールエラー
 		Activity: activity.NewActivityService(q, nil, nil),
 		Mailbox:  mailbox.NewMailboxService(q, cipher, nil),
@@ -299,6 +301,72 @@ func TestToolsAgainstDB(t *testing.T) {
 		})
 		require.NoError(t, err)
 		assert.True(t, res.IsError, "editor なしは permission_denied になるべき")
+	})
+
+	t.Run("create_customer with contacts links contact-email history", func(t *testing.T) {
+		// メールボックスに、contact のアドレスから来た未紐付けメールを seed。
+		mbID := uuid.New()
+		_, err := q.CreateMailbox(ctx, db.CreateMailboxParams{
+			ID: mbID, CompanyID: cid, Address: "cmb-" + mbID.String() + "@0utl1er.tech",
+			SmtpUsername: "cmb@0utl1er.tech", PasswordEnc: []byte("x"), Active: true,
+		})
+		require.NoError(t, err)
+		contactMail := "kako-" + uuid.NewString()[:8] + "@levtech.jp"
+		cmsgID := "<" + uuid.NewString() + "@levtech.jp>"
+		_, err = q.CreateMailboxMessage(ctx, db.CreateMailboxMessageParams{
+			ID: uuid.New(), MailboxID: mbID, Folder: "INBOX", MessageID: cmsgID,
+			FromAddr: contactMail, ToAddrs: "cmb@0utl1er.tech", Subject: "担当者からの連絡",
+			BodyText: "よろしくお願いします", OccurredAt: time.Now().Add(-time.Hour),
+		})
+		require.NoError(t, err)
+
+		session := connectClient(t, newTestHandler(t, q, owner.ID))
+		custMail := "levtech-main-" + uuid.NewString() + "@levtech.jp"
+		res, err := session.CallTool(ctx, &mcp.CallToolParams{
+			Name: "create_customer",
+			Arguments: map[string]any{
+				"book_id": bk.ID.String(), "name": "レバテック", "mail": custMail,
+				"contacts": []any{
+					map[string]any{"name": "加古", "mail": contactMail, "phone": "03-1111-2222"},
+				},
+			},
+		})
+		require.NoError(t, err)
+		require.False(t, res.IsError, "unexpected tool error: %s", textOf(t, res))
+
+		var out struct {
+			Customer struct {
+				Id string `json:"id"`
+			} `json:"customer"`
+		}
+		require.NoError(t, json.Unmarshal([]byte(textOf(t, res)), &out))
+		custID, _ := uuid.Parse(out.Customer.Id)
+
+		// contact が作られている。
+		contacts, err := q.ListContacts(ctx, custID)
+		require.NoError(t, err)
+		require.Len(t, contacts, 1)
+		assert.Equal(t, contactMail, contacts[0].Mail)
+
+		// contact のアドレスのメールが Activity 化され、contact_id が付く。
+		act, err := q.GetActivityByMessageID(ctx, pgtype.Text{String: cmsgID, Valid: true})
+		require.NoError(t, err, "contact のメールが顧客タイムラインに載るべき")
+		assert.Equal(t, custID, act.CustomerID)
+		require.True(t, act.ContactID.Valid, "contact_id が付くべき")
+		assert.Equal(t, contacts[0].ID, uuid.UUID(act.ContactID.Bytes))
+
+		// 冪等: 同じ contacts でもう一度 → contact も Activity も増えない。
+		res, err = session.CallTool(ctx, &mcp.CallToolParams{
+			Name: "create_customer",
+			Arguments: map[string]any{
+				"book_id": bk.ID.String(), "name": "レバテック", "mail": custMail,
+				"contacts": []any{map[string]any{"name": "加古", "mail": contactMail}},
+			},
+		})
+		require.NoError(t, err)
+		require.False(t, res.IsError)
+		contacts2, _ := q.ListContacts(ctx, custID)
+		assert.Len(t, contacts2, 1, "同一 mail の contact は重複作成しない")
 	})
 
 	t.Run("get_customer returns the customer", func(t *testing.T) {

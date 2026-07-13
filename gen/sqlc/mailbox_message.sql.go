@@ -26,9 +26,9 @@ WITH matched AS (
 ),
 ins AS (
   INSERT INTO "Activity"
-    (id, customer_id, type, user_id, mail_from, mail_to, mail_cc,
+    (id, customer_id, contact_id, type, user_id, mail_from, mail_to, mail_cc,
      subject, body, message_id, occurred_at, mailbox_id)
-  SELECT gen_random_uuid(), $1,
+  SELECT gen_random_uuid(), $1, $3,
          CASE WHEN m.folder = 'Sent' THEN 'email_sent' ELSE 'email_received' END,
          'system', m.from_addr, m.to_addrs, m.cc_addrs,
          m.subject, m.body_text, m.message_id, m.occurred_at, m.mailbox_id
@@ -42,6 +42,7 @@ FROM matched m WHERE mm.id = m.id
 type BackfillActivitiesForCustomerEmailParams struct {
 	CustomerID pgtype.UUID `json:"customer_id"`
 	Email      string      `json:"email"`
+	ContactID  pgtype.UUID `json:"contact_id"`
 }
 
 // 顧客の mail に一致する未紐付け MailboxMessage を Activity 化し、
@@ -49,7 +50,7 @@ type BackfillActivitiesForCustomerEmailParams struct {
 // INBOX(from 一致)=email_received / Sent(to 内に一致)=email_sent。
 // message_id 重複 (既に Activity 化済み) は ON CONFLICT でスキップ。冪等。
 func (q *Queries) BackfillActivitiesForCustomerEmail(ctx context.Context, arg BackfillActivitiesForCustomerEmailParams) (int64, error) {
-	result, err := q.db.Exec(ctx, backfillActivitiesForCustomerEmail, arg.CustomerID, arg.Email)
+	result, err := q.db.Exec(ctx, backfillActivitiesForCustomerEmail, arg.CustomerID, arg.Email, arg.ContactID)
 	if err != nil {
 		return 0, err
 	}
