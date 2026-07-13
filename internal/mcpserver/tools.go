@@ -13,6 +13,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/google/uuid"
 
 	activityv1 "github.com/0utl1er-tech/phox-customer/gen/pb/activity/v1"
@@ -157,8 +158,10 @@ func addTools(s *mcp.Server, deps Deps) {
 		Name: "create_customer",
 		Description: "Create a customer in a book (e.g. from an inquiry email found via " +
 			"list_mailbox_messages). Upsert-safe: if 'mail' is given and a customer with that email " +
-			"already exists in the book, the existing customer is returned unchanged instead of " +
-			"creating a duplicate. Requires editor access to the book.",
+			"already exists in the book, the existing customer is returned (and any 'contacts' are " +
+			"still added to it). Optionally attach 'contacts' (extra email addresses of the same " +
+			"customer) to aggregate their mailbox history. Requires editor access to the book.",
+		InputSchema: mcpInputSchema[createCustomerIn](),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in createCustomerIn) (*mcp.CallToolResult, any, error) {
 		// upsert 判定: mail 一致の既存顧客がいれば作らずにそれを返す。
 		// 生クエリの結果は必ず authz 付きの GetCustomer を通して返す。
@@ -218,6 +221,7 @@ func addTools(s *mcp.Server, deps Deps) {
 		Name: "search_customers",
 		Description: "Full-text search across customers in every book the user has access to " +
 			"(Elasticsearch, Japanese-aware). Supports prefecture filtering and pagination.",
+		InputSchema: mcpInputSchema[searchCustomersIn](),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in searchCustomersIn) (*mcp.CallToolResult, any, error) {
 		resp, err := deps.Search.SearchCustomers(ctx, connect.NewRequest(&searchv1.SearchCustomersRequest{
 			Query:      in.Query,
@@ -242,6 +246,7 @@ func addTools(s *mcp.Server, deps Deps) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "list_customer_activities",
 		Description: "Activity timeline (calls, sent/received emails) for a single customer, newest first.",
+		InputSchema: mcpInputSchema[listCustomerActivitiesIn](),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in listCustomerActivitiesIn) (*mcp.CallToolResult, any, error) {
 		types, err := activityTypes(in.Types)
 		if err != nil {
@@ -258,6 +263,7 @@ func addTools(s *mcp.Server, deps Deps) {
 		Name: "list_book_activities",
 		Description: "Book-wide activity feed: every customer's calls and emails in one timeline, " +
 			"filterable by type, assignee and time range. Paginated (server default 50, max 200).",
+		InputSchema: mcpInputSchema[listBookActivitiesIn](),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in listBookActivitiesIn) (*mcp.CallToolResult, any, error) {
 		types, err := activityTypes(in.Types)
 		if err != nil {
@@ -399,6 +405,49 @@ func syncCustomerContacts(ctx context.Context, deps Deps, customerID uuid.UUID, 
 }
 
 // ─── helpers ────────────────────────────────────────────────────
+
+// mcpInputSchema builds the JSON Schema for a tool input type and normalizes
+// nullable unions. jsonschema-go (v0.4) emits `["null","array"]` for every
+// slice and `["null","string"]` for pointers; the union type makes some MCP
+// clients serialise the value as a JSON *string* (observed with array params
+// like contacts / book_ids: `has type "string", want one of "null, array"`).
+// Collapsing to a plain type keeps clients sending real arrays/values.
+func mcpInputSchema[In any]() *jsonschema.Schema {
+	s, err := jsonschema.For[In](nil)
+	if err != nil {
+		panic(fmt.Sprintf("mcpserver: input schema for %T: %v", *new(In), err))
+	}
+	normalizeNullableUnions(s)
+	return s
+}
+
+func normalizeNullableUnions(s *jsonschema.Schema) {
+	if s == nil {
+		return
+	}
+	if len(s.Types) > 0 {
+		kept := make([]string, 0, len(s.Types))
+		for _, t := range s.Types {
+			if t != "null" {
+				kept = append(kept, t)
+			}
+		}
+		if len(kept) == 1 {
+			s.Type = kept[0]
+			s.Types = nil
+		} else {
+			s.Types = kept
+		}
+	}
+	normalizeNullableUnions(s.Items)
+	normalizeNullableUnions(s.AdditionalProperties)
+	for _, p := range s.Properties {
+		normalizeNullableUnions(p)
+	}
+	for _, p := range s.PrefixItems {
+		normalizeNullableUnions(p)
+	}
+}
 
 // protoResult converts a Connect service response into an MCP tool result:
 // protojson for the payload (same shape the Connect API returns to the UI),
