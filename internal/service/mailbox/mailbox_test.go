@@ -1,8 +1,10 @@
 package mailbox_test
 
 import (
+	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"connectrpc.com/connect"
 	mailboxv1 "github.com/0utl1er-tech/phox-customer/gen/pb/mailbox/v1"
@@ -170,6 +172,59 @@ func TestUpdateMailbox_PasswordRotates(t *testing.T) {
 	after, _ := q.GetMailbox(ctx, mbID)
 	assert.NotEqual(t, before.PasswordEnc, after.PasswordEnc, "パスワード更新で暗号文が変わる")
 	assert.False(t, strings.Contains(string(after.PasswordEnc), newPw), "平文で保存しない")
+}
+
+func TestMailboxMessages_RBACAndBody(t *testing.T) {
+	svc, q, owner, other := newFixture(t)
+	octx := testutil.AuthContext(t, owner.ID, "owner@test.com")
+	created, err := svc.CreateMailbox(octx, connect.NewRequest(&mailboxv1.CreateMailboxRequest{
+		Address: uniqAddr("msg"), Password: "pw",
+	}))
+	require.NoError(t, err)
+	mbID, _ := uuid.Parse(created.Msg.Mailbox.Id)
+
+	// メッセージを 1 件 seed。
+	seeded, err := q.CreateMailboxMessage(context.Background(), db.CreateMailboxMessageParams{
+		ID: uuid.New(), MailboxID: mbID, Folder: "INBOX",
+		MessageID: "svc-" + uuid.NewString(), FromAddr: "someone@example.com",
+		Subject: "件名テスト", BodyText: "本文テスト", OccurredAt: time.Now(),
+	})
+	require.NoError(t, err)
+
+	// owner: List はメタデータのみ (本文なし)、Get は本文あり。
+	list, err := svc.ListMailboxMessages(octx, connect.NewRequest(&mailboxv1.ListMailboxMessagesRequest{
+		MailboxId: mbID.String(),
+	}))
+	require.NoError(t, err)
+	require.NotEmpty(t, list.Msg.Messages)
+	assert.Empty(t, list.Msg.Messages[0].BodyText, "List は本文を返さない")
+
+	got, err := svc.GetMailboxMessage(octx, connect.NewRequest(&mailboxv1.GetMailboxMessageRequest{
+		Id: seeded.ID.String(),
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, "本文テスト", got.Msg.Message.BodyText)
+
+	// permit の無い other は List も Get も拒否。
+	xctx := testutil.AuthContext(t, other.ID, "other@test.com")
+	_, err = svc.ListMailboxMessages(xctx, connect.NewRequest(&mailboxv1.ListMailboxMessagesRequest{
+		MailboxId: mbID.String(),
+	}))
+	assertConnectCode(t, err, connect.CodePermissionDenied)
+	_, err = svc.GetMailboxMessage(xctx, connect.NewRequest(&mailboxv1.GetMailboxMessageRequest{
+		Id: seeded.ID.String(),
+	}))
+	assertConnectCode(t, err, connect.CodePermissionDenied)
+
+	// viewer permit を付ければ読める (viewer で十分)。
+	_, err = svc.AddMailboxUser(octx, connect.NewRequest(&mailboxv1.AddMailboxUserRequest{
+		MailboxId: mbID.String(), UserId: other.ID, Role: permitv1.Role_ROLE_VIEWER,
+	}))
+	require.NoError(t, err)
+	_, err = svc.GetMailboxMessage(xctx, connect.NewRequest(&mailboxv1.GetMailboxMessageRequest{
+		Id: seeded.ID.String(),
+	}))
+	require.NoError(t, err, "viewer は本文を読めるべき")
 }
 
 // ─── helpers ─────────────────────────────────────────────────

@@ -57,6 +57,12 @@ const (
 	// MailboxServiceRemoveMailboxUserProcedure is the fully-qualified name of the MailboxService's
 	// RemoveMailboxUser RPC.
 	MailboxServiceRemoveMailboxUserProcedure = "/mailbox.v1.MailboxService/RemoveMailboxUser"
+	// MailboxServiceListMailboxMessagesProcedure is the fully-qualified name of the MailboxService's
+	// ListMailboxMessages RPC.
+	MailboxServiceListMailboxMessagesProcedure = "/mailbox.v1.MailboxService/ListMailboxMessages"
+	// MailboxServiceGetMailboxMessageProcedure is the fully-qualified name of the MailboxService's
+	// GetMailboxMessage RPC.
+	MailboxServiceGetMailboxMessageProcedure = "/mailbox.v1.MailboxService/GetMailboxMessage"
 )
 
 // MailboxServiceClient is a client for the mailbox.v1.MailboxService service.
@@ -74,6 +80,10 @@ type MailboxServiceClient interface {
 	ListMailboxUsers(context.Context, *connect.Request[v1.ListMailboxUsersRequest]) (*connect.Response[v1.ListMailboxUsersResponse], error)
 	UpdateMailboxUser(context.Context, *connect.Request[v1.UpdateMailboxUserRequest]) (*connect.Response[v1.UpdateMailboxUserResponse], error)
 	RemoveMailboxUser(context.Context, *connect.Request[v1.RemoveMailboxUserRequest]) (*connect.Response[v1.RemoveMailboxUserResponse], error)
+	// メールボックスの取込済みメッセージ (Phase 26)。viewer 以上。
+	// List はメタデータのみ、本文は Get で取得する。
+	ListMailboxMessages(context.Context, *connect.Request[v1.ListMailboxMessagesRequest]) (*connect.Response[v1.ListMailboxMessagesResponse], error)
+	GetMailboxMessage(context.Context, *connect.Request[v1.GetMailboxMessageRequest]) (*connect.Response[v1.GetMailboxMessageResponse], error)
 }
 
 // NewMailboxServiceClient constructs a client for the mailbox.v1.MailboxService service. By
@@ -135,19 +145,33 @@ func NewMailboxServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(mailboxServiceMethods.ByName("RemoveMailboxUser")),
 			connect.WithClientOptions(opts...),
 		),
+		listMailboxMessages: connect.NewClient[v1.ListMailboxMessagesRequest, v1.ListMailboxMessagesResponse](
+			httpClient,
+			baseURL+MailboxServiceListMailboxMessagesProcedure,
+			connect.WithSchema(mailboxServiceMethods.ByName("ListMailboxMessages")),
+			connect.WithClientOptions(opts...),
+		),
+		getMailboxMessage: connect.NewClient[v1.GetMailboxMessageRequest, v1.GetMailboxMessageResponse](
+			httpClient,
+			baseURL+MailboxServiceGetMailboxMessageProcedure,
+			connect.WithSchema(mailboxServiceMethods.ByName("GetMailboxMessage")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // mailboxServiceClient implements MailboxServiceClient.
 type mailboxServiceClient struct {
-	listMailboxes     *connect.Client[v1.ListMailboxesRequest, v1.ListMailboxesResponse]
-	createMailbox     *connect.Client[v1.CreateMailboxRequest, v1.CreateMailboxResponse]
-	updateMailbox     *connect.Client[v1.UpdateMailboxRequest, v1.UpdateMailboxResponse]
-	deleteMailbox     *connect.Client[v1.DeleteMailboxRequest, v1.DeleteMailboxResponse]
-	addMailboxUser    *connect.Client[v1.AddMailboxUserRequest, v1.AddMailboxUserResponse]
-	listMailboxUsers  *connect.Client[v1.ListMailboxUsersRequest, v1.ListMailboxUsersResponse]
-	updateMailboxUser *connect.Client[v1.UpdateMailboxUserRequest, v1.UpdateMailboxUserResponse]
-	removeMailboxUser *connect.Client[v1.RemoveMailboxUserRequest, v1.RemoveMailboxUserResponse]
+	listMailboxes       *connect.Client[v1.ListMailboxesRequest, v1.ListMailboxesResponse]
+	createMailbox       *connect.Client[v1.CreateMailboxRequest, v1.CreateMailboxResponse]
+	updateMailbox       *connect.Client[v1.UpdateMailboxRequest, v1.UpdateMailboxResponse]
+	deleteMailbox       *connect.Client[v1.DeleteMailboxRequest, v1.DeleteMailboxResponse]
+	addMailboxUser      *connect.Client[v1.AddMailboxUserRequest, v1.AddMailboxUserResponse]
+	listMailboxUsers    *connect.Client[v1.ListMailboxUsersRequest, v1.ListMailboxUsersResponse]
+	updateMailboxUser   *connect.Client[v1.UpdateMailboxUserRequest, v1.UpdateMailboxUserResponse]
+	removeMailboxUser   *connect.Client[v1.RemoveMailboxUserRequest, v1.RemoveMailboxUserResponse]
+	listMailboxMessages *connect.Client[v1.ListMailboxMessagesRequest, v1.ListMailboxMessagesResponse]
+	getMailboxMessage   *connect.Client[v1.GetMailboxMessageRequest, v1.GetMailboxMessageResponse]
 }
 
 // ListMailboxes calls mailbox.v1.MailboxService.ListMailboxes.
@@ -190,6 +214,16 @@ func (c *mailboxServiceClient) RemoveMailboxUser(ctx context.Context, req *conne
 	return c.removeMailboxUser.CallUnary(ctx, req)
 }
 
+// ListMailboxMessages calls mailbox.v1.MailboxService.ListMailboxMessages.
+func (c *mailboxServiceClient) ListMailboxMessages(ctx context.Context, req *connect.Request[v1.ListMailboxMessagesRequest]) (*connect.Response[v1.ListMailboxMessagesResponse], error) {
+	return c.listMailboxMessages.CallUnary(ctx, req)
+}
+
+// GetMailboxMessage calls mailbox.v1.MailboxService.GetMailboxMessage.
+func (c *mailboxServiceClient) GetMailboxMessage(ctx context.Context, req *connect.Request[v1.GetMailboxMessageRequest]) (*connect.Response[v1.GetMailboxMessageResponse], error) {
+	return c.getMailboxMessage.CallUnary(ctx, req)
+}
+
 // MailboxServiceHandler is an implementation of the mailbox.v1.MailboxService service.
 type MailboxServiceHandler interface {
 	// 自分がアクセスできるメールボックス一覧 (自分のロール付き)。
@@ -205,6 +239,10 @@ type MailboxServiceHandler interface {
 	ListMailboxUsers(context.Context, *connect.Request[v1.ListMailboxUsersRequest]) (*connect.Response[v1.ListMailboxUsersResponse], error)
 	UpdateMailboxUser(context.Context, *connect.Request[v1.UpdateMailboxUserRequest]) (*connect.Response[v1.UpdateMailboxUserResponse], error)
 	RemoveMailboxUser(context.Context, *connect.Request[v1.RemoveMailboxUserRequest]) (*connect.Response[v1.RemoveMailboxUserResponse], error)
+	// メールボックスの取込済みメッセージ (Phase 26)。viewer 以上。
+	// List はメタデータのみ、本文は Get で取得する。
+	ListMailboxMessages(context.Context, *connect.Request[v1.ListMailboxMessagesRequest]) (*connect.Response[v1.ListMailboxMessagesResponse], error)
+	GetMailboxMessage(context.Context, *connect.Request[v1.GetMailboxMessageRequest]) (*connect.Response[v1.GetMailboxMessageResponse], error)
 }
 
 // NewMailboxServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -262,6 +300,18 @@ func NewMailboxServiceHandler(svc MailboxServiceHandler, opts ...connect.Handler
 		connect.WithSchema(mailboxServiceMethods.ByName("RemoveMailboxUser")),
 		connect.WithHandlerOptions(opts...),
 	)
+	mailboxServiceListMailboxMessagesHandler := connect.NewUnaryHandler(
+		MailboxServiceListMailboxMessagesProcedure,
+		svc.ListMailboxMessages,
+		connect.WithSchema(mailboxServiceMethods.ByName("ListMailboxMessages")),
+		connect.WithHandlerOptions(opts...),
+	)
+	mailboxServiceGetMailboxMessageHandler := connect.NewUnaryHandler(
+		MailboxServiceGetMailboxMessageProcedure,
+		svc.GetMailboxMessage,
+		connect.WithSchema(mailboxServiceMethods.ByName("GetMailboxMessage")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/mailbox.v1.MailboxService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case MailboxServiceListMailboxesProcedure:
@@ -280,6 +330,10 @@ func NewMailboxServiceHandler(svc MailboxServiceHandler, opts ...connect.Handler
 			mailboxServiceUpdateMailboxUserHandler.ServeHTTP(w, r)
 		case MailboxServiceRemoveMailboxUserProcedure:
 			mailboxServiceRemoveMailboxUserHandler.ServeHTTP(w, r)
+		case MailboxServiceListMailboxMessagesProcedure:
+			mailboxServiceListMailboxMessagesHandler.ServeHTTP(w, r)
+		case MailboxServiceGetMailboxMessageProcedure:
+			mailboxServiceGetMailboxMessageHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -319,4 +373,12 @@ func (UnimplementedMailboxServiceHandler) UpdateMailboxUser(context.Context, *co
 
 func (UnimplementedMailboxServiceHandler) RemoveMailboxUser(context.Context, *connect.Request[v1.RemoveMailboxUserRequest]) (*connect.Response[v1.RemoveMailboxUserResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("mailbox.v1.MailboxService.RemoveMailboxUser is not implemented"))
+}
+
+func (UnimplementedMailboxServiceHandler) ListMailboxMessages(context.Context, *connect.Request[v1.ListMailboxMessagesRequest]) (*connect.Response[v1.ListMailboxMessagesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("mailbox.v1.MailboxService.ListMailboxMessages is not implemented"))
+}
+
+func (UnimplementedMailboxServiceHandler) GetMailboxMessage(context.Context, *connect.Request[v1.GetMailboxMessageRequest]) (*connect.Response[v1.GetMailboxMessageResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("mailbox.v1.MailboxService.GetMailboxMessage is not implemented"))
 }

@@ -586,6 +586,7 @@ func main() {
 			Search:   searchService,
 			Activity: activityService,
 			Mailbox:  mailboxService, // nil 可 (機能無効時は list_mailboxes 非登録)
+			Queries:  queries,        // create_customer の upsert 判定用
 		}, metaURL))
 		log.Info().Str("resource_metadata", metaURL).Msg("MCP server mounted at /mcp")
 	}

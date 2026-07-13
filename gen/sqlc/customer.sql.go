@@ -71,6 +71,35 @@ func (q *Queries) DeleteCustomer(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+const findCustomerByBookAndEmail = `-- name: FindCustomerByBookAndEmail :one
+SELECT customer_id FROM (
+    SELECT c.id AS customer_id, 1 AS priority
+    FROM "Customer" c
+    WHERE c.book_id = $1 AND c.mail = $2 AND c.mail <> ''
+    UNION ALL
+    SELECT ct.customer_id, 2 AS priority
+    FROM "Contact" ct
+    JOIN "Customer" c ON c.id = ct.customer_id
+    WHERE c.book_id = $1 AND ct.mail = $2 AND ct.mail <> ''
+) hits
+ORDER BY priority
+LIMIT 1
+`
+
+type FindCustomerByBookAndEmailParams struct {
+	BookID uuid.UUID `json:"book_id"`
+	Mail   string    `json:"mail"`
+}
+
+// MCP create_customer の upsert 判定用。book 内で Customer.mail / Contact.mail の
+// どちらかが一致する最初の Customer を返す。
+func (q *Queries) FindCustomerByBookAndEmail(ctx context.Context, arg FindCustomerByBookAndEmailParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, findCustomerByBookAndEmail, arg.BookID, arg.Mail)
+	var customer_id uuid.UUID
+	err := row.Scan(&customer_id)
+	return customer_id, err
+}
+
 const getCustomer = `-- name: GetCustomer :one
 SELECT
     id,

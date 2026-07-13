@@ -36,7 +36,7 @@ INSERT INTO "Mailbox" (
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7
 )
-RETURNING id, company_id, address, display_name, smtp_username, password_enc, active, created_at, updated_at
+RETURNING id, company_id, address, display_name, smtp_username, password_enc, active, created_at, updated_at, synced_at
 `
 
 type CreateMailboxParams struct {
@@ -70,6 +70,7 @@ func (q *Queries) CreateMailbox(ctx context.Context, arg CreateMailboxParams) (M
 		&i.Active,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SyncedAt,
 	)
 	return i, err
 }
@@ -133,7 +134,7 @@ func (q *Queries) DeleteMailboxPermit(ctx context.Context, arg DeleteMailboxPerm
 }
 
 const getMailbox = `-- name: GetMailbox :one
-SELECT id, company_id, address, display_name, smtp_username, password_enc, active, created_at, updated_at FROM "Mailbox" WHERE id = $1
+SELECT id, company_id, address, display_name, smtp_username, password_enc, active, created_at, updated_at, synced_at FROM "Mailbox" WHERE id = $1
 `
 
 func (q *Queries) GetMailbox(ctx context.Context, id uuid.UUID) (Mailbox, error) {
@@ -149,6 +150,7 @@ func (q *Queries) GetMailbox(ctx context.Context, id uuid.UUID) (Mailbox, error)
 		&i.Active,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SyncedAt,
 	)
 	return i, err
 }
@@ -178,7 +180,7 @@ func (q *Queries) GetMailboxPermitByMailboxIDAndUserID(ctx context.Context, arg 
 }
 
 const listActiveMailboxesByCompany = `-- name: ListActiveMailboxesByCompany :many
-SELECT id, company_id, address, display_name, smtp_username, password_enc, active, created_at, updated_at FROM "Mailbox"
+SELECT id, company_id, address, display_name, smtp_username, password_enc, active, created_at, updated_at, synced_at FROM "Mailbox"
 WHERE company_id = $1 AND active = true
 ORDER BY created_at ASC
 `
@@ -203,6 +205,7 @@ func (q *Queries) ListActiveMailboxesByCompany(ctx context.Context, companyID uu
 			&i.Active,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.SyncedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -215,7 +218,7 @@ func (q *Queries) ListActiveMailboxesByCompany(ctx context.Context, companyID uu
 }
 
 const listAllActiveMailboxes = `-- name: ListAllActiveMailboxes :many
-SELECT id, company_id, address, display_name, smtp_username, password_enc, active, created_at, updated_at FROM "Mailbox"
+SELECT id, company_id, address, display_name, smtp_username, password_enc, active, created_at, updated_at, synced_at FROM "Mailbox"
 WHERE active = true
 ORDER BY created_at ASC
 `
@@ -240,6 +243,7 @@ func (q *Queries) ListAllActiveMailboxes(ctx context.Context) ([]Mailbox, error)
 			&i.Active,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.SyncedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -354,7 +358,7 @@ SET
   active        = COALESCE($4, active),
   updated_at    = now()
 WHERE id = $5
-RETURNING id, company_id, address, display_name, smtp_username, password_enc, active, created_at, updated_at
+RETURNING id, company_id, address, display_name, smtp_username, password_enc, active, created_at, updated_at, synced_at
 `
 
 type UpdateMailboxParams struct {
@@ -385,6 +389,7 @@ func (q *Queries) UpdateMailbox(ctx context.Context, arg UpdateMailboxParams) (M
 		&i.Active,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SyncedAt,
 	)
 	return i, err
 }

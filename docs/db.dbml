@@ -1,0 +1,284 @@
+// Phox CRM — データベース構造 (migration 000012 時点 / 2026-07-09)
+// 生成元: 実 DB スキーマ (pg_dump) を DBML に転記。
+// 閲覧: https://dbdiagram.io/d に貼り付けると ER 図になる。
+// 更新ルール: マイグレーションを足したらこのファイルも更新する。
+
+Project phox_customer {
+  database_type: 'PostgreSQL'
+  Note: '''
+    Phox CRM バックエンド (phox-customer) のスキーマ。
+    ドメイン: Company/User → Book (顧客リスト) → Customer → Contact/Activity/Redial。
+    RBAC は Book に Permit、Mailbox に MailboxPermit (どちらも role enum を共有)。
+    Phase 25-26: Mailbox (Phox が所有する実メールアドレス) と
+    MailboxMessage (IMAP 全文取込み) を追加。
+  '''
+}
+
+// Book/Mailbox 共通の RBAC ロール (階層: owner > editor > viewer)
+Enum role {
+  viewer
+  editor
+  owner
+}
+
+// ─── 組織 ───────────────────────────────────────────────────────
+
+Table Company {
+  id uuid [pk]
+  name varchar [not null]
+  updated_at timestamptz [not null, default: `now()`]
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table User {
+  id varchar [pk, note: 'Keycloak の subject (sub) をそのまま使う']
+  company_id uuid [not null]
+  name varchar [not null]
+  role role [not null, note: '会社レベルの既定ロール']
+  updated_at timestamptz [not null, default: `now()`]
+  created_at timestamptz [not null, default: `now()`]
+}
+
+// ─── 顧客リスト (Book) ドメイン ──────────────────────────────────
+
+Table Book {
+  id uuid [pk]
+  name varchar [not null]
+  updated_at timestamptz [not null, default: `now()`]
+  created_at timestamptz [not null, default: `now()`]
+  Note: '顧客リスト。アクセス制御は Permit で行う'
+}
+
+Table Permit {
+  id uuid [pk]
+  book_id uuid [not null]
+  user_id varchar [not null]
+  role role [not null]
+  updated_at timestamptz [not null, default: `now()`]
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (book_id, user_id) [unique]
+  }
+  Note: 'Book への per-user アクセス権'
+}
+
+Table Customer {
+  id uuid [pk]
+  book_id uuid [not null]
+  phone varchar [not null, default: '']
+  category varchar [not null, default: '']
+  name varchar [not null, default: '']
+  corporation varchar [not null, default: '']
+  address varchar [not null, default: '']
+  memo text [not null, default: '']
+  mail varchar [not null, default: '', note: 'IMAP 取込みの顧客解決と MCP create_customer の upsert 判定に使う']
+  updated_at timestamptz [not null, default: `now()`]
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table Contact {
+  id uuid [pk]
+  customer_id uuid [not null]
+  name varchar [not null, default: '']
+  sex varchar [not null, default: '']
+  phone varchar [not null, default: '']
+  mail varchar [not null, default: '', note: '顧客解決は Customer.mail と Contact.mail の両方を見る']
+  fax varchar [not null, default: '']
+  updated_at timestamptz [not null, default: `now()`]
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table Status {
+  id uuid [pk]
+  book_id uuid [not null]
+  priority int [not null]
+  name varchar [not null]
+  effective boolean [not null]
+  ng boolean [not null]
+  updated_at timestamptz [not null, default: `now()`]
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (book_id, name) [unique]
+  }
+  Note: '架電結果ステータス (Book ごとに定義)'
+}
+
+// ─── 活動 (タイムライン) ─────────────────────────────────────────
+
+Table Activity {
+  id uuid [pk]
+  customer_id uuid [not null]
+  contact_id uuid
+  type varchar [not null, note: "CHECK: call | email_sent | email_received"]
+  user_id varchar [not null, note: '取込みは "system"']
+  status_id uuid [note: 'call のとき必須 (CHECK)']
+  phone varchar [note: 'call のとき必須 (CHECK)']
+  mail_from varchar
+  mail_to varchar [note: 'email_* のとき必須 (CHECK)']
+  mail_cc varchar
+  subject text [note: 'email のみ']
+  body text [note: 'email のみ (plain text)']
+  message_id varchar [note: 'RFC822 Message-ID。partial unique (NOT NULL のみ) で IMAP 取込みの dedup キー']
+  duration_seconds int [note: 'Zoom 通話']
+  recording_url text
+  zoom_call_id varchar [note: 'partial unique (NOT NULL のみ)。Zoom webhook/backfill の dedup キー']
+  mailbox_id uuid [note: 'Phase 25: どのメールボックスで送受信したか (削除時 SET NULL で履歴は残る)']
+  occurred_at timestamptz [not null, default: `now()`]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (customer_id, occurred_at) [name: 'activity_customer_occurred_at_idx']
+    type
+    message_id [unique, note: 'partial: WHERE message_id IS NOT NULL']
+    zoom_call_id [unique, note: 'partial: WHERE zoom_call_id IS NOT NULL']
+  }
+  Note: '顧客タイムライン (架電・メール送受信)。既知顧客に紐付くものだけが入る'
+}
+
+Table Redial {
+  id uuid [pk]
+  customer_id uuid [not null]
+  user_id varchar [not null]
+  phone varchar [not null, default: '']
+  start_at timestamptz [not null]
+  end_at timestamptz [not null]
+  note text [not null, default: '']
+  gcal_event_id varchar [note: 'Google Calendar 連携 (mock/real)']
+  gcal_synced_at timestamptz
+  updated_at timestamptz [not null, default: `now()`]
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (customer_id, start_at)
+    (user_id, start_at)
+  }
+  Note: '再架電予定'
+}
+
+Table MailTemplate {
+  id uuid [pk]
+  book_id uuid [not null]
+  name varchar [not null]
+  subject varchar [not null, default: '']
+  body text [not null, default: '']
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (book_id, created_at)
+  }
+}
+
+// ─── メールボックス (Phase 25-26) ────────────────────────────────
+
+Table Mailbox {
+  id uuid [pk]
+  company_id uuid [not null]
+  address varchar [not null, note: '実 mailu アカウントのアドレス (例 sales@0utl1er.tech)']
+  display_name varchar [not null, default: '']
+  smtp_username varchar [not null, note: '通常 = address']
+  password_enc bytea [not null, note: 'AES-256-GCM (鍵 = MAILBOX_SECRET_KEY)。平文はどこにも保存・返却しない']
+  active boolean [not null, default: true]
+  synced_at timestamptz [note: 'NULL = 未同期 → IMAP worker が初回に全履歴バックフィル']
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (company_id, address) [unique]
+  }
+  Note: 'Phox が所有する実メールアドレス (会社共有プール)。MAILU_API_* 設定時は作成/削除が mailu に自動反映'
+}
+
+Table MailboxPermit {
+  id uuid [pk]
+  mailbox_id uuid [not null]
+  user_id varchar [not null]
+  role role [not null]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (mailbox_id, user_id) [unique]
+  }
+  Note: 'Mailbox への per-user アクセス権 (viewer=閲覧 / editor=送信 / owner=管理)。Permit と同型'
+}
+
+Table MailboxMessage {
+  id uuid [pk]
+  mailbox_id uuid [not null]
+  folder varchar [not null, note: 'INBOX | Sent']
+  message_id varchar [not null, note: 'RFC822 Message-ID (bracket 無し)']
+  from_addr varchar [not null, default: '']
+  to_addrs varchar [not null, default: '', note: 'カンマ区切り']
+  cc_addrs varchar [not null, default: '']
+  subject text [not null, default: '']
+  body_text text [not null, default: '', note: 'text/plain (無ければ HTML タグ除去)。上限 256KB']
+  attachment_names text [not null, default: '', note: '添付ファイル名のカンマ区切り。中身は保存しない']
+  customer_id uuid [note: 'アドレスが既知顧客に解決できた場合のみ']
+  occurred_at timestamptz [not null]
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (mailbox_id, message_id) [unique, note: '取込み dedup']
+    (mailbox_id, occurred_at)
+    customer_id [note: 'partial: WHERE customer_id IS NOT NULL']
+  }
+  Note: 'Phase 26: メールボックスの全送受信メール (顧客未紐付けの新規問い合わせも含む)。閲覧は MailboxPermit viewer+'
+}
+
+// ─── ユーザー個人の連携 ─────────────────────────────────────────
+
+Table UserGoogleToken {
+  user_id varchar [pk]
+  refresh_token bytea [not null, note: 'AES-256-GCM (鍵 = GCAL_TOKEN_KEY)']
+  access_token bytea
+  expiry timestamptz
+  scopes text [not null]
+  google_email varchar [not null, default: '']
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+  Note: 'Google Calendar OAuth トークン (per-user)'
+}
+
+Table UserICalFeed {
+  user_id varchar [pk]
+  token varchar [not null, note: 'iCal フィード URL の秘密トークン']
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    token
+  }
+}
+
+// ─── リレーション ────────────────────────────────────────────────
+
+Ref: User.company_id > Company.id [delete: cascade]
+
+Ref: Permit.book_id > Book.id [delete: cascade]
+Ref: Permit.user_id > User.id [delete: cascade]
+Ref: Customer.book_id > Book.id [delete: cascade]
+Ref: Contact.customer_id > Customer.id [delete: cascade]
+Ref: Status.book_id > Book.id [delete: cascade]
+Ref: MailTemplate.book_id > Book.id [delete: cascade]
+
+Ref: Activity.customer_id > Customer.id [delete: cascade]
+Ref: Activity.contact_id > Contact.id [delete: set null]
+Ref: Activity.status_id > Status.id [delete: set null]
+Ref: Activity.user_id > User.id [delete: cascade]
+Ref: Activity.mailbox_id > Mailbox.id [delete: set null]
+
+Ref: Redial.customer_id > Customer.id [delete: cascade]
+Ref: Redial.user_id > User.id [delete: cascade]
+
+Ref: Mailbox.company_id > Company.id [delete: cascade]
+Ref: MailboxPermit.mailbox_id > Mailbox.id [delete: cascade]
+Ref: MailboxPermit.user_id > User.id [delete: cascade]
+Ref: MailboxMessage.mailbox_id > Mailbox.id [delete: cascade]
+Ref: MailboxMessage.customer_id > Customer.id [delete: set null]
+
+Ref: UserGoogleToken.user_id > User.id [delete: cascade]
+Ref: UserICalFeed.user_id > User.id [delete: cascade]

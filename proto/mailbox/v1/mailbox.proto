@@ -26,6 +26,11 @@ service MailboxService {
   rpc ListMailboxUsers(ListMailboxUsersRequest) returns (ListMailboxUsersResponse);
   rpc UpdateMailboxUser(UpdateMailboxUserRequest) returns (UpdateMailboxUserResponse);
   rpc RemoveMailboxUser(RemoveMailboxUserRequest) returns (RemoveMailboxUserResponse);
+
+  // メールボックスの取込済みメッセージ (Phase 26)。viewer 以上。
+  // List はメタデータのみ、本文は Get で取得する。
+  rpc ListMailboxMessages(ListMailboxMessagesRequest) returns (ListMailboxMessagesResponse);
+  rpc GetMailboxMessage(GetMailboxMessageRequest) returns (GetMailboxMessageResponse);
 }
 
 // パスワードは含めない。
@@ -115,4 +120,43 @@ message RemoveMailboxUserRequest {
 message RemoveMailboxUserResponse {
   string mailbox_id = 1;
   string user_id = 2;
+}
+
+// ─── メールボックスメッセージ (Phase 26) ─────────────────────────
+
+message MailboxMessage {
+  string id = 1;
+  string mailbox_id = 2;
+  string folder = 3; // "INBOX" / "Sent"
+  string message_id = 4;
+  string from_addr = 5;
+  string to_addrs = 6; // カンマ区切り
+  string cc_addrs = 7;
+  string subject = 8;
+  // List では空。Get でのみ返す。
+  string body_text = 9;
+  string attachment_names = 10; // カンマ区切り (中身は保存していない)
+  // 既知顧客に解決できた場合のみ。
+  optional string customer_id = 11;
+  google.protobuf.Timestamp occurred_at = 12;
+}
+
+message ListMailboxMessagesRequest {
+  string mailbox_id = 1 [(buf.validate.field).string.uuid = true];
+  // "INBOX" / "Sent"。未指定なら両方。
+  optional string folder = 2;
+  // 1〜200。未指定は 50。
+  optional int32 limit = 3 [(buf.validate.field).int32 = {gte: 1, lte: 200}];
+  optional int32 offset = 4 [(buf.validate.field).int32.gte = 0];
+}
+message ListMailboxMessagesResponse {
+  repeated MailboxMessage messages = 1;
+  int64 total = 2;
+}
+
+message GetMailboxMessageRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+message GetMailboxMessageResponse {
+  MailboxMessage message = 1;
 }

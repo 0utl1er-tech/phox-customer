@@ -34,6 +34,7 @@ import (
 	"connectrpc.com/connect"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
 	"github.com/0utl1er-tech/phox-customer/internal/service/activity"
 	"github.com/0utl1er-tech/phox-customer/internal/service/book"
 	"github.com/0utl1er-tech/phox-customer/internal/service/customer"
@@ -65,6 +66,10 @@ type Deps struct {
 	Search   *search.SearchService
 	Activity *activity.ActivityService
 	Mailbox  *mailbox.MailboxService // nil 可 (MAILBOX_SECRET_KEY 未設定時)
+	// Queries は create_customer の upsert 判定 (book 内 mail 一致検索) 専用。
+	// 結果は必ず authz 付きのサービス RPC を通して返すこと (生データを直接
+	// クライアントへ返さない)。nil 可 (その場合 upsert 判定はスキップ)。
+	Queries *db.Queries
 }
 
 // ProtectedResourceMetadata is the RFC 9728 document served at

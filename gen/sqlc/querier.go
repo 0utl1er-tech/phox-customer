@@ -18,6 +18,7 @@ type Querier interface {
 	ClearRedialGcalSync(ctx context.Context, id uuid.UUID) (Redial, error)
 	// ListActivitiesByBookID のページネーション用 total。フィルタ条件は同一に保つこと。
 	CountActivitiesByBookID(ctx context.Context, arg CountActivitiesByBookIDParams) (int64, error)
+	CountMailboxMessages(ctx context.Context, arg CountMailboxMessagesParams) (int64, error)
 	// duration_seconds / recording_url / zoom_call_id は call type で Zoom 連携時に
 	// セットされる。他の type (email_sent / email_received / manual call) では
 	// 全て NULL を渡せば良い (列は nullable)。
@@ -28,6 +29,7 @@ type Querier interface {
 	CreateCustomer(ctx context.Context, arg CreateCustomerParams) (Customer, error)
 	CreateMailTemplate(ctx context.Context, arg CreateMailTemplateParams) (MailTemplate, error)
 	CreateMailbox(ctx context.Context, arg CreateMailboxParams) (Mailbox, error)
+	CreateMailboxMessage(ctx context.Context, arg CreateMailboxMessageParams) (MailboxMessage, error)
 	CreateMailboxPermit(ctx context.Context, arg CreateMailboxPermitParams) (MailboxPermit, error)
 	CreatePermit(ctx context.Context, arg CreatePermitParams) (Permit, error)
 	// Phase 20: 再設計された Redial テーブルの CRUD。
@@ -49,6 +51,9 @@ type Querier interface {
 	DeleteUser(ctx context.Context, id string) (User, error)
 	DeleteUserGoogleToken(ctx context.Context, userID string) error
 	DeleteUserICalFeed(ctx context.Context, userID string) error
+	// MCP create_customer の upsert 判定用。book 内で Customer.mail / Contact.mail の
+	// どちらかが一致する最初の Customer を返す。
+	FindCustomerByBookAndEmail(ctx context.Context, arg FindCustomerByBookAndEmailParams) (uuid.UUID, error)
 	// IMAP worker が To アドレスから Customer を解決するのに使う。
 	// Customer.mail と Contact.mail の両方を UNION で引き、最初にヒットしたものを返す。
 	FindCustomerByEmail(ctx context.Context, mail string) (FindCustomerByEmailRow, error)
@@ -92,6 +97,7 @@ type Querier interface {
 	GetMailSentStatsByBook(ctx context.Context, arg GetMailSentStatsByBookParams) ([]GetMailSentStatsByBookRow, error)
 	GetMailTemplate(ctx context.Context, id uuid.UUID) (MailTemplate, error)
 	GetMailbox(ctx context.Context, id uuid.UUID) (Mailbox, error)
+	GetMailboxMessage(ctx context.Context, id uuid.UUID) (MailboxMessage, error)
 	GetMailboxPermitByMailboxIDAndUserID(ctx context.Context, arg GetMailboxPermitByMailboxIDAndUserIDParams) (MailboxPermit, error)
 	GetMaxStatusPriority(ctx context.Context, bookID uuid.UUID) (interface{}, error)
 	// Zoom Phone webhook の caller/callee マッチで複数 Customer 候補が出た時に
@@ -123,6 +129,8 @@ type Querier interface {
 	ListContacts(ctx context.Context, customerID uuid.UUID) ([]Contact, error)
 	ListCustomers(ctx context.Context, arg ListCustomersParams) ([]ListCustomersRow, error)
 	ListMailTemplatesByBook(ctx context.Context, bookID uuid.UUID) ([]MailTemplate, error)
+	// 本文は返さない (一覧用メタデータ)。has_attachments 判定用に attachment_names は返す。
+	ListMailboxMessages(ctx context.Context, arg ListMailboxMessagesParams) ([]ListMailboxMessagesRow, error)
 	ListMailboxPermitsWithUserInfo(ctx context.Context, mailboxID uuid.UUID) ([]ListMailboxPermitsWithUserInfoRow, error)
 	// 呼び出しユーザーが MailboxPermit を持つメールボックス一覧 (自分のロール付き)。
 	ListMailboxesByUserID(ctx context.Context, userID string) ([]ListMailboxesByUserIDRow, error)
@@ -137,6 +145,7 @@ type Querier interface {
 	ListStatusesByBookID(ctx context.Context, bookID uuid.UUID) ([]Status, error)
 	ListUsers(ctx context.Context) ([]User, error)
 	ListUsersByCompany(ctx context.Context, companyID uuid.UUID) ([]User, error)
+	SetMailboxSyncedAt(ctx context.Context, id uuid.UUID) error
 	SetRedialGcalSynced(ctx context.Context, arg SetRedialGcalSyncedParams) (Redial, error)
 	// phone.recording_completed イベントで recording archive 完了後に呼ぶ。
 	// $1 = zoom_call_id (= 既存 Activity row の dedup キー)

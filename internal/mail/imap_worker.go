@@ -176,14 +176,6 @@ func ingestMessages(ctx context.Context, queries *db.Queries, msgs []ParsedMessa
 			continue
 		}
 
-		// 既に取込済みなら dedup (UNIQUE INDEX でも止まるが事前チェックでログを減らす)
-		if _, err := queries.GetActivityByMessageID(ctx, pgtype.Text{String: m.MessageID, Valid: true}); err == nil {
-			continue
-		} else if !errors.Is(err, pgx.ErrNoRows) {
-			log.Warn().Err(err).Str("message_id", m.MessageID).Msg("IMAP worker: dedup lookup failed")
-			continue
-		}
-
 		// match 先のアドレスを決定: email_sent なら To (送信先) 側を、
 		// email_received なら From (送信元) 側を Customer とみなす。
 		var matchAddrs []string
@@ -197,11 +189,27 @@ func ingestMessages(ctx context.Context, queries *db.Queries, msgs []ParsedMessa
 		}
 
 		customer, contact, ok := resolveCustomer(ctx, queries, matchAddrs)
+
+		// Phase 26: 管理対象メールボックス経由なら、顧客に紐付かなくても
+		// 全メッセージを MailboxMessage に保存する (Activity dedup より先に —
+		// 過去に Activity 化済みのメールもここには入れる)。
+		if mailboxID.Valid {
+			storeMailboxMessage(ctx, queries, m, activityType, mailboxID, customer, ok)
+		}
+
+		// 既に取込済みなら dedup (UNIQUE INDEX でも止まるが事前チェックでログを減らす)
+		if _, err := queries.GetActivityByMessageID(ctx, pgtype.Text{String: m.MessageID, Valid: true}); err == nil {
+			continue
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			log.Warn().Err(err).Str("message_id", m.MessageID).Msg("IMAP worker: dedup lookup failed")
+			continue
+		}
+
 		if !ok {
 			log.Debug().
 				Strs("addrs", matchAddrs).
 				Str("message_id", m.MessageID).
-				Msg("IMAP worker: no matching customer — skipping")
+				Msg("IMAP worker: no matching customer — activity skipped (raw message kept)")
 			continue
 		}
 
@@ -215,6 +223,7 @@ func ingestMessages(ctx context.Context, queries *db.Queries, msgs []ParsedMessa
 			StatusID:   pgtype.UUID{Valid: false},
 			MailFrom:   pgtype.Text{String: m.From, Valid: m.From != ""},
 			Subject:    pgtype.Text{String: m.Subject, Valid: m.Subject != ""},
+			Body:       pgtype.Text{String: m.Body, Valid: m.Body != ""},
 			MessageID:  pgtype.Text{String: m.MessageID, Valid: true},
 			OccurredAt: effectiveOccurredAt(m),
 			MailboxID:  mailboxID,
@@ -242,6 +251,38 @@ func ingestMessages(ctx context.Context, queries *db.Queries, msgs []ParsedMessa
 			Str("message_id", m.MessageID).
 			Str("customer_id", customer.String()).
 			Msg("IMAP worker: ingested activity")
+	}
+}
+
+// storeMailboxMessage は 1 メッセージを MailboxMessage に保存する (Phase 26)。
+// 顧客解決の成否に関わらず全メッセージが対象。dedup は
+// (mailbox_id, message_id) UNIQUE INDEX に任せ、違反は正常系として無視。
+func storeMailboxMessage(ctx context.Context, queries *db.Queries, m ParsedMessage, activityType string, mailboxID pgtype.UUID, customer uuid.UUID, resolved bool) {
+	folder := "INBOX"
+	if activityType == "email_sent" {
+		folder = "Sent"
+	}
+	params := db.CreateMailboxMessageParams{
+		ID:              uuid.New(),
+		MailboxID:       mailboxID.Bytes,
+		Folder:          folder,
+		MessageID:       m.MessageID,
+		FromAddr:        m.From,
+		ToAddrs:         strings.Join(m.To, ", "),
+		CcAddrs:         strings.Join(m.Cc, ", "),
+		Subject:         m.Subject,
+		BodyText:        m.Body,
+		AttachmentNames: strings.Join(m.AttachmentNames, ", "),
+		OccurredAt:      effectiveOccurredAt(m),
+	}
+	if resolved && customer != uuid.Nil {
+		params.CustomerID = pgtype.UUID{Bytes: customer, Valid: true}
+	}
+	if _, err := queries.CreateMailboxMessage(ctx, params); err != nil {
+		if isUniqueViolation(err) {
+			return // 取込済み
+		}
+		log.Warn().Err(err).Str("message_id", m.MessageID).Msg("IMAP worker: insert mailbox message")
 	}
 }
 
