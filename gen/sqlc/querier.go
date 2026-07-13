@@ -12,6 +12,11 @@ import (
 )
 
 type Querier interface {
+	// 顧客の mail に一致する未紐付け MailboxMessage を Activity 化し、
+	// MailboxMessage.customer_id も紐付ける。create_customer 後に呼ぶ。
+	// INBOX(from 一致)=email_received / Sent(to 内に一致)=email_sent。
+	// message_id 重複 (既に Activity 化済み) は ON CONFLICT でスキップ。冪等。
+	BackfillActivitiesForCustomerEmail(ctx context.Context, arg BackfillActivitiesForCustomerEmailParams) (int64, error)
 	CheckUserAccessToBook(ctx context.Context, arg CheckUserAccessToBookParams) (bool, error)
 	CheckUserRoleForBook(ctx context.Context, arg CheckUserRoleForBookParams) (Role, error)
 	CheckUserRoleForMailbox(ctx context.Context, arg CheckUserRoleForMailboxParams) (Role, error)

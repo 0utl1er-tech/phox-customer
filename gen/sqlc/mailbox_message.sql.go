@@ -13,6 +13,49 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const backfillActivitiesForCustomerEmail = `-- name: BackfillActivitiesForCustomerEmail :execrows
+WITH matched AS (
+  SELECT mm.id, mm.folder, mm.from_addr, mm.to_addrs, mm.cc_addrs,
+         mm.subject, mm.body_text, mm.message_id, mm.occurred_at, mm.mailbox_id
+  FROM "MailboxMessage" mm
+  WHERE mm.customer_id IS NULL
+    AND (
+      (mm.folder = 'INBOX' AND lower(mm.from_addr) = lower($2))
+      OR (mm.folder = 'Sent' AND position(lower($2) IN lower(mm.to_addrs)) > 0)
+    )
+),
+ins AS (
+  INSERT INTO "Activity"
+    (id, customer_id, type, user_id, mail_from, mail_to, mail_cc,
+     subject, body, message_id, occurred_at, mailbox_id)
+  SELECT gen_random_uuid(), $1,
+         CASE WHEN m.folder = 'Sent' THEN 'email_sent' ELSE 'email_received' END,
+         'system', m.from_addr, m.to_addrs, m.cc_addrs,
+         m.subject, m.body_text, m.message_id, m.occurred_at, m.mailbox_id
+  FROM matched m
+  ON CONFLICT (message_id) WHERE message_id IS NOT NULL DO NOTHING
+)
+UPDATE "MailboxMessage" mm SET customer_id = $1
+FROM matched m WHERE mm.id = m.id
+`
+
+type BackfillActivitiesForCustomerEmailParams struct {
+	CustomerID pgtype.UUID `json:"customer_id"`
+	Email      string      `json:"email"`
+}
+
+// 顧客の mail に一致する未紐付け MailboxMessage を Activity 化し、
+// MailboxMessage.customer_id も紐付ける。create_customer 後に呼ぶ。
+// INBOX(from 一致)=email_received / Sent(to 内に一致)=email_sent。
+// message_id 重複 (既に Activity 化済み) は ON CONFLICT でスキップ。冪等。
+func (q *Queries) BackfillActivitiesForCustomerEmail(ctx context.Context, arg BackfillActivitiesForCustomerEmailParams) (int64, error) {
+	result, err := q.db.Exec(ctx, backfillActivitiesForCustomerEmail, arg.CustomerID, arg.Email)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const countMailboxMessages = `-- name: CountMailboxMessages :one
 SELECT count(*) FROM "MailboxMessage"
 WHERE mailbox_id = $1

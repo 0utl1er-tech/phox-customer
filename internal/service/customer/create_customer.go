@@ -8,6 +8,8 @@ import (
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
 	"github.com/0utl1er-tech/phox-customer/internal/util"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/rs/zerolog/log"
 )
 
 // CreateCustomer 新しいcustomerを作成
@@ -44,7 +46,44 @@ func (s *CustomerService) CreateCustomer(
 
 	s.indexCustomer(ctx, customer, "created")
 
+	// Phase 26: 既に取込済みのメール (MailboxMessage) のうち、この顧客の mail に
+	// 一致する未紐付けのものを遡って Activity 化し、タイムラインに載せる。
+	// メール → 顧客登録 の順で作業しても過去メールが履歴に出るようにする。
+	BackfillCustomerMail(ctx, s.queries, customer.ID, customer.Mail)
+
 	return connect.NewResponse(&customerv1.CreateCustomerResponse{
 		Customer: modelToProto(customer),
 	}), nil
+}
+
+// BackfillMailboxTimeline は既存顧客に対しメール履歴を紐付ける (editor 必須)。
+// create_customer の upsert 経路 (既存顧客が返る場合) から呼ぶ。冪等。
+func (s *CustomerService) BackfillMailboxTimeline(ctx context.Context, bookID, customerID uuid.UUID, mail string) error {
+	if err := s.authorizer.CheckPermission(ctx, bookID, db.RoleEditor); err != nil {
+		return err
+	}
+	BackfillCustomerMail(ctx, s.queries, customerID, mail)
+	return nil
+}
+
+// BackfillCustomerMail は customer の mail に一致する未紐付け MailboxMessage を
+// Activity 化する (best-effort、失敗しても顧客作成は成功扱い)。冪等なので
+// create_customer の upsert 経路など何度呼んでも安全。
+func BackfillCustomerMail(ctx context.Context, q *db.Queries, customerID uuid.UUID, mail string) {
+	if mail == "" {
+		return
+	}
+	n, err := q.BackfillActivitiesForCustomerEmail(ctx, db.BackfillActivitiesForCustomerEmailParams{
+		Email:      mail,
+		CustomerID: pgtype.UUID{Bytes: customerID, Valid: true},
+	})
+	if err != nil {
+		log.Warn().Err(err).Str("mail", mail).Str("customer_id", customerID.String()).
+			Msg("customer: mailbox activity backfill failed")
+		return
+	}
+	if n > 0 {
+		log.Info().Int64("linked", n).Str("mail", mail).Str("customer_id", customerID.String()).
+			Msg("customer: backfilled mailbox messages into timeline")
+	}
 }
