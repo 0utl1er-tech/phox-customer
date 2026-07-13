@@ -160,6 +160,10 @@ func addTools(s *mcp.Server, deps Deps) {
 				BookID: bookID,
 				Mail:   strings.ToLower(strings.TrimSpace(in.Mail)),
 			}); ferr == nil {
+				// 既存でも、未紐付けの過去メールを履歴に取り込む (editor 必須・冪等)。
+				if berr := deps.Customer.BackfillMailboxTimeline(ctx, bookID, existing, in.Mail); berr != nil {
+					return nil, nil, berr
+				}
 				resp, gerr := deps.Customer.GetCustomer(ctx, connect.NewRequest(&customerv1.GetCustomerRequest{
 					Id: existing.String(),
 				}))
