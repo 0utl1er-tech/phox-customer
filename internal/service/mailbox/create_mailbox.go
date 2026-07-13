@@ -68,14 +68,26 @@ func (s *MailboxService) CreateMailbox(
 		password = gen
 	}
 
+	// createdInMailu が true のときだけ、DB 失敗時に mailu アカウントを消す
+	// (取り込んだ既存アカウントは勝手に削除しない)。
+	createdInMailu := false
 	if s.provisioner != nil {
 		// mailu にアカウントを作成 (enable_imap=true, allow_spoofing=false)。
 		if perr := s.provisioner.CreateUser(ctx, req.Msg.Address, password, req.Msg.DisplayName); perr != nil {
 			if errors.Is(perr, mailu.ErrConflict) {
-				return nil, connect.NewError(connect.CodeAlreadyExists,
-					fmt.Errorf("このアドレスは mailu に既に存在します: %s", req.Msg.Address))
+				// 既存アカウントを取り込む: Phox が確実に送受信できるよう、
+				// 入力 (または自動生成) パスワードで mailu 側の資格情報を揃える。
+				// 入力が現行パスワードと同じなら実質 no-op、違えば Phox が支配下に置く。
+				if serr := s.provisioner.SetPassword(ctx, req.Msg.Address, password); serr != nil {
+					return nil, connect.NewError(connect.CodeInternal,
+						fmt.Errorf("既存 mailu アカウントの取り込みに失敗しました (%s): %w", req.Msg.Address, serr))
+				}
+				log.Info().Str("address", req.Msg.Address).Msg("mailbox: adopted existing mailu account")
+			} else {
+				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("mailu provision: %w", perr))
 			}
-			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("mailu provision: %w", perr))
+		} else {
+			createdInMailu = true
 		}
 	}
 
@@ -95,8 +107,9 @@ func (s *MailboxService) CreateMailbox(
 		Active:       true,
 	})
 	if err != nil {
-		// DB 挿入に失敗したら、直前に作った mailu アカウントを消して孤児を防ぐ。
-		if s.provisioner != nil {
+		// DB 挿入に失敗したら、このリクエストで新規作成した mailu アカウントだけを
+		// 消して孤児を防ぐ。取り込んだ既存アカウントは消さない。
+		if s.provisioner != nil && createdInMailu {
 			if derr := s.provisioner.DeleteUser(ctx, req.Msg.Address); derr != nil {
 				log.Warn().Err(derr).Str("address", req.Msg.Address).
 					Msg("mailbox: failed to roll back mailu account after DB error")
