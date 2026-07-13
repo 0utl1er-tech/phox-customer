@@ -8,6 +8,7 @@ import (
 	customerv1 "github.com/0utl1er-tech/phox-customer/gen/pb/customer/v1"
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
 	"github.com/0utl1er-tech/phox-customer/internal/util"
+	"github.com/rs/zerolog/log"
 )
 
 // GetCustomer returns a single customer by ID. Activity history (call / email)
@@ -31,7 +32,16 @@ func (s *CustomerService) GetCustomer(
 		return nil, err
 	}
 
+	proto := getRowToProto(customer)
+	// contacts も同梱する (GetCustomer は従来 contacts を返しておらず、
+	// 登録済みでも空に見えていた)。
+	if contacts, cerr := s.queries.ListContacts(ctx, id); cerr == nil {
+		proto.Contacts = contactsToProto(contacts)
+	} else {
+		log.Warn().Err(cerr).Str("customer_id", id.String()).Msg("customer: failed to load contacts")
+	}
+
 	return connect.NewResponse(&customerv1.GetCustomerResponse{
-		Customer: getRowToProto(customer),
+		Customer: proto,
 	}), nil
 }
