@@ -86,6 +86,29 @@ func TestGetCustomer_Success(t *testing.T) {
 	assert.Equal(t, created.Name, resp.Msg.Customer.Name)
 }
 
+// GetCustomer は配下の contacts も返す (以前は常に空だった)。
+func TestGetCustomer_IncludesContacts(t *testing.T) {
+	svc, queries, user, book := setupCustomerTest(t)
+	ctx := testutil.AuthContext(t, user.ID, "customer@test.com")
+	created := testutil.TestCustomer(t, queries, book.ID)
+	_, err := queries.CreateContact(ctx, db.CreateContactParams{
+		ID: uuid.New(), CustomerID: created.ID, Name: "担当A", Mail: "a@example.com",
+	})
+	require.NoError(t, err)
+	_, err = queries.CreateContact(ctx, db.CreateContactParams{
+		ID: uuid.New(), CustomerID: created.ID, Name: "担当B", Mail: "b@example.com",
+	})
+	require.NoError(t, err)
+
+	resp, err := svc.GetCustomer(ctx, connect.NewRequest(&customerv1.GetCustomerRequest{
+		Id: created.ID.String(),
+	}))
+	require.NoError(t, err)
+	require.Len(t, resp.Msg.Customer.Contacts, 2, "contacts が同梱されるべき")
+	mails := []string{resp.Msg.Customer.Contacts[0].Mail, resp.Msg.Customer.Contacts[1].Mail}
+	assert.ElementsMatch(t, []string{"a@example.com", "b@example.com"}, mails)
+}
+
 func TestGetCustomer_InvalidID(t *testing.T) {
 	svc, _, user, _ := setupCustomerTest(t)
 	ctx := testutil.AuthContext(t, user.ID, "customer@test.com")

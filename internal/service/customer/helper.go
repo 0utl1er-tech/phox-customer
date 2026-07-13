@@ -3,11 +3,29 @@ package customer
 import (
 	"context"
 
+	contactv1 "github.com/0utl1er-tech/phox-customer/gen/pb/contact/v1"
 	customerv1 "github.com/0utl1er-tech/phox-customer/gen/pb/customer/v1"
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
 	"github.com/0utl1er-tech/phox-customer/internal/search"
 	"github.com/rs/zerolog/log"
 )
+
+// contactsToProto は Contact 行の slice を proto に変換する。
+func contactsToProto(cs []db.Contact) []*contactv1.Contact {
+	out := make([]*contactv1.Contact, 0, len(cs))
+	for _, c := range cs {
+		out = append(out, &contactv1.Contact{
+			Id:         c.ID.String(),
+			CustomerId: c.CustomerID.String(),
+			Name:       c.Name,
+			Sex:        c.Sex,
+			Phone:      c.Phone,
+			Mail:       c.Mail,
+			Fax:        c.Fax,
+		})
+	}
+	return out
+}
 
 // modelToProto converts a db.Customer row to its proto representation.
 //
