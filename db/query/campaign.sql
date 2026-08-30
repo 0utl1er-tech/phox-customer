@@ -47,10 +47,12 @@ WHERE id = sqlc.arg(id)
 RETURNING *;
 
 -- name: SetCampaignStatus :one
+-- 注意: $2 を複数箇所で使うと 42P08 (型推論の衝突) になるため CASE 側は
+-- 明示キャスト必須 (実際に staging で 500 になった実績あり)。
 UPDATE "Campaign"
 SET status = $2,
-    started_at   = CASE WHEN $2 = 'running' AND started_at IS NULL THEN now() ELSE started_at END,
-    completed_at = CASE WHEN $2 IN ('completed', 'cancelled') THEN now() ELSE completed_at END,
+    started_at   = CASE WHEN $2::varchar = 'running' AND started_at IS NULL THEN now() ELSE started_at END,
+    completed_at = CASE WHEN $2::varchar IN ('completed', 'cancelled') THEN now() ELSE completed_at END,
     updated_at = now()
 WHERE id = $1
 RETURNING *;

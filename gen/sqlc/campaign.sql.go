@@ -1194,8 +1194,8 @@ func (q *Queries) RequeueRecipient(ctx context.Context, arg RequeueRecipientPara
 const setCampaignStatus = `-- name: SetCampaignStatus :one
 UPDATE "Campaign"
 SET status = $2,
-    started_at   = CASE WHEN $2 = 'running' AND started_at IS NULL THEN now() ELSE started_at END,
-    completed_at = CASE WHEN $2 IN ('completed', 'cancelled') THEN now() ELSE completed_at END,
+    started_at   = CASE WHEN $2::varchar = 'running' AND started_at IS NULL THEN now() ELSE started_at END,
+    completed_at = CASE WHEN $2::varchar IN ('completed', 'cancelled') THEN now() ELSE completed_at END,
     updated_at = now()
 WHERE id = $1
 RETURNING id, company_id, created_by, name, status, subject, body, track_opens, track_clicks, send_start_hour, send_end_hour, send_days, daily_cap_per_mailbox, min_interval_sec, warmup_enabled, sender_org, sender_address, sender_contact, started_at, completed_at, created_at, updated_at
@@ -1206,6 +1206,8 @@ type SetCampaignStatusParams struct {
 	Status string    `json:"status"`
 }
 
+// 注意: $2 を複数箇所で使うと 42P08 (型推論の衝突) になるため CASE 側は
+// 明示キャスト必須 (実際に staging で 500 になった実績あり)。
 func (q *Queries) SetCampaignStatus(ctx context.Context, arg SetCampaignStatusParams) (Campaign, error) {
 	row := q.db.QueryRow(ctx, setCampaignStatus, arg.ID, arg.Status)
 	var i Campaign

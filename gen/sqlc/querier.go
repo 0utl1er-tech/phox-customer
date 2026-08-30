@@ -217,6 +217,8 @@ type Querier interface {
 	RequeueFailedRecipients(ctx context.Context, campaignID uuid.UUID) (int64, error)
 	// transient エラー (SMTP 4xx / dial 失敗)。attempts を増やして queued に戻す。
 	RequeueRecipient(ctx context.Context, arg RequeueRecipientParams) error
+	// 注意: $2 を複数箇所で使うと 42P08 (型推論の衝突) になるため CASE 側は
+	// 明示キャスト必須 (実際に staging で 500 になった実績あり)。
 	SetCampaignStatus(ctx context.Context, arg SetCampaignStatusParams) (Campaign, error)
 	SetMailboxSyncedAt(ctx context.Context, id uuid.UUID) error
 	SetRedialGcalSynced(ctx context.Context, arg SetRedialGcalSyncedParams) (Redial, error)
