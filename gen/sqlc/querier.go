@@ -172,6 +172,7 @@ type Querier interface {
 	ListAllContacts(ctx context.Context, arg ListAllContactsParams) ([]ListAllContactsRow, error)
 	ListAllCustomers(ctx context.Context) ([]ListAllCustomersRow, error)
 	ListCampaignEventsByRecipient(ctx context.Context, recipientID uuid.UUID) ([]CampaignEvent, error)
+	ListCampaignLinks(ctx context.Context, campaignID uuid.UUID) ([]CampaignLink, error)
 	// worker が送信資格情報ごと引く (password_enc 込み)。
 	ListCampaignMailboxes(ctx context.Context, campaignID uuid.UUID) ([]Mailbox, error)
 	// status フィルタ (narg) + ページング。顧客名も返す。

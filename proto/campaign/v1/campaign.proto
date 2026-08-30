@@ -29,6 +29,8 @@ service CampaignService {
   // draft / cancelled のみ削除可。
   rpc DeleteCampaign(DeleteCampaignRequest) returns (DeleteCampaignResponse);
   rpc ListCampaignRecipients(ListCampaignRecipientsRequest) returns (ListCampaignRecipientsResponse);
+  // 受信者毎のイベント履歴 (open/click/unsubscribe/reply/bounce)。ドリルダウン用。
+  rpc ListRecipientEvents(ListRecipientEventsRequest) returns (ListRecipientEventsResponse);
   // failed の受信者を queued に戻す (明示操作のみ — 自動再送はしない)。
   rpc RequeueFailedRecipients(RequeueFailedRecipientsRequest) returns (RequeueFailedRecipientsResponse);
   // レンダリング済み本文 (フッター込み) を指定アドレスへテスト送信。
@@ -196,6 +198,21 @@ message ListCampaignRecipientsRequest {
 message ListCampaignRecipientsResponse {
   repeated CampaignRecipient recipients = 1;
   int64 total = 2;
+}
+
+message CampaignEvent {
+  string id = 1;
+  string kind = 2; // open|click|unsubscribe|reply|bounce
+  string url = 3;
+  string user_agent = 4;
+  google.protobuf.Timestamp created_at = 5;
+}
+
+message ListRecipientEventsRequest {
+  string recipient_id = 1 [(buf.validate.field).string.uuid = true];
+}
+message ListRecipientEventsResponse {
+  repeated CampaignEvent events = 1;
 }
 
 message RequeueFailedRecipientsRequest {

@@ -224,11 +224,15 @@ func (w *Worker) sendOne(ctx context.Context, c db.Campaign, now time.Time) {
 		"List-Unsubscribe-Post": "List-Unsubscribe=One-Click", // RFC 8058
 	}
 
+	// Phase 27b: トラッキング有効時のみ HTML alt パートを付ける
+	// (両方 OFF なら純 text/plain — 到達率最優先の設定)。
+	htmlBody := w.buildTrackedHTML(ctx, c, rec, body, unsubURL)
+
 	err = w.sender.SendAsWithHeaders(ctx,
 		mb.SmtpUsername, password,
 		mb.Address, mb.DisplayName,
 		rec.Email, nil,
-		subject, body, messageID, headers)
+		subject, body, messageID, headers, htmlBody)
 	if err != nil {
 		// SMTP エラーの transient/permanent 判別は不安定なので試行回数で打ち切る。
 		if rec.Attempts+1 >= maxAttempts {
@@ -279,6 +283,58 @@ func (w *Worker) sendOne(ctx context.Context, c db.Campaign, now time.Time) {
 		Str("mailbox", mb.Address).
 		Str("to", rec.Email).
 		Msg("campaign: sent")
+}
+
+// buildTrackedHTML はトラッキング設定に応じた HTML alt パートを組み立てる。
+// クリック計測: 本文 URL を CampaignLink に登録し (URL は DB 持ち = open
+// redirect 無し)、HTML 側のリンクだけ /t/c/{token} に書き換える。配信停止 URL
+// (自 publicBase 配下) は二重トラッキングしない。開封計測: 1×1 ピクセル。
+// 両方 OFF なら空文字 (text/plain のみ)。
+func (w *Worker) buildTrackedHTML(ctx context.Context, c db.Campaign, rec db.CampaignRecipient, body, unsubURL string) string {
+	if !c.TrackOpens && !c.TrackClicks {
+		return ""
+	}
+	var linkURL func(string) (string, bool)
+	if c.TrackClicks {
+		urlToIdx := map[string]int32{}
+		links, err := w.queries.ListCampaignLinks(ctx, c.ID)
+		if err != nil {
+			log.Error().Err(err).Str("campaign", c.ID.String()).Msg("campaign: list links failed — click tracking skipped")
+		} else {
+			for _, l := range links {
+				urlToIdx[l.Url] = l.Idx
+			}
+			next := int32(len(links))
+			linkURL = func(raw string) (string, bool) {
+				if raw == unsubURL || strings.HasPrefix(raw, w.publicBase+"/u/") {
+					return "", false // 配信停止リンクはそのまま
+				}
+				idx, ok := urlToIdx[raw]
+				if !ok {
+					// プレースホルダ入り URL は受信者毎に変わり得るので都度追加。
+					// worker は単一 leader なので競合しない。
+					idx = next
+					if cerr := w.queries.CreateCampaignLink(ctx, db.CreateCampaignLinkParams{
+						CampaignID: c.ID, Idx: idx, Url: raw,
+					}); cerr != nil {
+						log.Error().Err(cerr).Msg("campaign: create link failed")
+						return "", false
+					}
+					urlToIdx[raw] = idx
+					next++
+				}
+				if idx > 65535 {
+					return "", false // token の idx は uint16
+				}
+				return w.publicBase + "/t/c/" + w.tokenizer.Token(KindClick, rec.ID, uint16(idx)), true
+			}
+		}
+	}
+	pixelURL := ""
+	if c.TrackOpens {
+		pixelURL = w.publicBase + "/t/o/" + w.tokenizer.Token(KindOpen, rec.ID, 0)
+	}
+	return BuildHTMLBody(body, linkURL, pixelURL)
 }
 
 func (w *Worker) requeueTransient(ctx context.Context, rec db.CampaignRecipient, mailboxID uuid.UUID, now time.Time, msg string) {

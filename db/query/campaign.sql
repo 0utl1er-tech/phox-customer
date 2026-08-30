@@ -278,3 +278,6 @@ WHERE company_id = sqlc.arg(company_id)
 -- スナップショット作成時の一括チェック。
 SELECT email FROM "Suppression"
 WHERE company_id = $1 AND email = ANY(sqlc.arg(emails)::varchar[]);
+
+-- name: ListCampaignLinks :many
+SELECT * FROM "CampaignLink" WHERE campaign_id = $1 ORDER BY idx ASC;

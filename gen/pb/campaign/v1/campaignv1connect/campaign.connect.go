@@ -60,6 +60,9 @@ const (
 	// CampaignServiceListCampaignRecipientsProcedure is the fully-qualified name of the
 	// CampaignService's ListCampaignRecipients RPC.
 	CampaignServiceListCampaignRecipientsProcedure = "/campaign.v1.CampaignService/ListCampaignRecipients"
+	// CampaignServiceListRecipientEventsProcedure is the fully-qualified name of the CampaignService's
+	// ListRecipientEvents RPC.
+	CampaignServiceListRecipientEventsProcedure = "/campaign.v1.CampaignService/ListRecipientEvents"
 	// CampaignServiceRequeueFailedRecipientsProcedure is the fully-qualified name of the
 	// CampaignService's RequeueFailedRecipients RPC.
 	CampaignServiceRequeueFailedRecipientsProcedure = "/campaign.v1.CampaignService/RequeueFailedRecipients"
@@ -94,6 +97,8 @@ type CampaignServiceClient interface {
 	// draft / cancelled のみ削除可。
 	DeleteCampaign(context.Context, *connect.Request[v1.DeleteCampaignRequest]) (*connect.Response[v1.DeleteCampaignResponse], error)
 	ListCampaignRecipients(context.Context, *connect.Request[v1.ListCampaignRecipientsRequest]) (*connect.Response[v1.ListCampaignRecipientsResponse], error)
+	// 受信者毎のイベント履歴 (open/click/unsubscribe/reply/bounce)。ドリルダウン用。
+	ListRecipientEvents(context.Context, *connect.Request[v1.ListRecipientEventsRequest]) (*connect.Response[v1.ListRecipientEventsResponse], error)
 	// failed の受信者を queued に戻す (明示操作のみ — 自動再送はしない)。
 	RequeueFailedRecipients(context.Context, *connect.Request[v1.RequeueFailedRecipientsRequest]) (*connect.Response[v1.RequeueFailedRecipientsResponse], error)
 	// レンダリング済み本文 (フッター込み) を指定アドレスへテスト送信。
@@ -170,6 +175,12 @@ func NewCampaignServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(campaignServiceMethods.ByName("ListCampaignRecipients")),
 			connect.WithClientOptions(opts...),
 		),
+		listRecipientEvents: connect.NewClient[v1.ListRecipientEventsRequest, v1.ListRecipientEventsResponse](
+			httpClient,
+			baseURL+CampaignServiceListRecipientEventsProcedure,
+			connect.WithSchema(campaignServiceMethods.ByName("ListRecipientEvents")),
+			connect.WithClientOptions(opts...),
+		),
 		requeueFailedRecipients: connect.NewClient[v1.RequeueFailedRecipientsRequest, v1.RequeueFailedRecipientsResponse](
 			httpClient,
 			baseURL+CampaignServiceRequeueFailedRecipientsProcedure,
@@ -214,6 +225,7 @@ type campaignServiceClient struct {
 	cancelCampaign          *connect.Client[v1.CancelCampaignRequest, v1.CancelCampaignResponse]
 	deleteCampaign          *connect.Client[v1.DeleteCampaignRequest, v1.DeleteCampaignResponse]
 	listCampaignRecipients  *connect.Client[v1.ListCampaignRecipientsRequest, v1.ListCampaignRecipientsResponse]
+	listRecipientEvents     *connect.Client[v1.ListRecipientEventsRequest, v1.ListRecipientEventsResponse]
 	requeueFailedRecipients *connect.Client[v1.RequeueFailedRecipientsRequest, v1.RequeueFailedRecipientsResponse]
 	sendTestEmail           *connect.Client[v1.SendTestEmailRequest, v1.SendTestEmailResponse]
 	listSuppressions        *connect.Client[v1.ListSuppressionsRequest, v1.ListSuppressionsResponse]
@@ -266,6 +278,11 @@ func (c *campaignServiceClient) ListCampaignRecipients(ctx context.Context, req 
 	return c.listCampaignRecipients.CallUnary(ctx, req)
 }
 
+// ListRecipientEvents calls campaign.v1.CampaignService.ListRecipientEvents.
+func (c *campaignServiceClient) ListRecipientEvents(ctx context.Context, req *connect.Request[v1.ListRecipientEventsRequest]) (*connect.Response[v1.ListRecipientEventsResponse], error) {
+	return c.listRecipientEvents.CallUnary(ctx, req)
+}
+
 // RequeueFailedRecipients calls campaign.v1.CampaignService.RequeueFailedRecipients.
 func (c *campaignServiceClient) RequeueFailedRecipients(ctx context.Context, req *connect.Request[v1.RequeueFailedRecipientsRequest]) (*connect.Response[v1.RequeueFailedRecipientsResponse], error) {
 	return c.requeueFailedRecipients.CallUnary(ctx, req)
@@ -308,6 +325,8 @@ type CampaignServiceHandler interface {
 	// draft / cancelled のみ削除可。
 	DeleteCampaign(context.Context, *connect.Request[v1.DeleteCampaignRequest]) (*connect.Response[v1.DeleteCampaignResponse], error)
 	ListCampaignRecipients(context.Context, *connect.Request[v1.ListCampaignRecipientsRequest]) (*connect.Response[v1.ListCampaignRecipientsResponse], error)
+	// 受信者毎のイベント履歴 (open/click/unsubscribe/reply/bounce)。ドリルダウン用。
+	ListRecipientEvents(context.Context, *connect.Request[v1.ListRecipientEventsRequest]) (*connect.Response[v1.ListRecipientEventsResponse], error)
 	// failed の受信者を queued に戻す (明示操作のみ — 自動再送はしない)。
 	RequeueFailedRecipients(context.Context, *connect.Request[v1.RequeueFailedRecipientsRequest]) (*connect.Response[v1.RequeueFailedRecipientsResponse], error)
 	// レンダリング済み本文 (フッター込み) を指定アドレスへテスト送信。
@@ -380,6 +399,12 @@ func NewCampaignServiceHandler(svc CampaignServiceHandler, opts ...connect.Handl
 		connect.WithSchema(campaignServiceMethods.ByName("ListCampaignRecipients")),
 		connect.WithHandlerOptions(opts...),
 	)
+	campaignServiceListRecipientEventsHandler := connect.NewUnaryHandler(
+		CampaignServiceListRecipientEventsProcedure,
+		svc.ListRecipientEvents,
+		connect.WithSchema(campaignServiceMethods.ByName("ListRecipientEvents")),
+		connect.WithHandlerOptions(opts...),
+	)
 	campaignServiceRequeueFailedRecipientsHandler := connect.NewUnaryHandler(
 		CampaignServiceRequeueFailedRecipientsProcedure,
 		svc.RequeueFailedRecipients,
@@ -430,6 +455,8 @@ func NewCampaignServiceHandler(svc CampaignServiceHandler, opts ...connect.Handl
 			campaignServiceDeleteCampaignHandler.ServeHTTP(w, r)
 		case CampaignServiceListCampaignRecipientsProcedure:
 			campaignServiceListCampaignRecipientsHandler.ServeHTTP(w, r)
+		case CampaignServiceListRecipientEventsProcedure:
+			campaignServiceListRecipientEventsHandler.ServeHTTP(w, r)
 		case CampaignServiceRequeueFailedRecipientsProcedure:
 			campaignServiceRequeueFailedRecipientsHandler.ServeHTTP(w, r)
 		case CampaignServiceSendTestEmailProcedure:
@@ -483,6 +510,10 @@ func (UnimplementedCampaignServiceHandler) DeleteCampaign(context.Context, *conn
 
 func (UnimplementedCampaignServiceHandler) ListCampaignRecipients(context.Context, *connect.Request[v1.ListCampaignRecipientsRequest]) (*connect.Response[v1.ListCampaignRecipientsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("campaign.v1.CampaignService.ListCampaignRecipients is not implemented"))
+}
+
+func (UnimplementedCampaignServiceHandler) ListRecipientEvents(context.Context, *connect.Request[v1.ListRecipientEventsRequest]) (*connect.Response[v1.ListRecipientEventsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("campaign.v1.CampaignService.ListRecipientEvents is not implemented"))
 }
 
 func (UnimplementedCampaignServiceHandler) RequeueFailedRecipients(context.Context, *connect.Request[v1.RequeueFailedRecipientsRequest]) (*connect.Response[v1.RequeueFailedRecipientsResponse], error) {

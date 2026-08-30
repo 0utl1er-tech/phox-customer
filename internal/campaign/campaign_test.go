@@ -81,6 +81,49 @@ func TestRenderBodyInlineUnsubscribePlaceholder(t *testing.T) {
 	}
 }
 
+func TestExtractLinks(t *testing.T) {
+	body := "詳細は https://example.com/a をご覧ください。\nhttps://example.com/a と https://example.com/b?x=1 も。"
+	got := ExtractLinks(body)
+	want := []string{"https://example.com/a", "https://example.com/b?x=1"}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("ExtractLinks = %v, want %v", got, want)
+	}
+}
+
+func TestBuildHTMLBody(t *testing.T) {
+	html := BuildHTMLBody("こんにちは <様>\nhttps://example.com/page を見てください",
+		func(u string) (string, bool) {
+			if u == "https://example.com/page" {
+				return "https://api.example/t/c/tok123", true
+			}
+			return "", false
+		},
+		"https://api.example/t/o/pix456")
+
+	for _, want := range []string{
+		"こんにちは &lt;様&gt;<br>",                                                // エスケープ + 改行変換
+		`<a href="https://api.example/t/c/tok123">https://example.com/page</a>`, // リンク書き換え (表示は元URL)
+		`<img src="https://api.example/t/o/pix456"`,                             // 開封ピクセル
+	} {
+		if !strings.Contains(html, want) {
+			t.Errorf("html missing %q:\n%s", want, html)
+		}
+	}
+	if strings.Contains(html, `href="https://example.com/page"`) {
+		t.Error("original URL should not remain as href when rewritten")
+	}
+}
+
+func TestBuildHTMLBodyNoTracking(t *testing.T) {
+	html := BuildHTMLBody("プレーン https://example.com", nil, "")
+	if !strings.Contains(html, `<a href="https://example.com">`) {
+		t.Errorf("untracked link should keep original href:\n%s", html)
+	}
+	if strings.Contains(html, "<img") {
+		t.Error("no pixel expected")
+	}
+}
+
 func mkCampaign(start, end, days int32) db.Campaign {
 	return db.Campaign{SendStartHour: start, SendEndHour: end, SendDays: days}
 }

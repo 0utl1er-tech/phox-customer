@@ -571,6 +571,9 @@ func main() {
 	if trackingHandler := campaignpkg.NewTrackingHandler(queries, campaignTokenizer); trackingHandler != nil {
 		mux.HandleFunc("GET /u/{token}", trackingHandler.Unsubscribe)
 		mux.HandleFunc("POST /u/{token}", trackingHandler.Unsubscribe)
+		// Phase 27b: 開封ピクセル + クリックリダイレクト
+		mux.HandleFunc("GET /t/o/{token}", trackingHandler.Open)
+		mux.HandleFunc("GET /t/c/{token}", trackingHandler.Click)
 	}
 	contactPath, contactHandler := contactv1connect.NewContactServiceHandler(contactService, interceptors)
 	statusPath, statusHandler := statusv1connect.NewStatusServiceHandler(statusService, interceptors)

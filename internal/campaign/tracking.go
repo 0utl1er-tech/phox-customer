@@ -93,6 +93,74 @@ func (h *TrackingHandler) recordUnsubscribe(ctx context.Context, recipientID uui
 	return c.SenderOrg, true
 }
 
+// transparentGIF は 1×1 透過 GIF (43 byte)。
+var transparentGIF = []byte{
+	0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00, 0x01, 0x00, 0x80, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0x21, 0xf9, 0x04, 0x01, 0x00,
+	0x00, 0x00, 0x00, 0x2c, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00,
+	0x00, 0x02, 0x02, 0x44, 0x01, 0x00, 0x3b,
+}
+
+// Open は開封ピクセル (Phase 27b)。トークンが不正でも必ず GIF を返す
+// (メールクライアントに壊れた画像を見せない)。メール画像プロキシの再取得で
+// 複数ヒットするため、イベントは毎回記録し first_opened_at だけ冪等に打つ。
+// 開封率が目安値なのは仕様 (画像ブロックで過小、プリフェッチで過大)。
+func (h *TrackingHandler) Open(w http.ResponseWriter, r *http.Request) {
+	kind, recipientID, _, err := h.tokenizer.Parse(r.PathValue("token"))
+	if err == nil && kind == KindOpen {
+		ctx := r.Context()
+		if rec, gerr := h.queries.GetCampaignRecipient(ctx, recipientID); gerr == nil {
+			_ = h.queries.MarkRecipientOpened(ctx, rec.ID)
+			if err := h.queries.CreateCampaignEvent(ctx, db.CreateCampaignEventParams{
+				ID:          uuid.New(),
+				RecipientID: rec.ID,
+				Kind:        "open",
+				Url:         "",
+				UserAgent:   truncate(r.UserAgent(), 255),
+			}); err != nil {
+				log.Error().Err(err).Msg("campaign: create open event failed")
+			}
+		}
+	}
+	w.Header().Set("Content-Type", "image/gif")
+	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
+	_, _ = w.Write(transparentGIF)
+}
+
+// Click はクリックリダイレクト (Phase 27b)。リダイレクト先はトークンでなく
+// CampaignLink (DB) から引くので open redirect にならない。
+func (h *TrackingHandler) Click(w http.ResponseWriter, r *http.Request) {
+	kind, recipientID, idx, err := h.tokenizer.Parse(r.PathValue("token"))
+	if err != nil || kind != KindClick {
+		http.NotFound(w, r)
+		return
+	}
+	ctx := r.Context()
+	rec, err := h.queries.GetCampaignRecipient(ctx, recipientID)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	link, err := h.queries.GetCampaignLink(ctx, db.GetCampaignLinkParams{
+		CampaignID: rec.CampaignID, Idx: int32(idx),
+	})
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	_ = h.queries.MarkRecipientClicked(ctx, rec.ID)
+	if err := h.queries.CreateCampaignEvent(ctx, db.CreateCampaignEventParams{
+		ID:          uuid.New(),
+		RecipientID: rec.ID,
+		Kind:        "click",
+		Url:         link.Url,
+		UserAgent:   truncate(r.UserAgent(), 255),
+	}); err != nil {
+		log.Error().Err(err).Msg("campaign: create click event failed")
+	}
+	http.Redirect(w, r, link.Url, http.StatusFound)
+}
+
 func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s

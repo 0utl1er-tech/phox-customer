@@ -701,6 +701,30 @@ func (q *Queries) ListCampaignEventsByRecipient(ctx context.Context, recipientID
 	return items, nil
 }
 
+const listCampaignLinks = `-- name: ListCampaignLinks :many
+SELECT campaign_id, idx, url FROM "CampaignLink" WHERE campaign_id = $1 ORDER BY idx ASC
+`
+
+func (q *Queries) ListCampaignLinks(ctx context.Context, campaignID uuid.UUID) ([]CampaignLink, error) {
+	rows, err := q.db.Query(ctx, listCampaignLinks, campaignID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CampaignLink{}
+	for rows.Next() {
+		var i CampaignLink
+		if err := rows.Scan(&i.CampaignID, &i.Idx, &i.Url); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCampaignMailboxes = `-- name: ListCampaignMailboxes :many
 SELECT m.id, m.company_id, m.address, m.display_name, m.smtp_username, m.password_enc, m.active, m.created_at, m.updated_at, m.synced_at FROM "Mailbox" m
 JOIN "CampaignMailbox" cm ON cm.mailbox_id = m.id

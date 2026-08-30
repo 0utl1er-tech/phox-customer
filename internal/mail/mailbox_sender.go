@@ -47,12 +47,13 @@ func (m *MailboxSender) SendAs(
 	cc []string,
 	subject, body, messageID string,
 ) error {
-	return m.SendAsWithHeaders(ctx, smtpUsername, password, fromAddr, fromName, to, cc, subject, body, messageID, nil)
+	return m.SendAsWithHeaders(ctx, smtpUsername, password, fromAddr, fromName, to, cc, subject, body, messageID, nil, "")
 }
 
 // SendAsWithHeaders は SendAs + 任意の追加ヘッダ (Phase 27: キャンペーン送信の
-// List-Unsubscribe / List-Unsubscribe-Post 用)。キャンペーンの送信量でも
-// ~1 通/90 秒/mailbox なので接続は引き続き都度 dial で十分。
+// List-Unsubscribe / List-Unsubscribe-Post 用) + HTML alt パート (Phase 27b:
+// 開封ピクセル/クリックトラッキング用。空なら text/plain のみ)。
+// キャンペーンの送信量でも ~1 通/90 秒/mailbox なので接続は引き続き都度 dial で十分。
 func (m *MailboxSender) SendAsWithHeaders(
 	ctx context.Context,
 	smtpUsername, password string,
@@ -60,6 +61,7 @@ func (m *MailboxSender) SendAsWithHeaders(
 	cc []string,
 	subject, body, messageID string,
 	extraHeaders map[string]string,
+	htmlBody string,
 ) error {
 	if m == nil {
 		return ErrNotConfigured
@@ -114,6 +116,9 @@ func (m *MailboxSender) SendAsWithHeaders(
 	// そのまま同じ口に戻る。
 	msg.Subject(subject)
 	msg.SetBodyString(gomail.TypeTextPlain, body)
+	if htmlBody != "" {
+		msg.AddAlternativeString(gomail.TypeTextHTML, htmlBody)
+	}
 	if messageID != "" {
 		msg.SetMessageIDWithValue(messageID)
 	}

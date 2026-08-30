@@ -1592,6 +1592,170 @@ func (x *ListCampaignRecipientsResponse) GetTotal() int64 {
 	return 0
 }
 
+type CampaignEvent struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Kind          string                 `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"` // open|click|unsubscribe|reply|bounce
+	Url           string                 `protobuf:"bytes,3,opt,name=url,proto3" json:"url,omitempty"`
+	UserAgent     string                 `protobuf:"bytes,4,opt,name=user_agent,json=userAgent,proto3" json:"user_agent,omitempty"`
+	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CampaignEvent) Reset() {
+	*x = CampaignEvent{}
+	mi := &file_campaign_v1_campaign_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CampaignEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CampaignEvent) ProtoMessage() {}
+
+func (x *CampaignEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_campaign_v1_campaign_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CampaignEvent.ProtoReflect.Descriptor instead.
+func (*CampaignEvent) Descriptor() ([]byte, []int) {
+	return file_campaign_v1_campaign_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *CampaignEvent) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *CampaignEvent) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *CampaignEvent) GetUrl() string {
+	if x != nil {
+		return x.Url
+	}
+	return ""
+}
+
+func (x *CampaignEvent) GetUserAgent() string {
+	if x != nil {
+		return x.UserAgent
+	}
+	return ""
+}
+
+func (x *CampaignEvent) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+type ListRecipientEventsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RecipientId   string                 `protobuf:"bytes,1,opt,name=recipient_id,json=recipientId,proto3" json:"recipient_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListRecipientEventsRequest) Reset() {
+	*x = ListRecipientEventsRequest{}
+	mi := &file_campaign_v1_campaign_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListRecipientEventsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListRecipientEventsRequest) ProtoMessage() {}
+
+func (x *ListRecipientEventsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_campaign_v1_campaign_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListRecipientEventsRequest.ProtoReflect.Descriptor instead.
+func (*ListRecipientEventsRequest) Descriptor() ([]byte, []int) {
+	return file_campaign_v1_campaign_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *ListRecipientEventsRequest) GetRecipientId() string {
+	if x != nil {
+		return x.RecipientId
+	}
+	return ""
+}
+
+type ListRecipientEventsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Events        []*CampaignEvent       `protobuf:"bytes,1,rep,name=events,proto3" json:"events,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListRecipientEventsResponse) Reset() {
+	*x = ListRecipientEventsResponse{}
+	mi := &file_campaign_v1_campaign_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListRecipientEventsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListRecipientEventsResponse) ProtoMessage() {}
+
+func (x *ListRecipientEventsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_campaign_v1_campaign_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListRecipientEventsResponse.ProtoReflect.Descriptor instead.
+func (*ListRecipientEventsResponse) Descriptor() ([]byte, []int) {
+	return file_campaign_v1_campaign_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *ListRecipientEventsResponse) GetEvents() []*CampaignEvent {
+	if x != nil {
+		return x.Events
+	}
+	return nil
+}
+
 type RequeueFailedRecipientsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	CampaignId    string                 `protobuf:"bytes,1,opt,name=campaign_id,json=campaignId,proto3" json:"campaign_id,omitempty"`
@@ -1601,7 +1765,7 @@ type RequeueFailedRecipientsRequest struct {
 
 func (x *RequeueFailedRecipientsRequest) Reset() {
 	*x = RequeueFailedRecipientsRequest{}
-	mi := &file_campaign_v1_campaign_proto_msgTypes[23]
+	mi := &file_campaign_v1_campaign_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1613,7 +1777,7 @@ func (x *RequeueFailedRecipientsRequest) String() string {
 func (*RequeueFailedRecipientsRequest) ProtoMessage() {}
 
 func (x *RequeueFailedRecipientsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_campaign_v1_campaign_proto_msgTypes[23]
+	mi := &file_campaign_v1_campaign_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1626,7 +1790,7 @@ func (x *RequeueFailedRecipientsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RequeueFailedRecipientsRequest.ProtoReflect.Descriptor instead.
 func (*RequeueFailedRecipientsRequest) Descriptor() ([]byte, []int) {
-	return file_campaign_v1_campaign_proto_rawDescGZIP(), []int{23}
+	return file_campaign_v1_campaign_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *RequeueFailedRecipientsRequest) GetCampaignId() string {
@@ -1645,7 +1809,7 @@ type RequeueFailedRecipientsResponse struct {
 
 func (x *RequeueFailedRecipientsResponse) Reset() {
 	*x = RequeueFailedRecipientsResponse{}
-	mi := &file_campaign_v1_campaign_proto_msgTypes[24]
+	mi := &file_campaign_v1_campaign_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1657,7 +1821,7 @@ func (x *RequeueFailedRecipientsResponse) String() string {
 func (*RequeueFailedRecipientsResponse) ProtoMessage() {}
 
 func (x *RequeueFailedRecipientsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_campaign_v1_campaign_proto_msgTypes[24]
+	mi := &file_campaign_v1_campaign_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1670,7 +1834,7 @@ func (x *RequeueFailedRecipientsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RequeueFailedRecipientsResponse.ProtoReflect.Descriptor instead.
 func (*RequeueFailedRecipientsResponse) Descriptor() ([]byte, []int) {
-	return file_campaign_v1_campaign_proto_rawDescGZIP(), []int{24}
+	return file_campaign_v1_campaign_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *RequeueFailedRecipientsResponse) GetRequeued() int64 {
@@ -1692,7 +1856,7 @@ type SendTestEmailRequest struct {
 
 func (x *SendTestEmailRequest) Reset() {
 	*x = SendTestEmailRequest{}
-	mi := &file_campaign_v1_campaign_proto_msgTypes[25]
+	mi := &file_campaign_v1_campaign_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1704,7 +1868,7 @@ func (x *SendTestEmailRequest) String() string {
 func (*SendTestEmailRequest) ProtoMessage() {}
 
 func (x *SendTestEmailRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_campaign_v1_campaign_proto_msgTypes[25]
+	mi := &file_campaign_v1_campaign_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1717,7 +1881,7 @@ func (x *SendTestEmailRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SendTestEmailRequest.ProtoReflect.Descriptor instead.
 func (*SendTestEmailRequest) Descriptor() ([]byte, []int) {
-	return file_campaign_v1_campaign_proto_rawDescGZIP(), []int{25}
+	return file_campaign_v1_campaign_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *SendTestEmailRequest) GetCampaignId() string {
@@ -1749,7 +1913,7 @@ type SendTestEmailResponse struct {
 
 func (x *SendTestEmailResponse) Reset() {
 	*x = SendTestEmailResponse{}
-	mi := &file_campaign_v1_campaign_proto_msgTypes[26]
+	mi := &file_campaign_v1_campaign_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1761,7 +1925,7 @@ func (x *SendTestEmailResponse) String() string {
 func (*SendTestEmailResponse) ProtoMessage() {}
 
 func (x *SendTestEmailResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_campaign_v1_campaign_proto_msgTypes[26]
+	mi := &file_campaign_v1_campaign_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1774,7 +1938,7 @@ func (x *SendTestEmailResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SendTestEmailResponse.ProtoReflect.Descriptor instead.
 func (*SendTestEmailResponse) Descriptor() ([]byte, []int) {
-	return file_campaign_v1_campaign_proto_rawDescGZIP(), []int{26}
+	return file_campaign_v1_campaign_proto_rawDescGZIP(), []int{29}
 }
 
 type Suppression struct {
@@ -1791,7 +1955,7 @@ type Suppression struct {
 
 func (x *Suppression) Reset() {
 	*x = Suppression{}
-	mi := &file_campaign_v1_campaign_proto_msgTypes[27]
+	mi := &file_campaign_v1_campaign_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1803,7 +1967,7 @@ func (x *Suppression) String() string {
 func (*Suppression) ProtoMessage() {}
 
 func (x *Suppression) ProtoReflect() protoreflect.Message {
-	mi := &file_campaign_v1_campaign_proto_msgTypes[27]
+	mi := &file_campaign_v1_campaign_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1816,7 +1980,7 @@ func (x *Suppression) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Suppression.ProtoReflect.Descriptor instead.
 func (*Suppression) Descriptor() ([]byte, []int) {
-	return file_campaign_v1_campaign_proto_rawDescGZIP(), []int{27}
+	return file_campaign_v1_campaign_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *Suppression) GetId() string {
@@ -1872,7 +2036,7 @@ type ListSuppressionsRequest struct {
 
 func (x *ListSuppressionsRequest) Reset() {
 	*x = ListSuppressionsRequest{}
-	mi := &file_campaign_v1_campaign_proto_msgTypes[28]
+	mi := &file_campaign_v1_campaign_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1884,7 +2048,7 @@ func (x *ListSuppressionsRequest) String() string {
 func (*ListSuppressionsRequest) ProtoMessage() {}
 
 func (x *ListSuppressionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_campaign_v1_campaign_proto_msgTypes[28]
+	mi := &file_campaign_v1_campaign_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1897,7 +2061,7 @@ func (x *ListSuppressionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSuppressionsRequest.ProtoReflect.Descriptor instead.
 func (*ListSuppressionsRequest) Descriptor() ([]byte, []int) {
-	return file_campaign_v1_campaign_proto_rawDescGZIP(), []int{28}
+	return file_campaign_v1_campaign_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *ListSuppressionsRequest) GetSearch() string {
@@ -1931,7 +2095,7 @@ type ListSuppressionsResponse struct {
 
 func (x *ListSuppressionsResponse) Reset() {
 	*x = ListSuppressionsResponse{}
-	mi := &file_campaign_v1_campaign_proto_msgTypes[29]
+	mi := &file_campaign_v1_campaign_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1943,7 +2107,7 @@ func (x *ListSuppressionsResponse) String() string {
 func (*ListSuppressionsResponse) ProtoMessage() {}
 
 func (x *ListSuppressionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_campaign_v1_campaign_proto_msgTypes[29]
+	mi := &file_campaign_v1_campaign_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1956,7 +2120,7 @@ func (x *ListSuppressionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSuppressionsResponse.ProtoReflect.Descriptor instead.
 func (*ListSuppressionsResponse) Descriptor() ([]byte, []int) {
-	return file_campaign_v1_campaign_proto_rawDescGZIP(), []int{29}
+	return file_campaign_v1_campaign_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *ListSuppressionsResponse) GetSuppressions() []*Suppression {
@@ -1983,7 +2147,7 @@ type AddSuppressionRequest struct {
 
 func (x *AddSuppressionRequest) Reset() {
 	*x = AddSuppressionRequest{}
-	mi := &file_campaign_v1_campaign_proto_msgTypes[30]
+	mi := &file_campaign_v1_campaign_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1995,7 +2159,7 @@ func (x *AddSuppressionRequest) String() string {
 func (*AddSuppressionRequest) ProtoMessage() {}
 
 func (x *AddSuppressionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_campaign_v1_campaign_proto_msgTypes[30]
+	mi := &file_campaign_v1_campaign_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2008,7 +2172,7 @@ func (x *AddSuppressionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddSuppressionRequest.ProtoReflect.Descriptor instead.
 func (*AddSuppressionRequest) Descriptor() ([]byte, []int) {
-	return file_campaign_v1_campaign_proto_rawDescGZIP(), []int{30}
+	return file_campaign_v1_campaign_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *AddSuppressionRequest) GetEmail() string {
@@ -2034,7 +2198,7 @@ type AddSuppressionResponse struct {
 
 func (x *AddSuppressionResponse) Reset() {
 	*x = AddSuppressionResponse{}
-	mi := &file_campaign_v1_campaign_proto_msgTypes[31]
+	mi := &file_campaign_v1_campaign_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2046,7 +2210,7 @@ func (x *AddSuppressionResponse) String() string {
 func (*AddSuppressionResponse) ProtoMessage() {}
 
 func (x *AddSuppressionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_campaign_v1_campaign_proto_msgTypes[31]
+	mi := &file_campaign_v1_campaign_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2059,7 +2223,7 @@ func (x *AddSuppressionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddSuppressionResponse.ProtoReflect.Descriptor instead.
 func (*AddSuppressionResponse) Descriptor() ([]byte, []int) {
-	return file_campaign_v1_campaign_proto_rawDescGZIP(), []int{31}
+	return file_campaign_v1_campaign_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *AddSuppressionResponse) GetSuppression() *Suppression {
@@ -2078,7 +2242,7 @@ type RemoveSuppressionRequest struct {
 
 func (x *RemoveSuppressionRequest) Reset() {
 	*x = RemoveSuppressionRequest{}
-	mi := &file_campaign_v1_campaign_proto_msgTypes[32]
+	mi := &file_campaign_v1_campaign_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2090,7 +2254,7 @@ func (x *RemoveSuppressionRequest) String() string {
 func (*RemoveSuppressionRequest) ProtoMessage() {}
 
 func (x *RemoveSuppressionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_campaign_v1_campaign_proto_msgTypes[32]
+	mi := &file_campaign_v1_campaign_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2103,7 +2267,7 @@ func (x *RemoveSuppressionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveSuppressionRequest.ProtoReflect.Descriptor instead.
 func (*RemoveSuppressionRequest) Descriptor() ([]byte, []int) {
-	return file_campaign_v1_campaign_proto_rawDescGZIP(), []int{32}
+	return file_campaign_v1_campaign_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *RemoveSuppressionRequest) GetId() string {
@@ -2122,7 +2286,7 @@ type RemoveSuppressionResponse struct {
 
 func (x *RemoveSuppressionResponse) Reset() {
 	*x = RemoveSuppressionResponse{}
-	mi := &file_campaign_v1_campaign_proto_msgTypes[33]
+	mi := &file_campaign_v1_campaign_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2134,7 +2298,7 @@ func (x *RemoveSuppressionResponse) String() string {
 func (*RemoveSuppressionResponse) ProtoMessage() {}
 
 func (x *RemoveSuppressionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_campaign_v1_campaign_proto_msgTypes[33]
+	mi := &file_campaign_v1_campaign_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2147,7 +2311,7 @@ func (x *RemoveSuppressionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveSuppressionResponse.ProtoReflect.Descriptor instead.
 func (*RemoveSuppressionResponse) Descriptor() ([]byte, []int) {
-	return file_campaign_v1_campaign_proto_rawDescGZIP(), []int{33}
+	return file_campaign_v1_campaign_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *RemoveSuppressionResponse) GetId() string {
@@ -2442,7 +2606,27 @@ var file_campaign_v1_campaign_proto_rawDesc = string([]byte{
 	0x2e, 0x43, 0x61, 0x6d, 0x70, 0x61, 0x69, 0x67, 0x6e, 0x52, 0x65, 0x63, 0x69, 0x70, 0x69, 0x65,
 	0x6e, 0x74, 0x52, 0x0a, 0x72, 0x65, 0x63, 0x69, 0x70, 0x69, 0x65, 0x6e, 0x74, 0x73, 0x12, 0x14,
 	0x0a, 0x05, 0x74, 0x6f, 0x74, 0x61, 0x6c, 0x18, 0x02, 0x20, 0x01, 0x28, 0x03, 0x52, 0x05, 0x74,
-	0x6f, 0x74, 0x61, 0x6c, 0x22, 0x4b, 0x0a, 0x1e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x75, 0x65, 0x46,
+	0x6f, 0x74, 0x61, 0x6c, 0x22, 0x9f, 0x01, 0x0a, 0x0d, 0x43, 0x61, 0x6d, 0x70, 0x61, 0x69, 0x67,
+	0x6e, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01,
+	0x28, 0x09, 0x52, 0x02, 0x69, 0x64, 0x12, 0x12, 0x0a, 0x04, 0x6b, 0x69, 0x6e, 0x64, 0x18, 0x02,
+	0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x6b, 0x69, 0x6e, 0x64, 0x12, 0x10, 0x0a, 0x03, 0x75, 0x72,
+	0x6c, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x75, 0x72, 0x6c, 0x12, 0x1d, 0x0a, 0x0a,
+	0x75, 0x73, 0x65, 0x72, 0x5f, 0x61, 0x67, 0x65, 0x6e, 0x74, 0x18, 0x04, 0x20, 0x01, 0x28, 0x09,
+	0x52, 0x09, 0x75, 0x73, 0x65, 0x72, 0x41, 0x67, 0x65, 0x6e, 0x74, 0x12, 0x39, 0x0a, 0x0a, 0x63,
+	0x72, 0x65, 0x61, 0x74, 0x65, 0x64, 0x5f, 0x61, 0x74, 0x18, 0x05, 0x20, 0x01, 0x28, 0x0b, 0x32,
+	0x1a, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75,
+	0x66, 0x2e, 0x54, 0x69, 0x6d, 0x65, 0x73, 0x74, 0x61, 0x6d, 0x70, 0x52, 0x09, 0x63, 0x72, 0x65,
+	0x61, 0x74, 0x65, 0x64, 0x41, 0x74, 0x22, 0x49, 0x0a, 0x1a, 0x4c, 0x69, 0x73, 0x74, 0x52, 0x65,
+	0x63, 0x69, 0x70, 0x69, 0x65, 0x6e, 0x74, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x73, 0x52, 0x65, 0x71,
+	0x75, 0x65, 0x73, 0x74, 0x12, 0x2b, 0x0a, 0x0c, 0x72, 0x65, 0x63, 0x69, 0x70, 0x69, 0x65, 0x6e,
+	0x74, 0x5f, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x42, 0x08, 0xba, 0x48, 0x05, 0x72,
+	0x03, 0xb0, 0x01, 0x01, 0x52, 0x0b, 0x72, 0x65, 0x63, 0x69, 0x70, 0x69, 0x65, 0x6e, 0x74, 0x49,
+	0x64, 0x22, 0x51, 0x0a, 0x1b, 0x4c, 0x69, 0x73, 0x74, 0x52, 0x65, 0x63, 0x69, 0x70, 0x69, 0x65,
+	0x6e, 0x74, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
+	0x12, 0x32, 0x0a, 0x06, 0x65, 0x76, 0x65, 0x6e, 0x74, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b,
+	0x32, 0x1a, 0x2e, 0x63, 0x61, 0x6d, 0x70, 0x61, 0x69, 0x67, 0x6e, 0x2e, 0x76, 0x31, 0x2e, 0x43,
+	0x61, 0x6d, 0x70, 0x61, 0x69, 0x67, 0x6e, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x52, 0x06, 0x65, 0x76,
+	0x65, 0x6e, 0x74, 0x73, 0x22, 0x4b, 0x0a, 0x1e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x75, 0x65, 0x46,
 	0x61, 0x69, 0x6c, 0x65, 0x64, 0x52, 0x65, 0x63, 0x69, 0x70, 0x69, 0x65, 0x6e, 0x74, 0x73, 0x52,
 	0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x29, 0x0a, 0x0b, 0x63, 0x61, 0x6d, 0x70, 0x61, 0x69,
 	0x67, 0x6e, 0x5f, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x42, 0x08, 0xba, 0x48, 0x05,
@@ -2507,7 +2691,7 @@ var file_campaign_v1_campaign_proto_rawDesc = string([]byte{
 	0x28, 0x09, 0x42, 0x08, 0xba, 0x48, 0x05, 0x72, 0x03, 0xb0, 0x01, 0x01, 0x52, 0x02, 0x69, 0x64,
 	0x22, 0x2b, 0x0a, 0x19, 0x52, 0x65, 0x6d, 0x6f, 0x76, 0x65, 0x53, 0x75, 0x70, 0x70, 0x72, 0x65,
 	0x73, 0x73, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x0e, 0x0a,
-	0x02, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x02, 0x69, 0x64, 0x32, 0xb8, 0x0a,
+	0x02, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x02, 0x69, 0x64, 0x32, 0xa2, 0x0b,
 	0x0a, 0x0f, 0x43, 0x61, 0x6d, 0x70, 0x61, 0x69, 0x67, 0x6e, 0x53, 0x65, 0x72, 0x76, 0x69, 0x63,
 	0x65, 0x12, 0x59, 0x0a, 0x0e, 0x43, 0x72, 0x65, 0x61, 0x74, 0x65, 0x43, 0x61, 0x6d, 0x70, 0x61,
 	0x69, 0x67, 0x6e, 0x12, 0x22, 0x2e, 0x63, 0x61, 0x6d, 0x70, 0x61, 0x69, 0x67, 0x6e, 0x2e, 0x76,
@@ -2560,50 +2744,56 @@ var file_campaign_v1_campaign_proto_rawDesc = string([]byte{
 	0x70, 0x69, 0x65, 0x6e, 0x74, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x2b, 0x2e,
 	0x63, 0x61, 0x6d, 0x70, 0x61, 0x69, 0x67, 0x6e, 0x2e, 0x76, 0x31, 0x2e, 0x4c, 0x69, 0x73, 0x74,
 	0x43, 0x61, 0x6d, 0x70, 0x61, 0x69, 0x67, 0x6e, 0x52, 0x65, 0x63, 0x69, 0x70, 0x69, 0x65, 0x6e,
-	0x74, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x74, 0x0a, 0x17, 0x52, 0x65,
+	0x74, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x68, 0x0a, 0x13, 0x4c, 0x69,
+	0x73, 0x74, 0x52, 0x65, 0x63, 0x69, 0x70, 0x69, 0x65, 0x6e, 0x74, 0x45, 0x76, 0x65, 0x6e, 0x74,
+	0x73, 0x12, 0x27, 0x2e, 0x63, 0x61, 0x6d, 0x70, 0x61, 0x69, 0x67, 0x6e, 0x2e, 0x76, 0x31, 0x2e,
+	0x4c, 0x69, 0x73, 0x74, 0x52, 0x65, 0x63, 0x69, 0x70, 0x69, 0x65, 0x6e, 0x74, 0x45, 0x76, 0x65,
+	0x6e, 0x74, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x28, 0x2e, 0x63, 0x61, 0x6d,
+	0x70, 0x61, 0x69, 0x67, 0x6e, 0x2e, 0x76, 0x31, 0x2e, 0x4c, 0x69, 0x73, 0x74, 0x52, 0x65, 0x63,
+	0x69, 0x70, 0x69, 0x65, 0x6e, 0x74, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x73, 0x52, 0x65, 0x73, 0x70,
+	0x6f, 0x6e, 0x73, 0x65, 0x12, 0x74, 0x0a, 0x17, 0x52, 0x65, 0x71, 0x75, 0x65, 0x75, 0x65, 0x46,
+	0x61, 0x69, 0x6c, 0x65, 0x64, 0x52, 0x65, 0x63, 0x69, 0x70, 0x69, 0x65, 0x6e, 0x74, 0x73, 0x12,
+	0x2b, 0x2e, 0x63, 0x61, 0x6d, 0x70, 0x61, 0x69, 0x67, 0x6e, 0x2e, 0x76, 0x31, 0x2e, 0x52, 0x65,
 	0x71, 0x75, 0x65, 0x75, 0x65, 0x46, 0x61, 0x69, 0x6c, 0x65, 0x64, 0x52, 0x65, 0x63, 0x69, 0x70,
-	0x69, 0x65, 0x6e, 0x74, 0x73, 0x12, 0x2b, 0x2e, 0x63, 0x61, 0x6d, 0x70, 0x61, 0x69, 0x67, 0x6e,
-	0x2e, 0x76, 0x31, 0x2e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x75, 0x65, 0x46, 0x61, 0x69, 0x6c, 0x65,
-	0x64, 0x52, 0x65, 0x63, 0x69, 0x70, 0x69, 0x65, 0x6e, 0x74, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65,
-	0x73, 0x74, 0x1a, 0x2c, 0x2e, 0x63, 0x61, 0x6d, 0x70, 0x61, 0x69, 0x67, 0x6e, 0x2e, 0x76, 0x31,
-	0x2e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x75, 0x65, 0x46, 0x61, 0x69, 0x6c, 0x65, 0x64, 0x52, 0x65,
-	0x63, 0x69, 0x70, 0x69, 0x65, 0x6e, 0x74, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
-	0x12, 0x56, 0x0a, 0x0d, 0x53, 0x65, 0x6e, 0x64, 0x54, 0x65, 0x73, 0x74, 0x45, 0x6d, 0x61, 0x69,
-	0x6c, 0x12, 0x21, 0x2e, 0x63, 0x61, 0x6d, 0x70, 0x61, 0x69, 0x67, 0x6e, 0x2e, 0x76, 0x31, 0x2e,
-	0x53, 0x65, 0x6e, 0x64, 0x54, 0x65, 0x73, 0x74, 0x45, 0x6d, 0x61, 0x69, 0x6c, 0x52, 0x65, 0x71,
-	0x75, 0x65, 0x73, 0x74, 0x1a, 0x22, 0x2e, 0x63, 0x61, 0x6d, 0x70, 0x61, 0x69, 0x67, 0x6e, 0x2e,
-	0x76, 0x31, 0x2e, 0x53, 0x65, 0x6e, 0x64, 0x54, 0x65, 0x73, 0x74, 0x45, 0x6d, 0x61, 0x69, 0x6c,
-	0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x5f, 0x0a, 0x10, 0x4c, 0x69, 0x73, 0x74,
-	0x53, 0x75, 0x70, 0x70, 0x72, 0x65, 0x73, 0x73, 0x69, 0x6f, 0x6e, 0x73, 0x12, 0x24, 0x2e, 0x63,
+	0x69, 0x65, 0x6e, 0x74, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x2c, 0x2e, 0x63,
+	0x61, 0x6d, 0x70, 0x61, 0x69, 0x67, 0x6e, 0x2e, 0x76, 0x31, 0x2e, 0x52, 0x65, 0x71, 0x75, 0x65,
+	0x75, 0x65, 0x46, 0x61, 0x69, 0x6c, 0x65, 0x64, 0x52, 0x65, 0x63, 0x69, 0x70, 0x69, 0x65, 0x6e,
+	0x74, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x56, 0x0a, 0x0d, 0x53, 0x65,
+	0x6e, 0x64, 0x54, 0x65, 0x73, 0x74, 0x45, 0x6d, 0x61, 0x69, 0x6c, 0x12, 0x21, 0x2e, 0x63, 0x61,
+	0x6d, 0x70, 0x61, 0x69, 0x67, 0x6e, 0x2e, 0x76, 0x31, 0x2e, 0x53, 0x65, 0x6e, 0x64, 0x54, 0x65,
+	0x73, 0x74, 0x45, 0x6d, 0x61, 0x69, 0x6c, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x22,
+	0x2e, 0x63, 0x61, 0x6d, 0x70, 0x61, 0x69, 0x67, 0x6e, 0x2e, 0x76, 0x31, 0x2e, 0x53, 0x65, 0x6e,
+	0x64, 0x54, 0x65, 0x73, 0x74, 0x45, 0x6d, 0x61, 0x69, 0x6c, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e,
+	0x73, 0x65, 0x12, 0x5f, 0x0a, 0x10, 0x4c, 0x69, 0x73, 0x74, 0x53, 0x75, 0x70, 0x70, 0x72, 0x65,
+	0x73, 0x73, 0x69, 0x6f, 0x6e, 0x73, 0x12, 0x24, 0x2e, 0x63, 0x61, 0x6d, 0x70, 0x61, 0x69, 0x67,
+	0x6e, 0x2e, 0x76, 0x31, 0x2e, 0x4c, 0x69, 0x73, 0x74, 0x53, 0x75, 0x70, 0x70, 0x72, 0x65, 0x73,
+	0x73, 0x69, 0x6f, 0x6e, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x25, 0x2e, 0x63,
 	0x61, 0x6d, 0x70, 0x61, 0x69, 0x67, 0x6e, 0x2e, 0x76, 0x31, 0x2e, 0x4c, 0x69, 0x73, 0x74, 0x53,
-	0x75, 0x70, 0x70, 0x72, 0x65, 0x73, 0x73, 0x69, 0x6f, 0x6e, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65,
-	0x73, 0x74, 0x1a, 0x25, 0x2e, 0x63, 0x61, 0x6d, 0x70, 0x61, 0x69, 0x67, 0x6e, 0x2e, 0x76, 0x31,
-	0x2e, 0x4c, 0x69, 0x73, 0x74, 0x53, 0x75, 0x70, 0x70, 0x72, 0x65, 0x73, 0x73, 0x69, 0x6f, 0x6e,
-	0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x59, 0x0a, 0x0e, 0x41, 0x64, 0x64,
-	0x53, 0x75, 0x70, 0x70, 0x72, 0x65, 0x73, 0x73, 0x69, 0x6f, 0x6e, 0x12, 0x22, 0x2e, 0x63, 0x61,
-	0x6d, 0x70, 0x61, 0x69, 0x67, 0x6e, 0x2e, 0x76, 0x31, 0x2e, 0x41, 0x64, 0x64, 0x53, 0x75, 0x70,
-	0x70, 0x72, 0x65, 0x73, 0x73, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a,
-	0x23, 0x2e, 0x63, 0x61, 0x6d, 0x70, 0x61, 0x69, 0x67, 0x6e, 0x2e, 0x76, 0x31, 0x2e, 0x41, 0x64,
-	0x64, 0x53, 0x75, 0x70, 0x70, 0x72, 0x65, 0x73, 0x73, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x73, 0x70,
-	0x6f, 0x6e, 0x73, 0x65, 0x12, 0x62, 0x0a, 0x11, 0x52, 0x65, 0x6d, 0x6f, 0x76, 0x65, 0x53, 0x75,
-	0x70, 0x70, 0x72, 0x65, 0x73, 0x73, 0x69, 0x6f, 0x6e, 0x12, 0x25, 0x2e, 0x63, 0x61, 0x6d, 0x70,
-	0x61, 0x69, 0x67, 0x6e, 0x2e, 0x76, 0x31, 0x2e, 0x52, 0x65, 0x6d, 0x6f, 0x76, 0x65, 0x53, 0x75,
-	0x70, 0x70, 0x72, 0x65, 0x73, 0x73, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74,
-	0x1a, 0x26, 0x2e, 0x63, 0x61, 0x6d, 0x70, 0x61, 0x69, 0x67, 0x6e, 0x2e, 0x76, 0x31, 0x2e, 0x52,
-	0x65, 0x6d, 0x6f, 0x76, 0x65, 0x53, 0x75, 0x70, 0x70, 0x72, 0x65, 0x73, 0x73, 0x69, 0x6f, 0x6e,
-	0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x42, 0xb2, 0x01, 0x0a, 0x0f, 0x63, 0x6f, 0x6d,
-	0x2e, 0x63, 0x61, 0x6d, 0x70, 0x61, 0x69, 0x67, 0x6e, 0x2e, 0x76, 0x31, 0x42, 0x0d, 0x43, 0x61,
-	0x6d, 0x70, 0x61, 0x69, 0x67, 0x6e, 0x50, 0x72, 0x6f, 0x74, 0x6f, 0x50, 0x01, 0x5a, 0x43, 0x67,
-	0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x30, 0x75, 0x74, 0x6c, 0x31, 0x65,
-	0x72, 0x2d, 0x74, 0x65, 0x63, 0x68, 0x2f, 0x70, 0x68, 0x6f, 0x78, 0x2d, 0x63, 0x75, 0x73, 0x74,
-	0x6f, 0x6d, 0x65, 0x72, 0x2f, 0x67, 0x65, 0x6e, 0x2f, 0x70, 0x62, 0x2f, 0x63, 0x61, 0x6d, 0x70,
-	0x61, 0x69, 0x67, 0x6e, 0x2f, 0x76, 0x31, 0x3b, 0x63, 0x61, 0x6d, 0x70, 0x61, 0x69, 0x67, 0x6e,
-	0x76, 0x31, 0xa2, 0x02, 0x03, 0x43, 0x58, 0x58, 0xaa, 0x02, 0x0b, 0x43, 0x61, 0x6d, 0x70, 0x61,
-	0x69, 0x67, 0x6e, 0x2e, 0x56, 0x31, 0xca, 0x02, 0x0b, 0x43, 0x61, 0x6d, 0x70, 0x61, 0x69, 0x67,
-	0x6e, 0x5c, 0x56, 0x31, 0xe2, 0x02, 0x17, 0x43, 0x61, 0x6d, 0x70, 0x61, 0x69, 0x67, 0x6e, 0x5c,
-	0x56, 0x31, 0x5c, 0x47, 0x50, 0x42, 0x4d, 0x65, 0x74, 0x61, 0x64, 0x61, 0x74, 0x61, 0xea, 0x02,
-	0x0c, 0x43, 0x61, 0x6d, 0x70, 0x61, 0x69, 0x67, 0x6e, 0x3a, 0x3a, 0x56, 0x31, 0x62, 0x06, 0x70,
-	0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x75, 0x70, 0x70, 0x72, 0x65, 0x73, 0x73, 0x69, 0x6f, 0x6e, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f,
+	0x6e, 0x73, 0x65, 0x12, 0x59, 0x0a, 0x0e, 0x41, 0x64, 0x64, 0x53, 0x75, 0x70, 0x70, 0x72, 0x65,
+	0x73, 0x73, 0x69, 0x6f, 0x6e, 0x12, 0x22, 0x2e, 0x63, 0x61, 0x6d, 0x70, 0x61, 0x69, 0x67, 0x6e,
+	0x2e, 0x76, 0x31, 0x2e, 0x41, 0x64, 0x64, 0x53, 0x75, 0x70, 0x70, 0x72, 0x65, 0x73, 0x73, 0x69,
+	0x6f, 0x6e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x23, 0x2e, 0x63, 0x61, 0x6d, 0x70,
+	0x61, 0x69, 0x67, 0x6e, 0x2e, 0x76, 0x31, 0x2e, 0x41, 0x64, 0x64, 0x53, 0x75, 0x70, 0x70, 0x72,
+	0x65, 0x73, 0x73, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x62,
+	0x0a, 0x11, 0x52, 0x65, 0x6d, 0x6f, 0x76, 0x65, 0x53, 0x75, 0x70, 0x70, 0x72, 0x65, 0x73, 0x73,
+	0x69, 0x6f, 0x6e, 0x12, 0x25, 0x2e, 0x63, 0x61, 0x6d, 0x70, 0x61, 0x69, 0x67, 0x6e, 0x2e, 0x76,
+	0x31, 0x2e, 0x52, 0x65, 0x6d, 0x6f, 0x76, 0x65, 0x53, 0x75, 0x70, 0x70, 0x72, 0x65, 0x73, 0x73,
+	0x69, 0x6f, 0x6e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x26, 0x2e, 0x63, 0x61, 0x6d,
+	0x70, 0x61, 0x69, 0x67, 0x6e, 0x2e, 0x76, 0x31, 0x2e, 0x52, 0x65, 0x6d, 0x6f, 0x76, 0x65, 0x53,
+	0x75, 0x70, 0x70, 0x72, 0x65, 0x73, 0x73, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e,
+	0x73, 0x65, 0x42, 0xb2, 0x01, 0x0a, 0x0f, 0x63, 0x6f, 0x6d, 0x2e, 0x63, 0x61, 0x6d, 0x70, 0x61,
+	0x69, 0x67, 0x6e, 0x2e, 0x76, 0x31, 0x42, 0x0d, 0x43, 0x61, 0x6d, 0x70, 0x61, 0x69, 0x67, 0x6e,
+	0x50, 0x72, 0x6f, 0x74, 0x6f, 0x50, 0x01, 0x5a, 0x43, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e,
+	0x63, 0x6f, 0x6d, 0x2f, 0x30, 0x75, 0x74, 0x6c, 0x31, 0x65, 0x72, 0x2d, 0x74, 0x65, 0x63, 0x68,
+	0x2f, 0x70, 0x68, 0x6f, 0x78, 0x2d, 0x63, 0x75, 0x73, 0x74, 0x6f, 0x6d, 0x65, 0x72, 0x2f, 0x67,
+	0x65, 0x6e, 0x2f, 0x70, 0x62, 0x2f, 0x63, 0x61, 0x6d, 0x70, 0x61, 0x69, 0x67, 0x6e, 0x2f, 0x76,
+	0x31, 0x3b, 0x63, 0x61, 0x6d, 0x70, 0x61, 0x69, 0x67, 0x6e, 0x76, 0x31, 0xa2, 0x02, 0x03, 0x43,
+	0x58, 0x58, 0xaa, 0x02, 0x0b, 0x43, 0x61, 0x6d, 0x70, 0x61, 0x69, 0x67, 0x6e, 0x2e, 0x56, 0x31,
+	0xca, 0x02, 0x0b, 0x43, 0x61, 0x6d, 0x70, 0x61, 0x69, 0x67, 0x6e, 0x5c, 0x56, 0x31, 0xe2, 0x02,
+	0x17, 0x43, 0x61, 0x6d, 0x70, 0x61, 0x69, 0x67, 0x6e, 0x5c, 0x56, 0x31, 0x5c, 0x47, 0x50, 0x42,
+	0x4d, 0x65, 0x74, 0x61, 0x64, 0x61, 0x74, 0x61, 0xea, 0x02, 0x0c, 0x43, 0x61, 0x6d, 0x70, 0x61,
+	0x69, 0x67, 0x6e, 0x3a, 0x3a, 0x56, 0x31, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 })
 
 var (
@@ -2618,7 +2808,7 @@ func file_campaign_v1_campaign_proto_rawDescGZIP() []byte {
 	return file_campaign_v1_campaign_proto_rawDescData
 }
 
-var file_campaign_v1_campaign_proto_msgTypes = make([]protoimpl.MessageInfo, 34)
+var file_campaign_v1_campaign_proto_msgTypes = make([]protoimpl.MessageInfo, 37)
 var file_campaign_v1_campaign_proto_goTypes = []any{
 	(*CampaignSchedule)(nil),                // 0: campaign.v1.CampaignSchedule
 	(*CampaignSender)(nil),                  // 1: campaign.v1.CampaignSender
@@ -2643,27 +2833,30 @@ var file_campaign_v1_campaign_proto_goTypes = []any{
 	(*CampaignRecipient)(nil),               // 20: campaign.v1.CampaignRecipient
 	(*ListCampaignRecipientsRequest)(nil),   // 21: campaign.v1.ListCampaignRecipientsRequest
 	(*ListCampaignRecipientsResponse)(nil),  // 22: campaign.v1.ListCampaignRecipientsResponse
-	(*RequeueFailedRecipientsRequest)(nil),  // 23: campaign.v1.RequeueFailedRecipientsRequest
-	(*RequeueFailedRecipientsResponse)(nil), // 24: campaign.v1.RequeueFailedRecipientsResponse
-	(*SendTestEmailRequest)(nil),            // 25: campaign.v1.SendTestEmailRequest
-	(*SendTestEmailResponse)(nil),           // 26: campaign.v1.SendTestEmailResponse
-	(*Suppression)(nil),                     // 27: campaign.v1.Suppression
-	(*ListSuppressionsRequest)(nil),         // 28: campaign.v1.ListSuppressionsRequest
-	(*ListSuppressionsResponse)(nil),        // 29: campaign.v1.ListSuppressionsResponse
-	(*AddSuppressionRequest)(nil),           // 30: campaign.v1.AddSuppressionRequest
-	(*AddSuppressionResponse)(nil),          // 31: campaign.v1.AddSuppressionResponse
-	(*RemoveSuppressionRequest)(nil),        // 32: campaign.v1.RemoveSuppressionRequest
-	(*RemoveSuppressionResponse)(nil),       // 33: campaign.v1.RemoveSuppressionResponse
-	(*timestamppb.Timestamp)(nil),           // 34: google.protobuf.Timestamp
+	(*CampaignEvent)(nil),                   // 23: campaign.v1.CampaignEvent
+	(*ListRecipientEventsRequest)(nil),      // 24: campaign.v1.ListRecipientEventsRequest
+	(*ListRecipientEventsResponse)(nil),     // 25: campaign.v1.ListRecipientEventsResponse
+	(*RequeueFailedRecipientsRequest)(nil),  // 26: campaign.v1.RequeueFailedRecipientsRequest
+	(*RequeueFailedRecipientsResponse)(nil), // 27: campaign.v1.RequeueFailedRecipientsResponse
+	(*SendTestEmailRequest)(nil),            // 28: campaign.v1.SendTestEmailRequest
+	(*SendTestEmailResponse)(nil),           // 29: campaign.v1.SendTestEmailResponse
+	(*Suppression)(nil),                     // 30: campaign.v1.Suppression
+	(*ListSuppressionsRequest)(nil),         // 31: campaign.v1.ListSuppressionsRequest
+	(*ListSuppressionsResponse)(nil),        // 32: campaign.v1.ListSuppressionsResponse
+	(*AddSuppressionRequest)(nil),           // 33: campaign.v1.AddSuppressionRequest
+	(*AddSuppressionResponse)(nil),          // 34: campaign.v1.AddSuppressionResponse
+	(*RemoveSuppressionRequest)(nil),        // 35: campaign.v1.RemoveSuppressionRequest
+	(*RemoveSuppressionResponse)(nil),       // 36: campaign.v1.RemoveSuppressionResponse
+	(*timestamppb.Timestamp)(nil),           // 37: google.protobuf.Timestamp
 }
 var file_campaign_v1_campaign_proto_depIdxs = []int32{
 	0,  // 0: campaign.v1.Campaign.schedule:type_name -> campaign.v1.CampaignSchedule
 	1,  // 1: campaign.v1.Campaign.sender:type_name -> campaign.v1.CampaignSender
 	2,  // 2: campaign.v1.Campaign.stats:type_name -> campaign.v1.CampaignStats
-	34, // 3: campaign.v1.Campaign.started_at:type_name -> google.protobuf.Timestamp
-	34, // 4: campaign.v1.Campaign.completed_at:type_name -> google.protobuf.Timestamp
-	34, // 5: campaign.v1.Campaign.created_at:type_name -> google.protobuf.Timestamp
-	34, // 6: campaign.v1.Campaign.updated_at:type_name -> google.protobuf.Timestamp
+	37, // 3: campaign.v1.Campaign.started_at:type_name -> google.protobuf.Timestamp
+	37, // 4: campaign.v1.Campaign.completed_at:type_name -> google.protobuf.Timestamp
+	37, // 5: campaign.v1.Campaign.created_at:type_name -> google.protobuf.Timestamp
+	37, // 6: campaign.v1.Campaign.updated_at:type_name -> google.protobuf.Timestamp
 	0,  // 7: campaign.v1.CreateCampaignRequest.schedule:type_name -> campaign.v1.CampaignSchedule
 	1,  // 8: campaign.v1.CreateCampaignRequest.sender:type_name -> campaign.v1.CampaignSender
 	3,  // 9: campaign.v1.CreateCampaignResponse.campaign:type_name -> campaign.v1.Campaign
@@ -2675,49 +2868,53 @@ var file_campaign_v1_campaign_proto_depIdxs = []int32{
 	3,  // 15: campaign.v1.StartCampaignResponse.campaign:type_name -> campaign.v1.Campaign
 	3,  // 16: campaign.v1.PauseCampaignResponse.campaign:type_name -> campaign.v1.Campaign
 	3,  // 17: campaign.v1.CancelCampaignResponse.campaign:type_name -> campaign.v1.Campaign
-	34, // 18: campaign.v1.CampaignRecipient.sent_at:type_name -> google.protobuf.Timestamp
-	34, // 19: campaign.v1.CampaignRecipient.first_opened_at:type_name -> google.protobuf.Timestamp
-	34, // 20: campaign.v1.CampaignRecipient.first_clicked_at:type_name -> google.protobuf.Timestamp
-	34, // 21: campaign.v1.CampaignRecipient.replied_at:type_name -> google.protobuf.Timestamp
-	34, // 22: campaign.v1.CampaignRecipient.bounced_at:type_name -> google.protobuf.Timestamp
-	34, // 23: campaign.v1.CampaignRecipient.unsubscribed_at:type_name -> google.protobuf.Timestamp
+	37, // 18: campaign.v1.CampaignRecipient.sent_at:type_name -> google.protobuf.Timestamp
+	37, // 19: campaign.v1.CampaignRecipient.first_opened_at:type_name -> google.protobuf.Timestamp
+	37, // 20: campaign.v1.CampaignRecipient.first_clicked_at:type_name -> google.protobuf.Timestamp
+	37, // 21: campaign.v1.CampaignRecipient.replied_at:type_name -> google.protobuf.Timestamp
+	37, // 22: campaign.v1.CampaignRecipient.bounced_at:type_name -> google.protobuf.Timestamp
+	37, // 23: campaign.v1.CampaignRecipient.unsubscribed_at:type_name -> google.protobuf.Timestamp
 	20, // 24: campaign.v1.ListCampaignRecipientsResponse.recipients:type_name -> campaign.v1.CampaignRecipient
-	34, // 25: campaign.v1.Suppression.created_at:type_name -> google.protobuf.Timestamp
-	27, // 26: campaign.v1.ListSuppressionsResponse.suppressions:type_name -> campaign.v1.Suppression
-	27, // 27: campaign.v1.AddSuppressionResponse.suppression:type_name -> campaign.v1.Suppression
-	4,  // 28: campaign.v1.CampaignService.CreateCampaign:input_type -> campaign.v1.CreateCampaignRequest
-	6,  // 29: campaign.v1.CampaignService.ListCampaigns:input_type -> campaign.v1.ListCampaignsRequest
-	8,  // 30: campaign.v1.CampaignService.GetCampaign:input_type -> campaign.v1.GetCampaignRequest
-	10, // 31: campaign.v1.CampaignService.UpdateCampaign:input_type -> campaign.v1.UpdateCampaignRequest
-	12, // 32: campaign.v1.CampaignService.StartCampaign:input_type -> campaign.v1.StartCampaignRequest
-	14, // 33: campaign.v1.CampaignService.PauseCampaign:input_type -> campaign.v1.PauseCampaignRequest
-	16, // 34: campaign.v1.CampaignService.CancelCampaign:input_type -> campaign.v1.CancelCampaignRequest
-	18, // 35: campaign.v1.CampaignService.DeleteCampaign:input_type -> campaign.v1.DeleteCampaignRequest
-	21, // 36: campaign.v1.CampaignService.ListCampaignRecipients:input_type -> campaign.v1.ListCampaignRecipientsRequest
-	23, // 37: campaign.v1.CampaignService.RequeueFailedRecipients:input_type -> campaign.v1.RequeueFailedRecipientsRequest
-	25, // 38: campaign.v1.CampaignService.SendTestEmail:input_type -> campaign.v1.SendTestEmailRequest
-	28, // 39: campaign.v1.CampaignService.ListSuppressions:input_type -> campaign.v1.ListSuppressionsRequest
-	30, // 40: campaign.v1.CampaignService.AddSuppression:input_type -> campaign.v1.AddSuppressionRequest
-	32, // 41: campaign.v1.CampaignService.RemoveSuppression:input_type -> campaign.v1.RemoveSuppressionRequest
-	5,  // 42: campaign.v1.CampaignService.CreateCampaign:output_type -> campaign.v1.CreateCampaignResponse
-	7,  // 43: campaign.v1.CampaignService.ListCampaigns:output_type -> campaign.v1.ListCampaignsResponse
-	9,  // 44: campaign.v1.CampaignService.GetCampaign:output_type -> campaign.v1.GetCampaignResponse
-	11, // 45: campaign.v1.CampaignService.UpdateCampaign:output_type -> campaign.v1.UpdateCampaignResponse
-	13, // 46: campaign.v1.CampaignService.StartCampaign:output_type -> campaign.v1.StartCampaignResponse
-	15, // 47: campaign.v1.CampaignService.PauseCampaign:output_type -> campaign.v1.PauseCampaignResponse
-	17, // 48: campaign.v1.CampaignService.CancelCampaign:output_type -> campaign.v1.CancelCampaignResponse
-	19, // 49: campaign.v1.CampaignService.DeleteCampaign:output_type -> campaign.v1.DeleteCampaignResponse
-	22, // 50: campaign.v1.CampaignService.ListCampaignRecipients:output_type -> campaign.v1.ListCampaignRecipientsResponse
-	24, // 51: campaign.v1.CampaignService.RequeueFailedRecipients:output_type -> campaign.v1.RequeueFailedRecipientsResponse
-	26, // 52: campaign.v1.CampaignService.SendTestEmail:output_type -> campaign.v1.SendTestEmailResponse
-	29, // 53: campaign.v1.CampaignService.ListSuppressions:output_type -> campaign.v1.ListSuppressionsResponse
-	31, // 54: campaign.v1.CampaignService.AddSuppression:output_type -> campaign.v1.AddSuppressionResponse
-	33, // 55: campaign.v1.CampaignService.RemoveSuppression:output_type -> campaign.v1.RemoveSuppressionResponse
-	42, // [42:56] is the sub-list for method output_type
-	28, // [28:42] is the sub-list for method input_type
-	28, // [28:28] is the sub-list for extension type_name
-	28, // [28:28] is the sub-list for extension extendee
-	0,  // [0:28] is the sub-list for field type_name
+	37, // 25: campaign.v1.CampaignEvent.created_at:type_name -> google.protobuf.Timestamp
+	23, // 26: campaign.v1.ListRecipientEventsResponse.events:type_name -> campaign.v1.CampaignEvent
+	37, // 27: campaign.v1.Suppression.created_at:type_name -> google.protobuf.Timestamp
+	30, // 28: campaign.v1.ListSuppressionsResponse.suppressions:type_name -> campaign.v1.Suppression
+	30, // 29: campaign.v1.AddSuppressionResponse.suppression:type_name -> campaign.v1.Suppression
+	4,  // 30: campaign.v1.CampaignService.CreateCampaign:input_type -> campaign.v1.CreateCampaignRequest
+	6,  // 31: campaign.v1.CampaignService.ListCampaigns:input_type -> campaign.v1.ListCampaignsRequest
+	8,  // 32: campaign.v1.CampaignService.GetCampaign:input_type -> campaign.v1.GetCampaignRequest
+	10, // 33: campaign.v1.CampaignService.UpdateCampaign:input_type -> campaign.v1.UpdateCampaignRequest
+	12, // 34: campaign.v1.CampaignService.StartCampaign:input_type -> campaign.v1.StartCampaignRequest
+	14, // 35: campaign.v1.CampaignService.PauseCampaign:input_type -> campaign.v1.PauseCampaignRequest
+	16, // 36: campaign.v1.CampaignService.CancelCampaign:input_type -> campaign.v1.CancelCampaignRequest
+	18, // 37: campaign.v1.CampaignService.DeleteCampaign:input_type -> campaign.v1.DeleteCampaignRequest
+	21, // 38: campaign.v1.CampaignService.ListCampaignRecipients:input_type -> campaign.v1.ListCampaignRecipientsRequest
+	24, // 39: campaign.v1.CampaignService.ListRecipientEvents:input_type -> campaign.v1.ListRecipientEventsRequest
+	26, // 40: campaign.v1.CampaignService.RequeueFailedRecipients:input_type -> campaign.v1.RequeueFailedRecipientsRequest
+	28, // 41: campaign.v1.CampaignService.SendTestEmail:input_type -> campaign.v1.SendTestEmailRequest
+	31, // 42: campaign.v1.CampaignService.ListSuppressions:input_type -> campaign.v1.ListSuppressionsRequest
+	33, // 43: campaign.v1.CampaignService.AddSuppression:input_type -> campaign.v1.AddSuppressionRequest
+	35, // 44: campaign.v1.CampaignService.RemoveSuppression:input_type -> campaign.v1.RemoveSuppressionRequest
+	5,  // 45: campaign.v1.CampaignService.CreateCampaign:output_type -> campaign.v1.CreateCampaignResponse
+	7,  // 46: campaign.v1.CampaignService.ListCampaigns:output_type -> campaign.v1.ListCampaignsResponse
+	9,  // 47: campaign.v1.CampaignService.GetCampaign:output_type -> campaign.v1.GetCampaignResponse
+	11, // 48: campaign.v1.CampaignService.UpdateCampaign:output_type -> campaign.v1.UpdateCampaignResponse
+	13, // 49: campaign.v1.CampaignService.StartCampaign:output_type -> campaign.v1.StartCampaignResponse
+	15, // 50: campaign.v1.CampaignService.PauseCampaign:output_type -> campaign.v1.PauseCampaignResponse
+	17, // 51: campaign.v1.CampaignService.CancelCampaign:output_type -> campaign.v1.CancelCampaignResponse
+	19, // 52: campaign.v1.CampaignService.DeleteCampaign:output_type -> campaign.v1.DeleteCampaignResponse
+	22, // 53: campaign.v1.CampaignService.ListCampaignRecipients:output_type -> campaign.v1.ListCampaignRecipientsResponse
+	25, // 54: campaign.v1.CampaignService.ListRecipientEvents:output_type -> campaign.v1.ListRecipientEventsResponse
+	27, // 55: campaign.v1.CampaignService.RequeueFailedRecipients:output_type -> campaign.v1.RequeueFailedRecipientsResponse
+	29, // 56: campaign.v1.CampaignService.SendTestEmail:output_type -> campaign.v1.SendTestEmailResponse
+	32, // 57: campaign.v1.CampaignService.ListSuppressions:output_type -> campaign.v1.ListSuppressionsResponse
+	34, // 58: campaign.v1.CampaignService.AddSuppression:output_type -> campaign.v1.AddSuppressionResponse
+	36, // 59: campaign.v1.CampaignService.RemoveSuppression:output_type -> campaign.v1.RemoveSuppressionResponse
+	45, // [45:60] is the sub-list for method output_type
+	30, // [30:45] is the sub-list for method input_type
+	30, // [30:30] is the sub-list for extension type_name
+	30, // [30:30] is the sub-list for extension extendee
+	0,  // [0:30] is the sub-list for field type_name
 }
 
 func init() { file_campaign_v1_campaign_proto_init() }
@@ -2730,15 +2927,15 @@ func file_campaign_v1_campaign_proto_init() {
 	file_campaign_v1_campaign_proto_msgTypes[10].OneofWrappers = []any{}
 	file_campaign_v1_campaign_proto_msgTypes[20].OneofWrappers = []any{}
 	file_campaign_v1_campaign_proto_msgTypes[21].OneofWrappers = []any{}
-	file_campaign_v1_campaign_proto_msgTypes[27].OneofWrappers = []any{}
-	file_campaign_v1_campaign_proto_msgTypes[28].OneofWrappers = []any{}
+	file_campaign_v1_campaign_proto_msgTypes[30].OneofWrappers = []any{}
+	file_campaign_v1_campaign_proto_msgTypes[31].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_campaign_v1_campaign_proto_rawDesc), len(file_campaign_v1_campaign_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   34,
+			NumMessages:   37,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
