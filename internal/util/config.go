@@ -134,6 +134,12 @@ type Config struct {
 	// 自動プロビジョニングする (空なら「既存アカウントを登録」モード)。
 	MailuAPIBase  string `mapstructure:"MAILU_API_BASE"`
 	MailuAPIToken string `mapstructure:"MAILU_API_TOKEN"`
+
+	// Phase 27: キャンペーン (コールドメール一斉送信) のトラッキングトークン
+	// HMAC 鍵 (base64 32 byte)。配信停止 URL の生成に必須 — 未設定だと
+	// CampaignService は登録されるが送信 worker は起動しない (特電法上、
+	// 配信停止リンク無しの送信は許可しない)。
+	CampaignTrackingKey string `mapstructure:"CAMPAIGN_TRACKING_KEY"`
 }
 
 // LoadConfig reads configuration from `app.env` and (if present) layers

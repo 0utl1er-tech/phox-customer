@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"embed"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"connectrpc.com/connect"
 	activityv1connect "github.com/0utl1er-tech/phox-customer/gen/pb/activity/v1/activityv1connect"
 	"github.com/0utl1er-tech/phox-customer/gen/pb/book/v1/bookv1connect"
+	campaignv1connect "github.com/0utl1er-tech/phox-customer/gen/pb/campaign/v1/campaignv1connect"
 	contactv1connect "github.com/0utl1er-tech/phox-customer/gen/pb/contact/v1/contactv1connect"
 	customerv1connect "github.com/0utl1er-tech/phox-customer/gen/pb/customer/v1/customerv1connect"
 	googleoauthv1connect "github.com/0utl1er-tech/phox-customer/gen/pb/googleoauth/v1/googleoauthv1connect"
@@ -25,6 +27,7 @@ import (
 	userv1connect "github.com/0utl1er-tech/phox-customer/gen/pb/user/v1/userv1connect"
 	zoomphonev1connect "github.com/0utl1er-tech/phox-customer/gen/pb/zoomphone/v1/zoomphonev1connect"
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
+	campaignpkg "github.com/0utl1er-tech/phox-customer/internal/campaign"
 	"github.com/0utl1er-tech/phox-customer/internal/crypto"
 	"github.com/0utl1er-tech/phox-customer/internal/gcal"
 	"github.com/0utl1er-tech/phox-customer/internal/ical"
@@ -39,6 +42,7 @@ import (
 	"github.com/0utl1er-tech/phox-customer/internal/service/activity"
 	"github.com/0utl1er-tech/phox-customer/internal/service/auth"
 	"github.com/0utl1er-tech/phox-customer/internal/service/book"
+	campaignservice "github.com/0utl1er-tech/phox-customer/internal/service/campaign"
 	"github.com/0utl1er-tech/phox-customer/internal/service/contact"
 	"github.com/0utl1er-tech/phox-customer/internal/service/customer"
 	"github.com/0utl1er-tech/phox-customer/internal/service/googleoauth"
@@ -468,6 +472,32 @@ func main() {
 		sseHub = zoom.NewSSEHub()
 	}
 
+	// Phase 27: キャンペーン (コールドメール一斉送信)。
+	// CampaignService は MailboxService 有効時のみ登録 (送信経路が前提のため)。
+	// 送信 worker + 配信停止エンドポイントは CAMPAIGN_TRACKING_KEY +
+	// PHOX_API_PUBLIC_BASE_URL が揃ったときだけ有効になる (worker 側で判定)。
+	var campaignService *campaignservice.CampaignService
+	var campaignTokenizer *campaignpkg.Tokenizer
+	var campaignWorker *campaignpkg.Worker
+	if mailboxService != nil {
+		if cfg.CampaignTrackingKey != "" {
+			keyBytes, kerr := base64.StdEncoding.DecodeString(cfg.CampaignTrackingKey)
+			if kerr != nil {
+				log.Fatal().Err(kerr).Msg("Failed to decode CAMPAIGN_TRACKING_KEY (base64 32 byte expected)")
+			}
+			campaignTokenizer = campaignpkg.NewTokenizer(keyBytes)
+		} else {
+			log.Warn().Msg("CAMPAIGN_TRACKING_KEY not set — campaign sending disabled (CRUD only)")
+		}
+		campaignService = campaignservice.NewCampaignService(
+			queries, connPool, mailboxSender, mailboxCipher, campaignTokenizer, publicBaseURL)
+		campaignWorker = campaignpkg.NewWorker(
+			queries, mailboxSender, mailboxCipher, rdb, campaignTokenizer, publicBaseURL)
+		log.Info().
+			Bool("worker_enabled", campaignWorker != nil).
+			Msg("CampaignService enabled")
+	}
+
 	// Zoom Webhook handler (着信・通話終了・録音完了)
 	// ZOOM_WEBHOOK_SECRET 設定時は signature 検証 + URL validation challenge を
 	// その鍵で HMAC-SHA256 する。空なら署名検証スキップ (dev / 移行期)。
@@ -531,6 +561,16 @@ func main() {
 	if mailboxService != nil {
 		mailboxPath, mailboxHandler := mailboxv1connect.NewMailboxServiceHandler(mailboxService, interceptors)
 		mux.Handle(mailboxPath, mailboxHandler)
+	}
+	if campaignService != nil {
+		campaignPath, campaignHandler := campaignv1connect.NewCampaignServiceHandler(campaignService, interceptors)
+		mux.Handle(campaignPath, campaignHandler)
+	}
+	// Phase 27a: 配信停止エンドポイント (非認証・HMAC トークンで防護)。
+	// GET は人間がリンクを踏む、POST は RFC 8058 One-Click。
+	if trackingHandler := campaignpkg.NewTrackingHandler(queries, campaignTokenizer); trackingHandler != nil {
+		mux.HandleFunc("GET /u/{token}", trackingHandler.Unsubscribe)
+		mux.HandleFunc("POST /u/{token}", trackingHandler.Unsubscribe)
 	}
 	contactPath, contactHandler := contactv1connect.NewContactServiceHandler(contactService, interceptors)
 	statusPath, statusHandler := statusv1connect.NewStatusServiceHandler(statusService, interceptors)
@@ -648,6 +688,13 @@ func main() {
 	waitGroup.Go(func() error {
 		return sseHub.Run(ctx)
 	})
+
+	// Phase 27: キャンペーン送信 worker (Redis leader lock + CAS claim)。
+	if campaignWorker != nil {
+		waitGroup.Go(func() error {
+			return campaignWorker.Run(ctx)
+		})
+	}
 
 	waitGroup.Go(func() error {
 		log.Info().Msgf("Start Connect-Go server at %s", server.Addr)

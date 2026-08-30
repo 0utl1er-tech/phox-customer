@@ -86,6 +86,71 @@ type Book struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+type Campaign struct {
+	ID                 uuid.UUID          `json:"id"`
+	CompanyID          uuid.UUID          `json:"company_id"`
+	CreatedBy          string             `json:"created_by"`
+	Name               string             `json:"name"`
+	Status             string             `json:"status"`
+	Subject            string             `json:"subject"`
+	Body               string             `json:"body"`
+	TrackOpens         bool               `json:"track_opens"`
+	TrackClicks        bool               `json:"track_clicks"`
+	SendStartHour      int32              `json:"send_start_hour"`
+	SendEndHour        int32              `json:"send_end_hour"`
+	SendDays           int32              `json:"send_days"`
+	DailyCapPerMailbox int32              `json:"daily_cap_per_mailbox"`
+	MinIntervalSec     int32              `json:"min_interval_sec"`
+	WarmupEnabled      bool               `json:"warmup_enabled"`
+	SenderOrg          string             `json:"sender_org"`
+	SenderAddress      string             `json:"sender_address"`
+	SenderContact      string             `json:"sender_contact"`
+	StartedAt          pgtype.Timestamptz `json:"started_at"`
+	CompletedAt        pgtype.Timestamptz `json:"completed_at"`
+	CreatedAt          time.Time          `json:"created_at"`
+	UpdatedAt          time.Time          `json:"updated_at"`
+}
+
+type CampaignEvent struct {
+	ID          uuid.UUID `json:"id"`
+	RecipientID uuid.UUID `json:"recipient_id"`
+	Kind        string    `json:"kind"`
+	Url         string    `json:"url"`
+	UserAgent   string    `json:"user_agent"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+type CampaignLink struct {
+	CampaignID uuid.UUID `json:"campaign_id"`
+	Idx        int32     `json:"idx"`
+	Url        string    `json:"url"`
+}
+
+type CampaignMailbox struct {
+	CampaignID uuid.UUID `json:"campaign_id"`
+	MailboxID  uuid.UUID `json:"mailbox_id"`
+}
+
+type CampaignRecipient struct {
+	ID             uuid.UUID          `json:"id"`
+	CampaignID     uuid.UUID          `json:"campaign_id"`
+	CustomerID     uuid.UUID          `json:"customer_id"`
+	Email          string             `json:"email"`
+	Status         string             `json:"status"`
+	Attempts       int32              `json:"attempts"`
+	MailboxID      pgtype.UUID        `json:"mailbox_id"`
+	MessageID      pgtype.Text        `json:"message_id"`
+	Error          string             `json:"error"`
+	SentAt         pgtype.Timestamptz `json:"sent_at"`
+	FirstOpenedAt  pgtype.Timestamptz `json:"first_opened_at"`
+	FirstClickedAt pgtype.Timestamptz `json:"first_clicked_at"`
+	RepliedAt      pgtype.Timestamptz `json:"replied_at"`
+	BouncedAt      pgtype.Timestamptz `json:"bounced_at"`
+	UnsubscribedAt pgtype.Timestamptz `json:"unsubscribed_at"`
+	LockedAt       pgtype.Timestamptz `json:"locked_at"`
+	CreatedAt      time.Time          `json:"created_at"`
+}
+
 type Company struct {
 	ID        uuid.UUID `json:"id"`
 	Name      string    `json:"name"`
@@ -201,6 +266,16 @@ type Status struct {
 	Ng        bool      `json:"ng"`
 	UpdatedAt time.Time `json:"updated_at"`
 	CreatedAt time.Time `json:"created_at"`
+}
+
+type Suppression struct {
+	ID         uuid.UUID   `json:"id"`
+	CompanyID  uuid.UUID   `json:"company_id"`
+	Email      string      `json:"email"`
+	Reason     string      `json:"reason"`
+	CampaignID pgtype.UUID `json:"campaign_id"`
+	Note       string      `json:"note"`
+	CreatedAt  time.Time   `json:"created_at"`
 }
 
 type User struct {
