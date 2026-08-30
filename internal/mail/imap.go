@@ -53,6 +53,13 @@ type ParsedMessage struct {
 	// envelope のみで軽量なまま — Phase 14 の設計を維持)。
 	Body            string   // text/plain (無ければ HTML のタグ除去)
 	AttachmentNames []string // 添付ファイル名 (中身は取らない)
+
+	// Phase 27c: キャンペーン返信/バウンス紐付け用。
+	// InReplyTo は envelope 由来 (FetchSince でも埋まる)、References と DSN は
+	// 生ヘッダ解析が必要なので FetchSinceFull でのみ埋まる。
+	InReplyTo  []string // 返信元 Message-ID (bracket 除去済み)
+	References []string // References ヘッダの Message-ID 列 (bracket 除去済み)
+	DSN        *DSNInfo // 配送失敗レポート (DSN) なら non-nil
 }
 
 // IMAPClient は imapclient.Client を phox 用途にラップする。
@@ -197,6 +204,11 @@ func (ic *IMAPClient) fetchSince(mailbox string, since time.Time, withBody bool)
 		if len(buf.Envelope.From) > 0 {
 			pm.From = buf.Envelope.From[0].Addr()
 		}
+		for _, id := range buf.Envelope.InReplyTo {
+			if n := normalizeMessageID(id); n != "" {
+				pm.InReplyTo = append(pm.InReplyTo, n)
+			}
+		}
 		for _, a := range buf.Envelope.To {
 			if addr := a.Addr(); addr != "" {
 				pm.To = append(pm.To, addr)
@@ -212,6 +224,9 @@ func (ic *IMAPClient) fetchSince(mailbox string, since time.Time, withBody bool)
 				body, atts := parseBodyAndAttachments(raw)
 				pm.Body = body
 				pm.AttachmentNames = atts
+				// Phase 27c: References + DSN は生ヘッダからのみ取れる
+				pm.References = parseReferences(raw)
+				pm.DSN = ParseDSN(raw)
 			}
 		}
 		msgs = append(msgs, pm)
