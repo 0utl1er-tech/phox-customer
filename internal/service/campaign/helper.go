@@ -27,6 +27,19 @@ func (s *CampaignService) campaignToProto(ctx context.Context, c db.Campaign) (*
 	for _, mb := range mailboxes {
 		mailboxIDs = append(mailboxIDs, mb.ID.String())
 	}
+	steps, err := s.queries.ListCampaignSteps(ctx, c.ID)
+	if err != nil {
+		return nil, err
+	}
+	followups := make([]*campaignv1.CampaignFollowup, 0, len(steps))
+	for _, st := range steps {
+		followups = append(followups, &campaignv1.CampaignFollowup{
+			StepNo:   st.StepNo,
+			WaitDays: st.WaitDays,
+			Subject:  st.Subject,
+			Body:     st.Body,
+		})
+	}
 	p := &campaignv1.Campaign{
 		Id:          c.ID.String(),
 		Name:        c.Name,
@@ -49,6 +62,7 @@ func (s *CampaignService) campaignToProto(ctx context.Context, c db.Campaign) (*
 			SenderContact: c.SenderContact,
 		},
 		MailboxIds: mailboxIDs,
+		Followups:  followups,
 		Stats: &campaignv1.CampaignStats{
 			Total:        int32(stats.Total),
 			Queued:       int32(stats.Queued),
@@ -59,7 +73,8 @@ func (s *CampaignService) campaignToProto(ctx context.Context, c db.Campaign) (*
 			Clicked:      int32(stats.Clicked),
 			Replied:      int32(stats.Replied),
 			Bounced:      int32(stats.Bounced),
-			Unsubscribed: int32(stats.Unsubscribed),
+			Unsubscribed:    int32(stats.Unsubscribed),
+			WaitingFollowup: int32(stats.WaitingFollowup),
 		},
 		CreatedBy: c.CreatedBy,
 		CreatedAt: timestamppb.New(c.CreatedAt),
@@ -105,6 +120,7 @@ func recipientRowToProto(r db.ListCampaignRecipientsRow) *campaignv1.CampaignRec
 		Email:               r.Email,
 		Status:              r.Status,
 		Error:               r.Error,
+		CurrentStep:         r.CurrentStep,
 	}
 	setTS := func(dst **timestamppb.Timestamp, src pgtype.Timestamptz) {
 		if src.Valid {
@@ -117,6 +133,7 @@ func recipientRowToProto(r db.ListCampaignRecipientsRow) *campaignv1.CampaignRec
 	setTS(&p.RepliedAt, r.RepliedAt)
 	setTS(&p.BouncedAt, r.BouncedAt)
 	setTS(&p.UnsubscribedAt, r.UnsubscribedAt)
+	setTS(&p.NextStepAt, r.NextStepAt)
 	return p
 }
 

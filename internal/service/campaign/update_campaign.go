@@ -97,6 +97,24 @@ func (s *CampaignService) UpdateCampaign(
 		}
 	}
 
+	// Phase 27e: フォローアップの全置換 (指定時のみ)。
+	if len(req.Msg.Followups) > 0 {
+		if err := s.queries.DeleteCampaignSteps(ctx, c.ID); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("replace followups: %w", err))
+		}
+		for i, fu := range req.Msg.Followups {
+			if err := s.queries.CreateCampaignStep(ctx, db.CreateCampaignStepParams{
+				CampaignID: c.ID,
+				StepNo:     int32(i + 2),
+				WaitDays:   fu.WaitDays,
+				Subject:    fu.Subject,
+				Body:       fu.Body,
+			}); err != nil {
+				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("replace followups: %w", err))
+			}
+		}
+	}
+
 	updated, err := s.queries.UpdateCampaignDraft(ctx, params)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("update campaign: %w", err))

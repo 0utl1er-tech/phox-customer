@@ -115,6 +115,12 @@ func (w *Worker) tick(ctx context.Context) {
 		return
 	}
 	for _, c := range campaigns {
+		// Phase 27e: 返信/配信停止/バウンスが付いたフォローアップ待ちを終了させる。
+		if n, ferr := w.queries.FinalizeStoppedFollowups(ctx, c.ID); ferr != nil {
+			log.Error().Err(ferr).Str("campaign", c.ID.String()).Msg("campaign: finalize stopped followups failed")
+		} else if n > 0 {
+			log.Info().Int64("count", n).Str("campaign", c.ID.String()).Msg("campaign: followup sequences stopped (reply/unsub/bounce)")
+		}
 		// 完了判定は送信窓の外でも行う (窓の外で queued 0 になっても閉じたい)。
 		if done, err := w.completeIfDrained(ctx, c); err != nil || done {
 			continue
@@ -204,7 +210,37 @@ func (w *Worker) sendOne(ctx context.Context, c db.Campaign, now time.Time) {
 		return
 	}
 
+	// Phase 27e: 送るステップを決める。sent_at 無し = 1 通目、
+	// あり = current_step (最後に送った番号) の次のフォローアップ。
+	stepToSend := int32(1)
+	if rec.SentAt.Valid {
+		stepToSend = rec.CurrentStep + 1
+	}
+	steps, err := w.queries.ListCampaignSteps(ctx, c.ID)
+	if err != nil {
+		log.Error().Err(err).Str("campaign", c.ID.String()).Msg("campaign: list steps failed")
+		w.requeueTransient(ctx, rec, mb.ID, now, "list steps: "+err.Error())
+		return
+	}
+	var followup *db.CampaignStep
+	for i := range steps {
+		if steps[i].StepNo == stepToSend {
+			followup = &steps[i]
+		}
+	}
+	if stepToSend > 1 && followup == nil {
+		// フォローアップが途中で削除された等 — シーケンス終了として確定。
+		_ = w.queries.MarkRecipientStepSent(ctx, db.MarkRecipientStepSentParams{
+			ID: rec.ID, MessageID: rec.MessageID, CurrentStep: rec.CurrentStep,
+			NextStepAt: pgtype.Timestamptz{Valid: false},
+		})
+		return
+	}
+
 	messageID := fmt.Sprintf("cmp-%s@%s", rec.ID.String(), domainOf(mb.Address))
+	if stepToSend > 1 {
+		messageID = fmt.Sprintf("cmp-%s-s%d@%s", rec.ID.String(), stepToSend, domainOf(mb.Address))
+	}
 	unsubURL := w.publicBase + "/u/" + w.tokenizer.Token(KindUnsubscribe, rec.ID, 0)
 	vars := map[string]string{
 		"customer_name":        customer.Name,
@@ -215,13 +251,32 @@ func (w *Worker) sendOne(ctx context.Context, c db.Campaign, now time.Time) {
 		"sender_mail":          mb.Address,
 		"today":                TodayJST(now),
 	}
-	subject := Render(c.Subject, vars)
-	body := RenderBody(c.Body, vars, SenderInfo{
+	subjectTpl, bodyTpl := c.Subject, c.Body
+	if followup != nil && stepToSend > 1 {
+		bodyTpl = followup.Body
+		if followup.Subject != "" {
+			subjectTpl = followup.Subject
+		}
+	}
+	subject := Render(subjectTpl, vars)
+	if stepToSend > 1 && (followup == nil || followup.Subject == "") {
+		subject = "Re: " + Render(c.Subject, vars) // スレッド返信の体裁
+	}
+	body := RenderBody(bodyTpl, vars, SenderInfo{
 		Org: c.SenderOrg, Address: c.SenderAddress, Contact: c.SenderContact,
 	}, unsubURL)
 	headers := map[string]string{
 		"List-Unsubscribe":      "<" + unsubURL + ">",
 		"List-Unsubscribe-Post": "List-Unsubscribe=One-Click", // RFC 8058
+	}
+	// フォローアップは同一スレッドへの返信として送る (到達率と受信者体験のため)。
+	if stepToSend > 1 && rec.MessageID.Valid {
+		headers["In-Reply-To"] = "<" + rec.MessageID.String + ">"
+		refs := "<" + rec.MessageID.String + ">"
+		if rec.FirstMessageID.Valid && rec.FirstMessageID.String != rec.MessageID.String {
+			refs = "<" + rec.FirstMessageID.String + "> " + refs
+		}
+		headers["References"] = refs
 	}
 
 	// Phase 27b: トラッキング有効時のみ HTML alt パートを付ける
@@ -246,8 +301,20 @@ func (w *Worker) sendOne(ctx context.Context, c db.Campaign, now time.Time) {
 		return
 	}
 
-	if merr := w.queries.MarkRecipientSent(ctx, db.MarkRecipientSentParams{
-		ID: rec.ID, MessageID: pgtype.Text{String: messageID, Valid: true},
+	// 次のフォローアップがあれば待機時刻をセットして queued に戻す。
+	nextStepAt := pgtype.Timestamptz{Valid: false}
+	for i := range steps {
+		if steps[i].StepNo == stepToSend+1 {
+			nextStepAt = pgtype.Timestamptz{
+				Time: now.Add(time.Duration(steps[i].WaitDays) * 24 * time.Hour), Valid: true,
+			}
+		}
+	}
+	if merr := w.queries.MarkRecipientStepSent(ctx, db.MarkRecipientStepSentParams{
+		ID:          rec.ID,
+		MessageID:   pgtype.Text{String: messageID, Valid: true},
+		CurrentStep: stepToSend,
+		NextStepAt:  nextStepAt,
 	}); merr != nil {
 		// 送信済みなのに記録に失敗 — janitor が stale-claim で failed に倒すため
 		// 二重送信にはならないが、必ずログに残す。
