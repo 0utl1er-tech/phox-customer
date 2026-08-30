@@ -147,6 +147,47 @@ func TestInSendWindow(t *testing.T) {
 	}
 }
 
+func TestEstimateCompletion(t *testing.T) {
+	// 水曜 10:00 JST、窓 9-18、間隔 60 秒、mailbox 1 台、warmup 無し、cap 100。
+	now := time.Date(2026, 9, 2, 10, 0, 0, 0, jst)
+	c := db.Campaign{
+		SendStartHour: 9, SendEndHour: 18, SendDays: 31,
+		DailyCapPerMailbox: 100, MinIntervalSec: 60, WarmupEnabled: false,
+	}
+	// 残 30 通 → 30 分後に完了するはず。
+	eta := EstimateCompletion(c, 1, 30, 0, now)
+	if eta == nil {
+		t.Fatal("expected eta")
+	}
+	if got := eta.Sub(now); got < 29*time.Minute || got > 31*time.Minute {
+		t.Errorf("eta = +%v, want ~30m", got)
+	}
+
+	// 残 150 通、cap 100 → 今日 100 通 + 翌日 50 通 → 木曜 9:50 頃。
+	eta = EstimateCompletion(c, 1, 150, 0, now)
+	if eta == nil {
+		t.Fatal("expected eta")
+	}
+	if eta.In(jst).Day() != 3 || eta.In(jst).Hour() != 9 {
+		t.Errorf("eta = %v, want Thu ~09:50 JST", eta.In(jst))
+	}
+
+	// 金曜 17:59 に残 100 通 → 週末スキップで月曜に完了。
+	fri := time.Date(2026, 9, 4, 17, 59, 0, 0, jst)
+	eta = EstimateCompletion(c, 1, 100, 99, fri) // 今日はほぼ送り切っている
+	if eta == nil {
+		t.Fatal("expected eta")
+	}
+	if eta.In(jst).Weekday() != time.Monday {
+		t.Errorf("eta weekday = %v, want Monday", eta.In(jst).Weekday())
+	}
+
+	// queued 0 / mailbox 0 は nil。
+	if EstimateCompletion(c, 1, 0, 0, now) != nil || EstimateCompletion(c, 0, 10, 0, now) != nil {
+		t.Error("expected nil for no work / no mailboxes")
+	}
+}
+
 func TestEffectiveCapWarmup(t *testing.T) {
 	w := &Worker{}
 	now := time.Now()

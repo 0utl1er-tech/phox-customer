@@ -206,7 +206,8 @@ SELECT
   count(*) FILTER (WHERE first_clicked_at IS NOT NULL) AS clicked,
   count(*) FILTER (WHERE replied_at IS NOT NULL)    AS replied,
   count(*) FILTER (WHERE bounced_at IS NOT NULL)    AS bounced,
-  count(*) FILTER (WHERE unsubscribed_at IS NOT NULL)  AS unsubscribed
+  count(*) FILTER (WHERE unsubscribed_at IS NOT NULL)  AS unsubscribed,
+  max(sent_at) AS last_sent_at
 FROM "CampaignRecipient"
 WHERE campaign_id = $1;
 
@@ -283,3 +284,34 @@ WHERE company_id = $1 AND email = ANY(sqlc.arg(emails)::varchar[]);
 
 -- name: ListCampaignLinks :many
 SELECT * FROM "CampaignLink" WHERE campaign_id = $1 ORDER BY idx ASC;
+
+-- name: GetCampaignDailyStats :many
+-- ダッシュボードの折れ線グラフ用 (JST 日次)。各指標は各時刻列の日付で集計。
+SELECT t.day::date AS day,
+  count(*) FILTER (WHERE t.kind = 'sent')         AS sent,
+  count(*) FILTER (WHERE t.kind = 'opened')       AS opened,
+  count(*) FILTER (WHERE t.kind = 'clicked')      AS clicked,
+  count(*) FILTER (WHERE t.kind = 'replied')      AS replied,
+  count(*) FILTER (WHERE t.kind = 'bounced')      AS bounced,
+  count(*) FILTER (WHERE t.kind = 'unsubscribed') AS unsubscribed
+FROM (
+  SELECT (r1.sent_at AT TIME ZONE 'Asia/Tokyo')::date AS day, 'sent'::text AS kind
+    FROM "CampaignRecipient" r1 WHERE r1.campaign_id = sqlc.arg(campaign_id) AND r1.sent_at IS NOT NULL
+  UNION ALL
+  SELECT (r2.first_opened_at AT TIME ZONE 'Asia/Tokyo')::date, 'opened'
+    FROM "CampaignRecipient" r2 WHERE r2.campaign_id = sqlc.arg(campaign_id) AND r2.first_opened_at IS NOT NULL
+  UNION ALL
+  SELECT (r3.first_clicked_at AT TIME ZONE 'Asia/Tokyo')::date, 'clicked'
+    FROM "CampaignRecipient" r3 WHERE r3.campaign_id = sqlc.arg(campaign_id) AND r3.first_clicked_at IS NOT NULL
+  UNION ALL
+  SELECT (r4.replied_at AT TIME ZONE 'Asia/Tokyo')::date, 'replied'
+    FROM "CampaignRecipient" r4 WHERE r4.campaign_id = sqlc.arg(campaign_id) AND r4.replied_at IS NOT NULL
+  UNION ALL
+  SELECT (r5.bounced_at AT TIME ZONE 'Asia/Tokyo')::date, 'bounced'
+    FROM "CampaignRecipient" r5 WHERE r5.campaign_id = sqlc.arg(campaign_id) AND r5.bounced_at IS NOT NULL
+  UNION ALL
+  SELECT (r6.unsubscribed_at AT TIME ZONE 'Asia/Tokyo')::date, 'unsubscribed'
+    FROM "CampaignRecipient" r6 WHERE r6.campaign_id = sqlc.arg(campaign_id) AND r6.unsubscribed_at IS NOT NULL
+) t
+GROUP BY t.day
+ORDER BY t.day ASC;

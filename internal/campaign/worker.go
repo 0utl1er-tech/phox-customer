@@ -353,7 +353,7 @@ func (w *Worker) pickMailbox(ctx context.Context, c db.Campaign, now time.Time) 
 		}
 		return db.Mailbox{}, false
 	}
-	midnight := jstMidnight(now)
+	midnight := JSTMidnight(now)
 	var best db.Mailbox
 	var bestNext time.Time
 	found := false
@@ -399,7 +399,8 @@ func (w *Worker) effectiveCap(c db.Campaign, now time.Time) int32 {
 	return cap
 }
 
-func jstMidnight(now time.Time) time.Time {
+// JSTMidnight は JST の当日 0 時 (daily cap の起算点)。
+func JSTMidnight(now time.Time) time.Time {
 	n := now.In(jst)
 	return time.Date(n.Year(), n.Month(), n.Day(), 0, 0, 0, 0, jst)
 }

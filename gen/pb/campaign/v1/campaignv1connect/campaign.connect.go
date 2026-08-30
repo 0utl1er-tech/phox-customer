@@ -63,6 +63,9 @@ const (
 	// CampaignServiceListRecipientEventsProcedure is the fully-qualified name of the CampaignService's
 	// ListRecipientEvents RPC.
 	CampaignServiceListRecipientEventsProcedure = "/campaign.v1.CampaignService/ListRecipientEvents"
+	// CampaignServiceGetCampaignTimeseriesProcedure is the fully-qualified name of the
+	// CampaignService's GetCampaignTimeseries RPC.
+	CampaignServiceGetCampaignTimeseriesProcedure = "/campaign.v1.CampaignService/GetCampaignTimeseries"
 	// CampaignServiceRequeueFailedRecipientsProcedure is the fully-qualified name of the
 	// CampaignService's RequeueFailedRecipients RPC.
 	CampaignServiceRequeueFailedRecipientsProcedure = "/campaign.v1.CampaignService/RequeueFailedRecipients"
@@ -99,6 +102,8 @@ type CampaignServiceClient interface {
 	ListCampaignRecipients(context.Context, *connect.Request[v1.ListCampaignRecipientsRequest]) (*connect.Response[v1.ListCampaignRecipientsResponse], error)
 	// 受信者毎のイベント履歴 (open/click/unsubscribe/reply/bounce)。ドリルダウン用。
 	ListRecipientEvents(context.Context, *connect.Request[v1.ListRecipientEventsRequest]) (*connect.Response[v1.ListRecipientEventsResponse], error)
+	// 日次時系列 (送信/開封/クリック/返信/バウンス/配停)。折れ線グラフ用。
+	GetCampaignTimeseries(context.Context, *connect.Request[v1.GetCampaignTimeseriesRequest]) (*connect.Response[v1.GetCampaignTimeseriesResponse], error)
 	// failed の受信者を queued に戻す (明示操作のみ — 自動再送はしない)。
 	RequeueFailedRecipients(context.Context, *connect.Request[v1.RequeueFailedRecipientsRequest]) (*connect.Response[v1.RequeueFailedRecipientsResponse], error)
 	// レンダリング済み本文 (フッター込み) を指定アドレスへテスト送信。
@@ -181,6 +186,12 @@ func NewCampaignServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(campaignServiceMethods.ByName("ListRecipientEvents")),
 			connect.WithClientOptions(opts...),
 		),
+		getCampaignTimeseries: connect.NewClient[v1.GetCampaignTimeseriesRequest, v1.GetCampaignTimeseriesResponse](
+			httpClient,
+			baseURL+CampaignServiceGetCampaignTimeseriesProcedure,
+			connect.WithSchema(campaignServiceMethods.ByName("GetCampaignTimeseries")),
+			connect.WithClientOptions(opts...),
+		),
 		requeueFailedRecipients: connect.NewClient[v1.RequeueFailedRecipientsRequest, v1.RequeueFailedRecipientsResponse](
 			httpClient,
 			baseURL+CampaignServiceRequeueFailedRecipientsProcedure,
@@ -226,6 +237,7 @@ type campaignServiceClient struct {
 	deleteCampaign          *connect.Client[v1.DeleteCampaignRequest, v1.DeleteCampaignResponse]
 	listCampaignRecipients  *connect.Client[v1.ListCampaignRecipientsRequest, v1.ListCampaignRecipientsResponse]
 	listRecipientEvents     *connect.Client[v1.ListRecipientEventsRequest, v1.ListRecipientEventsResponse]
+	getCampaignTimeseries   *connect.Client[v1.GetCampaignTimeseriesRequest, v1.GetCampaignTimeseriesResponse]
 	requeueFailedRecipients *connect.Client[v1.RequeueFailedRecipientsRequest, v1.RequeueFailedRecipientsResponse]
 	sendTestEmail           *connect.Client[v1.SendTestEmailRequest, v1.SendTestEmailResponse]
 	listSuppressions        *connect.Client[v1.ListSuppressionsRequest, v1.ListSuppressionsResponse]
@@ -283,6 +295,11 @@ func (c *campaignServiceClient) ListRecipientEvents(ctx context.Context, req *co
 	return c.listRecipientEvents.CallUnary(ctx, req)
 }
 
+// GetCampaignTimeseries calls campaign.v1.CampaignService.GetCampaignTimeseries.
+func (c *campaignServiceClient) GetCampaignTimeseries(ctx context.Context, req *connect.Request[v1.GetCampaignTimeseriesRequest]) (*connect.Response[v1.GetCampaignTimeseriesResponse], error) {
+	return c.getCampaignTimeseries.CallUnary(ctx, req)
+}
+
 // RequeueFailedRecipients calls campaign.v1.CampaignService.RequeueFailedRecipients.
 func (c *campaignServiceClient) RequeueFailedRecipients(ctx context.Context, req *connect.Request[v1.RequeueFailedRecipientsRequest]) (*connect.Response[v1.RequeueFailedRecipientsResponse], error) {
 	return c.requeueFailedRecipients.CallUnary(ctx, req)
@@ -327,6 +344,8 @@ type CampaignServiceHandler interface {
 	ListCampaignRecipients(context.Context, *connect.Request[v1.ListCampaignRecipientsRequest]) (*connect.Response[v1.ListCampaignRecipientsResponse], error)
 	// 受信者毎のイベント履歴 (open/click/unsubscribe/reply/bounce)。ドリルダウン用。
 	ListRecipientEvents(context.Context, *connect.Request[v1.ListRecipientEventsRequest]) (*connect.Response[v1.ListRecipientEventsResponse], error)
+	// 日次時系列 (送信/開封/クリック/返信/バウンス/配停)。折れ線グラフ用。
+	GetCampaignTimeseries(context.Context, *connect.Request[v1.GetCampaignTimeseriesRequest]) (*connect.Response[v1.GetCampaignTimeseriesResponse], error)
 	// failed の受信者を queued に戻す (明示操作のみ — 自動再送はしない)。
 	RequeueFailedRecipients(context.Context, *connect.Request[v1.RequeueFailedRecipientsRequest]) (*connect.Response[v1.RequeueFailedRecipientsResponse], error)
 	// レンダリング済み本文 (フッター込み) を指定アドレスへテスト送信。
@@ -405,6 +424,12 @@ func NewCampaignServiceHandler(svc CampaignServiceHandler, opts ...connect.Handl
 		connect.WithSchema(campaignServiceMethods.ByName("ListRecipientEvents")),
 		connect.WithHandlerOptions(opts...),
 	)
+	campaignServiceGetCampaignTimeseriesHandler := connect.NewUnaryHandler(
+		CampaignServiceGetCampaignTimeseriesProcedure,
+		svc.GetCampaignTimeseries,
+		connect.WithSchema(campaignServiceMethods.ByName("GetCampaignTimeseries")),
+		connect.WithHandlerOptions(opts...),
+	)
 	campaignServiceRequeueFailedRecipientsHandler := connect.NewUnaryHandler(
 		CampaignServiceRequeueFailedRecipientsProcedure,
 		svc.RequeueFailedRecipients,
@@ -457,6 +482,8 @@ func NewCampaignServiceHandler(svc CampaignServiceHandler, opts ...connect.Handl
 			campaignServiceListCampaignRecipientsHandler.ServeHTTP(w, r)
 		case CampaignServiceListRecipientEventsProcedure:
 			campaignServiceListRecipientEventsHandler.ServeHTTP(w, r)
+		case CampaignServiceGetCampaignTimeseriesProcedure:
+			campaignServiceGetCampaignTimeseriesHandler.ServeHTTP(w, r)
 		case CampaignServiceRequeueFailedRecipientsProcedure:
 			campaignServiceRequeueFailedRecipientsHandler.ServeHTTP(w, r)
 		case CampaignServiceSendTestEmailProcedure:
@@ -514,6 +541,10 @@ func (UnimplementedCampaignServiceHandler) ListCampaignRecipients(context.Contex
 
 func (UnimplementedCampaignServiceHandler) ListRecipientEvents(context.Context, *connect.Request[v1.ListRecipientEventsRequest]) (*connect.Response[v1.ListRecipientEventsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("campaign.v1.CampaignService.ListRecipientEvents is not implemented"))
+}
+
+func (UnimplementedCampaignServiceHandler) GetCampaignTimeseries(context.Context, *connect.Request[v1.GetCampaignTimeseriesRequest]) (*connect.Response[v1.GetCampaignTimeseriesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("campaign.v1.CampaignService.GetCampaignTimeseries is not implemented"))
 }
 
 func (UnimplementedCampaignServiceHandler) RequeueFailedRecipients(context.Context, *connect.Request[v1.RequeueFailedRecipientsRequest]) (*connect.Response[v1.RequeueFailedRecipientsResponse], error) {

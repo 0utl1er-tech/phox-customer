@@ -2,9 +2,11 @@ package campaign
 
 import (
 	"context"
+	"time"
 
 	campaignv1 "github.com/0utl1er-tech/phox-customer/gen/pb/campaign/v1"
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
+	campaignpkg "github.com/0utl1er-tech/phox-customer/internal/campaign"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -68,6 +70,28 @@ func (s *CampaignService) campaignToProto(ctx context.Context, c db.Campaign) (*
 	}
 	if c.CompletedAt.Valid {
 		p.CompletedAt = timestamppb.New(c.CompletedAt.Time)
+	}
+	// 「今動いている」表示用の最終送信時刻 (max() は sqlc 上 interface{})。
+	if t, ok := stats.LastSentAt.(time.Time); ok && !t.IsZero() {
+		p.Stats.LastSentAt = timestamppb.New(t)
+	}
+	// running 中のみ完了予定時刻を見積もる (ペーシング設定のシミュレーション)。
+	if c.Status == "running" && stats.Queued > 0 {
+		now := time.Now()
+		midnight := campaignpkg.JSTMidnight(now)
+		var sentToday int64
+		for _, mb := range mailboxes {
+			n, cerr := s.queries.CountSentSinceByMailbox(ctx, db.CountSentSinceByMailboxParams{
+				MailboxID: pgtype.UUID{Bytes: mb.ID, Valid: true},
+				SentAt:    pgtype.Timestamptz{Time: midnight, Valid: true},
+			})
+			if cerr == nil {
+				sentToday += n
+			}
+		}
+		if eta := campaignpkg.EstimateCompletion(c, len(mailboxes), stats.Queued, sentToday, now); eta != nil {
+			p.EstimatedCompletionAt = timestamppb.New(*eta)
+		}
 	}
 	return p, nil
 }

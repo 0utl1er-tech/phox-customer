@@ -115,6 +115,8 @@ type Querier interface {
 	// 「Status 削除済み / 未設定」のコールを表す。
 	GetCallStatsByBook(ctx context.Context, arg GetCallStatsByBookParams) ([]GetCallStatsByBookRow, error)
 	GetCampaign(ctx context.Context, id uuid.UUID) (Campaign, error)
+	// ダッシュボードの折れ線グラフ用 (JST 日次)。各指標は各時刻列の日付で集計。
+	GetCampaignDailyStats(ctx context.Context, campaignID uuid.UUID) ([]GetCampaignDailyStatsRow, error)
 	GetCampaignLink(ctx context.Context, arg GetCampaignLinkParams) (CampaignLink, error)
 	GetCampaignRecipient(ctx context.Context, id uuid.UUID) (CampaignRecipient, error)
 	GetCampaignRecipientByMessageID(ctx context.Context, messageID pgtype.Text) (CampaignRecipient, error)

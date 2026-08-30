@@ -31,6 +31,8 @@ service CampaignService {
   rpc ListCampaignRecipients(ListCampaignRecipientsRequest) returns (ListCampaignRecipientsResponse);
   // 受信者毎のイベント履歴 (open/click/unsubscribe/reply/bounce)。ドリルダウン用。
   rpc ListRecipientEvents(ListRecipientEventsRequest) returns (ListRecipientEventsResponse);
+  // 日次時系列 (送信/開封/クリック/返信/バウンス/配停)。折れ線グラフ用。
+  rpc GetCampaignTimeseries(GetCampaignTimeseriesRequest) returns (GetCampaignTimeseriesResponse);
   // failed の受信者を queued に戻す (明示操作のみ — 自動再送はしない)。
   rpc RequeueFailedRecipients(RequeueFailedRecipientsRequest) returns (RequeueFailedRecipientsResponse);
   // レンダリング済み本文 (フッター込み) を指定アドレスへテスト送信。
@@ -72,6 +74,8 @@ message CampaignStats {
   int32 replied = 8;
   int32 bounced = 9;
   int32 unsubscribed = 10;
+  // 最後に送信した時刻 (「今動いている」表示用)。
+  optional google.protobuf.Timestamp last_sent_at = 11;
 }
 
 message Campaign {
@@ -91,6 +95,9 @@ message Campaign {
   optional google.protobuf.Timestamp completed_at = 14;
   google.protobuf.Timestamp created_at = 15;
   google.protobuf.Timestamp updated_at = 16;
+  // running 中のみ: ペーシング設定と残数から算出した完了予定時刻 (JST 送信窓・
+  // 曜日・日次上限・warmup を考慮したシミュレーション値、目安)。
+  optional google.protobuf.Timestamp estimated_completion_at = 17;
 }
 
 message CreateCampaignRequest {
@@ -198,6 +205,23 @@ message ListCampaignRecipientsRequest {
 message ListCampaignRecipientsResponse {
   repeated CampaignRecipient recipients = 1;
   int64 total = 2;
+}
+
+message CampaignDailyStat {
+  string date = 1; // "YYYY-MM-DD" (JST)
+  int32 sent = 2;
+  int32 opened = 3;
+  int32 clicked = 4;
+  int32 replied = 5;
+  int32 bounced = 6;
+  int32 unsubscribed = 7;
+}
+
+message GetCampaignTimeseriesRequest {
+  string campaign_id = 1 [(buf.validate.field).string.uuid = true];
+}
+message GetCampaignTimeseriesResponse {
+  repeated CampaignDailyStat days = 1;
 }
 
 message CampaignEvent {
