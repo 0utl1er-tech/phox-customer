@@ -30,6 +30,7 @@ type Querier interface {
 	CountActivitiesByBookID(ctx context.Context, arg CountActivitiesByBookIDParams) (int64, error)
 	CountCampaignRecipients(ctx context.Context, arg CountCampaignRecipientsParams) (int64, error)
 	CountCampaignsByCompany(ctx context.Context, companyID uuid.UUID) (int64, error)
+	CountCustomersByBook(ctx context.Context, bookID uuid.UUID) (int64, error)
 	CountMailboxMessages(ctx context.Context, arg CountMailboxMessagesParams) (int64, error)
 	CountQueuedRecipients(ctx context.Context, campaignID uuid.UUID) (int64, error)
 	// mailbox 毎の daily cap 判定 (全キャンペーン横断)。$2 = JST の当日 0 時。

@@ -30,6 +30,8 @@ message ListCustomerRequest {
 
 message ListCustomerResponse {
   repeated Customer customers = 1;
+  // Book 内の総件数 (ページネーション用)。
+  int64 total_count = 2;
 }
 
 message GetCustomerRequest {
