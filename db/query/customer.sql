@@ -56,6 +56,9 @@ ORDER BY updated_at DESC
 LIMIT $2
 OFFSET $3;
 
+-- name: CountCustomersByBook :one
+SELECT count(*) FROM "Customer" WHERE book_id = $1;
+
 -- name: ListAllCustomers :many
 SELECT
     id,

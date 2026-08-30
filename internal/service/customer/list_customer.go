@@ -37,7 +37,15 @@ func (s *CustomerService) ListCustomer(
 		customerList = append(customerList, listRowToProto(customer))
 	}
 
+	// ページネーション用の総件数。これが無いと UI は 51 件目以降に到達できない
+	// (totalCount がページ内件数にフォールバックし「次へ」が描画されない)。
+	total, err := s.queries.CountCustomersByBook(ctx, bookID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("customer件数の取得に失敗しました: %w", err))
+	}
+
 	return connect.NewResponse(&customerv1.ListCustomerResponse{
-		Customers: customerList,
+		Customers:  customerList,
+		TotalCount: total,
 	}), nil
 }

@@ -1,0 +1,289 @@
+syntax = "proto3";
+
+package campaign.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/0utl1er-tech/phox-customer/gen/pb/campaign/v1;campaignv1";
+
+// CampaignService — コールドメール一斉送信 (Phase 27)。
+// Campaign は会社スコープの「受信者スナップショット + 本文テンプレート +
+// ペーシング設定 + 送信 Mailbox プール」。
+//
+// RBAC: 作成/開始/停止/閲覧はプール内全 Mailbox への editor 以上の
+// MailboxPermit、作成時は受信者が属する全 Book への editor 以上の Permit。
+service CampaignService {
+  // 受信者スナップショットごと作成 (draft)。メール無し/重複/サプレッション済み
+  // は skipped として記録され、内訳がレスポンスで返る。
+  rpc CreateCampaign(CreateCampaignRequest) returns (CreateCampaignResponse);
+  rpc ListCampaigns(ListCampaignsRequest) returns (ListCampaignsResponse);
+  rpc GetCampaign(GetCampaignRequest) returns (GetCampaignResponse);
+  // draft / paused のみ。
+  rpc UpdateCampaign(UpdateCampaignRequest) returns (UpdateCampaignResponse);
+  // 特電法フィールド (sender_org/address/contact) の非空を検証してから running へ。
+  rpc StartCampaign(StartCampaignRequest) returns (StartCampaignResponse);
+  // running <-> paused のトグル。
+  rpc PauseCampaign(PauseCampaignRequest) returns (PauseCampaignResponse);
+  rpc CancelCampaign(CancelCampaignRequest) returns (CancelCampaignResponse);
+  // draft / cancelled のみ削除可。
+  rpc DeleteCampaign(DeleteCampaignRequest) returns (DeleteCampaignResponse);
+  rpc ListCampaignRecipients(ListCampaignRecipientsRequest) returns (ListCampaignRecipientsResponse);
+  // 受信者毎のイベント履歴 (open/click/unsubscribe/reply/bounce)。ドリルダウン用。
+  rpc ListRecipientEvents(ListRecipientEventsRequest) returns (ListRecipientEventsResponse);
+  // 日次時系列 (送信/開封/クリック/返信/バウンス/配停)。折れ線グラフ用。
+  rpc GetCampaignTimeseries(GetCampaignTimeseriesRequest) returns (GetCampaignTimeseriesResponse);
+  // failed の受信者を queued に戻す (明示操作のみ — 自動再送はしない)。
+  rpc RequeueFailedRecipients(RequeueFailedRecipientsRequest) returns (RequeueFailedRecipientsResponse);
+  // レンダリング済み本文 (フッター込み) を指定アドレスへテスト送信。
+  rpc SendTestEmail(SendTestEmailRequest) returns (SendTestEmailResponse);
+
+  // サプレッションリスト (会社単位の配信停止/バウンス/手動除外)。
+  rpc ListSuppressions(ListSuppressionsRequest) returns (ListSuppressionsResponse);
+  rpc AddSuppression(AddSuppressionRequest) returns (AddSuppressionResponse);
+  // reason=manual の行のみ削除可 (unsubscribe/hard_bounce は法令/運用上残す)。
+  rpc RemoveSuppression(RemoveSuppressionRequest) returns (RemoveSuppressionResponse);
+}
+
+// ペーシング設定。worker は Asia/Tokyo で解釈する。
+message CampaignSchedule {
+  int32 send_start_hour = 1 [(buf.validate.field).int32 = {gte: 0, lte: 23}];
+  int32 send_end_hour = 2 [(buf.validate.field).int32 = {gte: 1, lte: 24}];
+  // bitmask Mon=1, Tue=2, Wed=4, Thu=8, Fri=16, Sat=32, Sun=64。0 は平日扱い。
+  int32 send_days = 3 [(buf.validate.field).int32 = {gte: 0, lte: 127}];
+  int32 daily_cap_per_mailbox = 4 [(buf.validate.field).int32 = {gte: 1, lte: 1000}];
+  int32 min_interval_sec = 5 [(buf.validate.field).int32 = {gte: 10, lte: 3600}];
+  bool warmup_enabled = 6;
+}
+
+// 特定電子メール法の送信者表示。全メールのフッターに自動挿入される。
+message CampaignSender {
+  string sender_org = 1;     // 会社名/氏名
+  string sender_address = 2; // 住所
+  string sender_contact = 3; // 電話 or 問い合わせ先
+}
+
+message CampaignStats {
+  int32 total = 1;
+  int32 queued = 2; // queued + sending
+  int32 sent = 3;
+  int32 failed = 4;
+  int32 skipped = 5;
+  int32 opened = 6;
+  int32 clicked = 7;
+  int32 replied = 8;
+  int32 bounced = 9;
+  int32 unsubscribed = 10;
+  // 最後に送信した時刻 (「今動いている」表示用)。
+  optional google.protobuf.Timestamp last_sent_at = 11;
+}
+
+message Campaign {
+  string id = 1;
+  string name = 2;
+  string status = 3; // draft|running|paused|completed|cancelled
+  string subject = 4;
+  string body = 5;
+  bool track_opens = 6;
+  bool track_clicks = 7;
+  CampaignSchedule schedule = 8;
+  CampaignSender sender = 9;
+  repeated string mailbox_ids = 10;
+  CampaignStats stats = 11;
+  string created_by = 12;
+  optional google.protobuf.Timestamp started_at = 13;
+  optional google.protobuf.Timestamp completed_at = 14;
+  google.protobuf.Timestamp created_at = 15;
+  google.protobuf.Timestamp updated_at = 16;
+  // running 中のみ: ペーシング設定と残数から算出した完了予定時刻 (JST 送信窓・
+  // 曜日・日次上限・warmup を考慮したシミュレーション値、目安)。
+  optional google.protobuf.Timestamp estimated_completion_at = 17;
+}
+
+message CreateCampaignRequest {
+  string name = 1 [(buf.validate.field).string.min_len = 1];
+  repeated string customer_ids = 2 [(buf.validate.field).repeated = {min_items: 1, max_items: 10000}];
+  repeated string mailbox_ids = 3 [(buf.validate.field).repeated.min_items = 1];
+  string subject = 4;
+  string body = 5;
+  CampaignSchedule schedule = 6;
+  CampaignSender sender = 7;
+  bool track_opens = 8;
+  bool track_clicks = 9;
+}
+message CreateCampaignResponse {
+  Campaign campaign = 1;
+  // スナップショット時の内訳 (UI が「1,240 選択 → 1,180 queued (60 skipped)」を出す)。
+  int32 queued_count = 2;
+  int32 skipped_no_email = 3;
+  int32 skipped_suppressed = 4;
+  int32 skipped_duplicate = 5;
+}
+
+message ListCampaignsRequest {
+  optional int32 limit = 1 [(buf.validate.field).int32 = {gte: 1, lte: 100}];
+  optional int32 offset = 2 [(buf.validate.field).int32.gte = 0];
+}
+message ListCampaignsResponse {
+  repeated Campaign campaigns = 1;
+  int64 total = 2;
+}
+
+message GetCampaignRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+message GetCampaignResponse {
+  Campaign campaign = 1;
+}
+
+message UpdateCampaignRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+  optional string name = 2;
+  optional string subject = 3;
+  optional string body = 4;
+  optional bool track_opens = 5;
+  optional bool track_clicks = 6;
+  CampaignSchedule schedule = 7;   // 未指定なら変更しない
+  CampaignSender sender = 8;       // 未指定なら変更しない
+  repeated string mailbox_ids = 9; // 空なら変更しない
+}
+message UpdateCampaignResponse {
+  Campaign campaign = 1;
+}
+
+message StartCampaignRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+message StartCampaignResponse {
+  Campaign campaign = 1;
+}
+
+message PauseCampaignRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+message PauseCampaignResponse {
+  Campaign campaign = 1;
+}
+
+message CancelCampaignRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+message CancelCampaignResponse {
+  Campaign campaign = 1;
+}
+
+message DeleteCampaignRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+message DeleteCampaignResponse {
+  string id = 1;
+}
+
+message CampaignRecipient {
+  string id = 1;
+  string customer_id = 2;
+  string customer_name = 3;
+  string customer_corporation = 4;
+  string email = 5;
+  string status = 6; // queued|sending|sent|failed|skipped
+  string error = 7;
+  optional google.protobuf.Timestamp sent_at = 8;
+  optional google.protobuf.Timestamp first_opened_at = 9;
+  optional google.protobuf.Timestamp first_clicked_at = 10;
+  optional google.protobuf.Timestamp replied_at = 11;
+  optional google.protobuf.Timestamp bounced_at = 12;
+  optional google.protobuf.Timestamp unsubscribed_at = 13;
+}
+
+message ListCampaignRecipientsRequest {
+  string campaign_id = 1 [(buf.validate.field).string.uuid = true];
+  // queued|sending|sent|failed|skipped。未指定なら全部。
+  optional string status = 2;
+  optional int32 limit = 3 [(buf.validate.field).int32 = {gte: 1, lte: 200}];
+  optional int32 offset = 4 [(buf.validate.field).int32.gte = 0];
+}
+message ListCampaignRecipientsResponse {
+  repeated CampaignRecipient recipients = 1;
+  int64 total = 2;
+}
+
+message CampaignDailyStat {
+  string date = 1; // "YYYY-MM-DD" (JST)
+  int32 sent = 2;
+  int32 opened = 3;
+  int32 clicked = 4;
+  int32 replied = 5;
+  int32 bounced = 6;
+  int32 unsubscribed = 7;
+}
+
+message GetCampaignTimeseriesRequest {
+  string campaign_id = 1 [(buf.validate.field).string.uuid = true];
+}
+message GetCampaignTimeseriesResponse {
+  repeated CampaignDailyStat days = 1;
+}
+
+message CampaignEvent {
+  string id = 1;
+  string kind = 2; // open|click|unsubscribe|reply|bounce
+  string url = 3;
+  string user_agent = 4;
+  google.protobuf.Timestamp created_at = 5;
+}
+
+message ListRecipientEventsRequest {
+  string recipient_id = 1 [(buf.validate.field).string.uuid = true];
+}
+message ListRecipientEventsResponse {
+  repeated CampaignEvent events = 1;
+}
+
+message RequeueFailedRecipientsRequest {
+  string campaign_id = 1 [(buf.validate.field).string.uuid = true];
+}
+message RequeueFailedRecipientsResponse {
+  int64 requeued = 1;
+}
+
+message SendTestEmailRequest {
+  string campaign_id = 1 [(buf.validate.field).string.uuid = true];
+  string to = 2 [(buf.validate.field).string.min_len = 3];
+  // プール内のどの mailbox で送るか。
+  string mailbox_id = 3 [(buf.validate.field).string.uuid = true];
+}
+message SendTestEmailResponse {}
+
+message Suppression {
+  string id = 1;
+  string email = 2;
+  string reason = 3; // unsubscribe|hard_bounce|manual|complaint
+  optional string campaign_id = 4;
+  string note = 5;
+  google.protobuf.Timestamp created_at = 6;
+}
+
+message ListSuppressionsRequest {
+  optional string search = 1;
+  optional int32 limit = 2 [(buf.validate.field).int32 = {gte: 1, lte: 200}];
+  optional int32 offset = 3 [(buf.validate.field).int32.gte = 0];
+}
+message ListSuppressionsResponse {
+  repeated Suppression suppressions = 1;
+  int64 total = 2;
+}
+
+message AddSuppressionRequest {
+  string email = 1 [(buf.validate.field).string.min_len = 3];
+  string note = 2;
+}
+message AddSuppressionResponse {
+  Suppression suppression = 1;
+}
+
+message RemoveSuppressionRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+message RemoveSuppressionResponse {
+  string id = 1;
+}

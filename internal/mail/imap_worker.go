@@ -197,6 +197,17 @@ func ingestMessages(ctx context.Context, queries *db.Queries, msgs []ParsedMessa
 			storeMailboxMessage(ctx, queries, m, activityType, mailboxID, customer, ok)
 		}
 
+		// Phase 27c: 受信メールのキャンペーン紐付け。
+		// DSN (バウンス) は受信者に紐付けた上で顧客タイムライン Activity には
+		// しない (MAILER-DAEMON は顧客ではない)。それ以外は返信として帰属を試す
+		// (Activity dedup より先 — 再取込みでも replied_at は冪等)。
+		if activityType == "email_received" {
+			if handleCampaignBounce(ctx, queries, m) {
+				continue
+			}
+			attributeCampaignReply(ctx, queries, m)
+		}
+
 		// 既に取込済みなら dedup (UNIQUE INDEX でも止まるが事前チェックでログを減らす)
 		if _, err := queries.GetActivityByMessageID(ctx, pgtype.Text{String: m.MessageID, Valid: true}); err == nil {
 			continue

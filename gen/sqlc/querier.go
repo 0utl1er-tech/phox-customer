@@ -12,6 +12,8 @@ import (
 )
 
 type Querier interface {
+	// ─── CampaignMailbox ─────────────────────────────────────────────
+	AddCampaignMailbox(ctx context.Context, arg AddCampaignMailboxParams) error
 	// 顧客の mail に一致する未紐付け MailboxMessage を Activity 化し、
 	// MailboxMessage.customer_id も紐付ける。create_customer 後に呼ぶ。
 	// INBOX(from 一致)=email_received / Sent(to 内に一致)=email_sent。
@@ -20,15 +22,33 @@ type Querier interface {
 	CheckUserAccessToBook(ctx context.Context, arg CheckUserAccessToBookParams) (bool, error)
 	CheckUserRoleForBook(ctx context.Context, arg CheckUserRoleForBookParams) (Role, error)
 	CheckUserRoleForMailbox(ctx context.Context, arg CheckUserRoleForMailboxParams) (Role, error)
+	// worker の per-recipient CAS claim。Redis ロックが破れても FOR UPDATE
+	// SKIP LOCKED で at-most-once を担保する二重防御。
+	ClaimCampaignRecipient(ctx context.Context, arg ClaimCampaignRecipientParams) (CampaignRecipient, error)
 	ClearRedialGcalSync(ctx context.Context, id uuid.UUID) (Redial, error)
 	// ListActivitiesByBookID のページネーション用 total。フィルタ条件は同一に保つこと。
 	CountActivitiesByBookID(ctx context.Context, arg CountActivitiesByBookIDParams) (int64, error)
+	CountCampaignRecipients(ctx context.Context, arg CountCampaignRecipientsParams) (int64, error)
+	CountCampaignsByCompany(ctx context.Context, companyID uuid.UUID) (int64, error)
+	CountCustomersByBook(ctx context.Context, bookID uuid.UUID) (int64, error)
 	CountMailboxMessages(ctx context.Context, arg CountMailboxMessagesParams) (int64, error)
+	CountQueuedRecipients(ctx context.Context, campaignID uuid.UUID) (int64, error)
+	// mailbox 毎の daily cap 判定 (全キャンペーン横断)。$2 = JST の当日 0 時。
+	CountSentSinceByMailbox(ctx context.Context, arg CountSentSinceByMailboxParams) (int64, error)
+	CountSuppressionsByCompany(ctx context.Context, arg CountSuppressionsByCompanyParams) (int64, error)
 	// duration_seconds / recording_url / zoom_call_id は call type で Zoom 連携時に
 	// セットされる。他の type (email_sent / email_received / manual call) では
 	// 全て NULL を渡せば良い (列は nullable)。
 	CreateActivity(ctx context.Context, arg CreateActivityParams) (Activity, error)
 	CreateBook(ctx context.Context, arg CreateBookParams) (Book, error)
+	// Phase 27: キャンペーン (コールドメール一斉送信)
+	CreateCampaign(ctx context.Context, arg CreateCampaignParams) (Campaign, error)
+	// ─── CampaignEvent ──────────────────────────────────────────────
+	CreateCampaignEvent(ctx context.Context, arg CreateCampaignEventParams) error
+	// ─── CampaignLink (27b) ─────────────────────────────────────────
+	CreateCampaignLink(ctx context.Context, arg CreateCampaignLinkParams) error
+	// ─── CampaignRecipient ───────────────────────────────────────────
+	CreateCampaignRecipients(ctx context.Context, arg []CreateCampaignRecipientsParams) (int64, error)
 	CreateCompany(ctx context.Context, arg CreateCompanyParams) (Company, error)
 	CreateContact(ctx context.Context, arg CreateContactParams) (Contact, error)
 	CreateCustomer(ctx context.Context, arg CreateCustomerParams) (Customer, error)
@@ -41,9 +61,15 @@ type Querier interface {
 	// 旧の CreateRedial (date+time 引数) は削除、start_at/end_at + note + gcal_event_id。
 	CreateRedial(ctx context.Context, arg CreateRedialParams) (Redial, error)
 	CreateStatus(ctx context.Context, arg CreateStatusParams) (Status, error)
+	// ─── Suppression ────────────────────────────────────────────────
+	// 冪等: 既に登録済みなら何もしない (先勝ち — 最初の理由を残す)。
+	CreateSuppression(ctx context.Context, arg CreateSuppressionParams) error
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeleteActivity(ctx context.Context, id uuid.UUID) error
 	DeleteBook(ctx context.Context, id uuid.UUID) error
+	DeleteCampaign(ctx context.Context, id uuid.UUID) error
+	DeleteCampaignLinks(ctx context.Context, campaignID uuid.UUID) error
+	DeleteCampaignMailboxes(ctx context.Context, campaignID uuid.UUID) error
 	DeleteCompany(ctx context.Context, id uuid.UUID) error
 	DeleteContact(ctx context.Context, id uuid.UUID) error
 	DeleteCustomer(ctx context.Context, id uuid.UUID) error
@@ -53,9 +79,12 @@ type Querier interface {
 	DeletePermit(ctx context.Context, id uuid.UUID) error
 	DeleteRedial(ctx context.Context, id uuid.UUID) error
 	DeleteStatus(ctx context.Context, id uuid.UUID) error
+	DeleteSuppression(ctx context.Context, id uuid.UUID) error
 	DeleteUser(ctx context.Context, id string) (User, error)
 	DeleteUserGoogleToken(ctx context.Context, userID string) error
 	DeleteUserICalFeed(ctx context.Context, userID string) error
+	// janitor: claim したまま落ちた行。自動再送はしない (二重送信の方が害)。
+	FailStaleSendingRecipients(ctx context.Context, lockedAt pgtype.Timestamptz) (int64, error)
 	// MCP create_customer の upsert 判定用。book 内で Customer.mail / Contact.mail の
 	// どちらかが一致する最初の Customer を返す。
 	FindCustomerByBookAndEmail(ctx context.Context, arg FindCustomerByBookAndEmailParams) (uuid.UUID, error)
@@ -69,6 +98,9 @@ type Querier interface {
 	// 1 つの番号が複数 Customer/Contact に紐づく場合 (= 家族で共有 etc) は
 	// 全行返し、呼び出し側が occurred_at ベースで disambiguation する。
 	FindCustomersByPhoneDigits(ctx context.Context, dollar_1 string) ([]FindCustomersByPhoneDigitsRow, error)
+	// 返信検出のフォールバック (27c): ヘッダで紐付かない「新規メールでの返信」を
+	// from アドレスで直近の sent 受信者に当てる。
+	FindSentRecipientByFromAddr(ctx context.Context, arg FindSentRecipientByFromAddrParams) ([]CampaignRecipient, error)
 	FindUnsyncedRedialsByUser(ctx context.Context, userID string) ([]Redial, error)
 	FindUserICalFeedByToken(ctx context.Context, token string) (UserICalFeed, error)
 	GetActivity(ctx context.Context, id uuid.UUID) (Activity, error)
@@ -82,6 +114,14 @@ type Querier interface {
 	// ロングフォーマット (1 行 = 1 セル)。status_id が NULL の行は
 	// 「Status 削除済み / 未設定」のコールを表す。
 	GetCallStatsByBook(ctx context.Context, arg GetCallStatsByBookParams) ([]GetCallStatsByBookRow, error)
+	GetCampaign(ctx context.Context, id uuid.UUID) (Campaign, error)
+	// ダッシュボードの折れ線グラフ用 (JST 日次)。各指標は各時刻列の日付で集計。
+	GetCampaignDailyStats(ctx context.Context, campaignID uuid.UUID) ([]GetCampaignDailyStatsRow, error)
+	GetCampaignLink(ctx context.Context, arg GetCampaignLinkParams) (CampaignLink, error)
+	GetCampaignRecipient(ctx context.Context, id uuid.UUID) (CampaignRecipient, error)
+	GetCampaignRecipientByMessageID(ctx context.Context, messageID pgtype.Text) (CampaignRecipient, error)
+	// 非正規化時刻列の FILTER 集計 1 スキャンで済ませる (CampaignEvent 不要)。
+	GetCampaignStats(ctx context.Context, campaignID uuid.UUID) (GetCampaignStatsRow, error)
 	GetCompany(ctx context.Context, id uuid.UUID) (Company, error)
 	GetContact(ctx context.Context, id uuid.UUID) (Contact, error)
 	GetCustomer(ctx context.Context, id uuid.UUID) (GetCustomerRow, error)
@@ -91,6 +131,8 @@ type Querier interface {
 	GetCustomerCountByCategory(ctx context.Context, arg GetCustomerCountByCategoryParams) (int64, error)
 	GetCustomerCountByCorporation(ctx context.Context, arg GetCustomerCountByCorporationParams) (int64, error)
 	GetCustomerCountByDate(ctx context.Context, arg GetCustomerCountByDateParams) (int64, error)
+	// スナップショット作成用。book_id は RBAC チェックに使う。
+	GetCustomersByIDs(ctx context.Context, ids []uuid.UUID) ([]GetCustomersByIDsRow, error)
 	GetDefaultStatusByBookID(ctx context.Context, bookID uuid.UUID) (Status, error)
 	// email_received を「その顧客に最後に email_sent した担当者」に帰属させて
 	// 返信数を集計する。Activity には in_reply_to が無くスレッド追跡が
@@ -114,6 +156,8 @@ type Querier interface {
 	GetPermitsByUserID(ctx context.Context, userID string) ([]Permit, error)
 	GetRedial(ctx context.Context, id uuid.UUID) (Redial, error)
 	GetStatus(ctx context.Context, id uuid.UUID) (Status, error)
+	GetSuppression(ctx context.Context, id uuid.UUID) (Suppression, error)
+	GetSuppressionByEmail(ctx context.Context, arg GetSuppressionByEmailParams) (Suppression, error)
 	GetUser(ctx context.Context, id string) (User, error)
 	GetUserGoogleToken(ctx context.Context, userID string) (UserGoogleToken, error)
 	GetUserICalFeed(ctx context.Context, userID string) (UserICalFeed, error)
@@ -130,6 +174,13 @@ type Querier interface {
 	ListAllActiveMailboxes(ctx context.Context) ([]Mailbox, error)
 	ListAllContacts(ctx context.Context, arg ListAllContactsParams) ([]ListAllContactsRow, error)
 	ListAllCustomers(ctx context.Context) ([]ListAllCustomersRow, error)
+	ListCampaignEventsByRecipient(ctx context.Context, recipientID uuid.UUID) ([]CampaignEvent, error)
+	ListCampaignLinks(ctx context.Context, campaignID uuid.UUID) ([]CampaignLink, error)
+	// worker が送信資格情報ごと引く (password_enc 込み)。
+	ListCampaignMailboxes(ctx context.Context, campaignID uuid.UUID) ([]Mailbox, error)
+	// status フィルタ (narg) + ページング。顧客名も返す。
+	ListCampaignRecipients(ctx context.Context, arg ListCampaignRecipientsParams) ([]ListCampaignRecipientsRow, error)
+	ListCampaignsByCompany(ctx context.Context, arg ListCampaignsByCompanyParams) ([]Campaign, error)
 	ListCompanies(ctx context.Context) ([]Company, error)
 	ListContacts(ctx context.Context, customerID uuid.UUID) ([]Contact, error)
 	ListCustomers(ctx context.Context, arg ListCustomersParams) ([]ListCustomersRow, error)
@@ -147,9 +198,30 @@ type Querier interface {
 	// 付きで返す。N+1 を避けるため JOIN で 1 クエリ。
 	// 上限 1000 行 (DoS / OOM ガード)。
 	ListRedialsByUserWithCustomer(ctx context.Context, arg ListRedialsByUserWithCustomerParams) ([]ListRedialsByUserWithCustomerRow, error)
+	// worker の tick 対象。
+	ListRunningCampaigns(ctx context.Context) ([]Campaign, error)
 	ListStatusesByBookID(ctx context.Context, bookID uuid.UUID) ([]Status, error)
+	// スナップショット作成時の一括チェック。
+	ListSuppressedEmailsIn(ctx context.Context, arg ListSuppressedEmailsInParams) ([]string, error)
+	ListSuppressionsByCompany(ctx context.Context, arg ListSuppressionsByCompanyParams) ([]Suppression, error)
 	ListUsers(ctx context.Context) ([]User, error)
 	ListUsersByCompany(ctx context.Context, companyID uuid.UUID) ([]User, error)
+	MarkRecipientBounced(ctx context.Context, id uuid.UUID) error
+	MarkRecipientClicked(ctx context.Context, id uuid.UUID) error
+	MarkRecipientFailed(ctx context.Context, arg MarkRecipientFailedParams) error
+	MarkRecipientOpened(ctx context.Context, id uuid.UUID) error
+	MarkRecipientReplied(ctx context.Context, id uuid.UUID) error
+	MarkRecipientSent(ctx context.Context, arg MarkRecipientSentParams) error
+	MarkRecipientSkipped(ctx context.Context, arg MarkRecipientSkippedParams) error
+	// 冪等: 未設定のときだけ時刻を打つ。
+	MarkRecipientUnsubscribed(ctx context.Context, id uuid.UUID) (CampaignRecipient, error)
+	// 「失敗分を再キュー」ボタン (27c)。明示操作のみ。attempts はリセットする。
+	RequeueFailedRecipients(ctx context.Context, campaignID uuid.UUID) (int64, error)
+	// transient エラー (SMTP 4xx / dial 失敗)。attempts を増やして queued に戻す。
+	RequeueRecipient(ctx context.Context, arg RequeueRecipientParams) error
+	// 注意: $2 を複数箇所で使うと 42P08 (型推論の衝突) になるため CASE 側は
+	// 明示キャスト必須 (実際に staging で 500 になった実績あり)。
+	SetCampaignStatus(ctx context.Context, arg SetCampaignStatusParams) (Campaign, error)
 	SetMailboxSyncedAt(ctx context.Context, id uuid.UUID) error
 	SetRedialGcalSynced(ctx context.Context, arg SetRedialGcalSyncedParams) (Redial, error)
 	// phone.recording_completed イベントで recording archive 完了後に呼ぶ。
@@ -158,6 +230,8 @@ type Querier interface {
 	UpdateActivityRecordingURL(ctx context.Context, arg UpdateActivityRecordingURLParams) error
 	UpdateActivityStatus(ctx context.Context, arg UpdateActivityStatusParams) (Activity, error)
 	UpdateBook(ctx context.Context, arg UpdateBookParams) (Book, error)
+	// draft / paused のみ編集可 (状態チェックは service 層)。
+	UpdateCampaignDraft(ctx context.Context, arg UpdateCampaignDraftParams) (Campaign, error)
 	UpdateCompany(ctx context.Context, arg UpdateCompanyParams) (Company, error)
 	UpdateContact(ctx context.Context, arg UpdateContactParams) (Contact, error)
 	UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) (Customer, error)
