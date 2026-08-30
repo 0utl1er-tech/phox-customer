@@ -119,6 +119,8 @@ SET status = 'sending', locked_at = now(), mailbox_id = $2
 WHERE id = (
   SELECT cr.id FROM "CampaignRecipient" cr
   WHERE cr.campaign_id = $1 AND cr.status = 'queued'
+    AND (cr.next_step_at IS NULL OR cr.next_step_at <= now())
+    AND cr.replied_at IS NULL AND cr.unsubscribed_at IS NULL AND cr.bounced_at IS NULL
   ORDER BY cr.attempts ASC, cr.created_at ASC
   LIMIT 1
   FOR UPDATE SKIP LOCKED
@@ -198,8 +200,9 @@ WHERE id = $1;
 -- 非正規化時刻列の FILTER 集計 1 スキャンで済ませる (CampaignEvent 不要)。
 SELECT
   count(*)                                          AS total,
-  count(*) FILTER (WHERE status IN ('queued','sending')) AS queued,
-  count(*) FILTER (WHERE status = 'sent')           AS sent,
+  count(*) FILTER (WHERE status IN ('queued','sending') AND sent_at IS NULL) AS queued,
+  count(*) FILTER (WHERE sent_at IS NOT NULL)       AS sent,
+  count(*) FILTER (WHERE status = 'queued' AND sent_at IS NOT NULL) AS waiting_followup,
   count(*) FILTER (WHERE status = 'failed')         AS failed,
   count(*) FILTER (WHERE status = 'skipped')        AS skipped,
   count(*) FILTER (WHERE first_opened_at IS NOT NULL)  AS opened,
@@ -315,3 +318,38 @@ FROM (
 ) t
 GROUP BY t.day
 ORDER BY t.day ASC;
+
+-- ─── CampaignStep (Phase 27e: フォローアップシーケンス) ─────────
+
+-- name: CreateCampaignStep :exec
+INSERT INTO "CampaignStep" (campaign_id, step_no, wait_days, subject, body)
+VALUES ($1, $2, $3, $4, $5);
+
+-- name: DeleteCampaignSteps :exec
+DELETE FROM "CampaignStep" WHERE campaign_id = $1;
+
+-- name: ListCampaignSteps :many
+SELECT * FROM "CampaignStep" WHERE campaign_id = $1 ORDER BY step_no ASC;
+
+-- name: MarkRecipientStepSent :exec
+-- step 送信完了。次ステップがある (next_step_at 非 NULL) 場合は queued に
+-- 戻して待機、無ければ sent で確定。narg を複数箇所で使うため全て明示キャスト
+-- (42P08 対策 — SetCampaignStatus で実績のある罠)。
+UPDATE "CampaignRecipient"
+SET status = CASE WHEN sqlc.narg(next_step_at)::timestamptz IS NULL THEN 'sent' ELSE 'queued' END,
+    sent_at = now(),
+    message_id = sqlc.arg(message_id),
+    error = '',
+    locked_at = NULL,
+    current_step = sqlc.arg(current_step),
+    next_step_at = sqlc.narg(next_step_at)::timestamptz,
+    first_message_id = COALESCE(first_message_id, sqlc.arg(message_id))
+WHERE id = sqlc.arg(id);
+
+-- name: FinalizeStoppedFollowups :execrows
+-- 返信/配信停止/バウンスが付いた「フォローアップ待ち」受信者のシーケンスを
+-- 終了する (status='sent' で確定)。worker が tick 毎に呼ぶ。
+UPDATE "CampaignRecipient"
+SET status = 'sent', next_step_at = NULL, locked_at = NULL
+WHERE campaign_id = $1 AND status = 'queued' AND sent_at IS NOT NULL
+  AND (replied_at IS NOT NULL OR unsubscribed_at IS NOT NULL OR bounced_at IS NOT NULL);

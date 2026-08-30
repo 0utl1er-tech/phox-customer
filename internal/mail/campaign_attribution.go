@@ -2,6 +2,7 @@ package mail
 
 import (
 	"context"
+	"regexp"
 	"strings"
 	"time"
 
@@ -57,15 +58,31 @@ func attributeCampaignReply(ctx context.Context, queries *db.Queries, m ParsedMe
 	}
 }
 
+// campaignMessageIDRe は cmp-{recipient_uuid}[-s{step}]@... 形式の Message-ID。
+// Phase 27e 以降フォローアップは -sN サフィックス付きなので、UUID を直接抜いて
+// 受信者を引く (message_id カラムの完全一致に依存しない)。
+var campaignMessageIDRe = regexp.MustCompile(`^cmp-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:-s\d+)?@`)
+
+// recipientIDFromMessageID は cmp-* Message-ID から受信者 UUID を取り出す。
+func recipientIDFromMessageID(id string) (uuid.UUID, bool) {
+	m := campaignMessageIDRe.FindStringSubmatch(id)
+	if m == nil {
+		return uuid.Nil, false
+	}
+	rid, err := uuid.Parse(m[1])
+	return rid, err == nil
+}
+
 // findRecipientByHeaders は In-Reply-To + References から cmp-* Message-ID を
 // 探して受信者を引き当てる。
 func findRecipientByHeaders(ctx context.Context, queries *db.Queries, m ParsedMessage) (db.CampaignRecipient, bool) {
 	candidates := append(append([]string{}, m.InReplyTo...), m.References...)
 	for _, id := range candidates {
-		if !strings.HasPrefix(id, "cmp-") {
+		rid, ok := recipientIDFromMessageID(id)
+		if !ok {
 			continue // キャンペーン規約外の ID は DB を引かない
 		}
-		rec, err := queries.GetCampaignRecipientByMessageID(ctx, pgtype.Text{String: id, Valid: true})
+		rec, err := queries.GetCampaignRecipient(ctx, rid)
 		if err == nil {
 			return rec, true
 		}
@@ -83,9 +100,8 @@ func handleCampaignBounce(ctx context.Context, queries *db.Queries, m ParsedMess
 	}
 	var rec db.CampaignRecipient
 	found := false
-	if strings.HasPrefix(m.DSN.OriginalMessageID, "cmp-") {
-		if r, err := queries.GetCampaignRecipientByMessageID(ctx,
-			pgtype.Text{String: m.DSN.OriginalMessageID, Valid: true}); err == nil {
+	if rid, ok := recipientIDFromMessageID(m.DSN.OriginalMessageID); ok {
+		if r, err := queries.GetCampaignRecipient(ctx, rid); err == nil {
 			rec, found = r, true
 		}
 	}

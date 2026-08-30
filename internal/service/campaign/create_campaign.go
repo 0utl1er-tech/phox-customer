@@ -198,6 +198,18 @@ func (s *CampaignService) CreateCampaign(
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("add campaign mailbox: %w", err))
 		}
 	}
+	// Phase 27e: フォローアップ (2 通目以降)。step_no は配列順で自動採番。
+	for i, fu := range req.Msg.Followups {
+		if err := q.CreateCampaignStep(ctx, db.CreateCampaignStepParams{
+			CampaignID: campaignID,
+			StepNo:     int32(i + 2),
+			WaitDays:   fu.WaitDays,
+			Subject:    fu.Subject,
+			Body:       fu.Body,
+		}); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("create followup step: %w", err))
+		}
+	}
 	if _, err := q.CreateCampaignRecipients(ctx, rows); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("create recipients: %w", err))
 	}

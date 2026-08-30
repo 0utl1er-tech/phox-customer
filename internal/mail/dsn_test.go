@@ -69,3 +69,19 @@ func TestParseReferences(t *testing.T) {
 		t.Fatalf("parseReferences = %v", refs)
 	}
 }
+
+func TestRecipientIDFromMessageID(t *testing.T) {
+	id := "cmp-11111111-2222-3333-4444-555555555555@0utl1er.tech"
+	rid, ok := recipientIDFromMessageID(id)
+	if !ok || rid.String() != "11111111-2222-3333-4444-555555555555" {
+		t.Fatalf("step1 id parse failed: %v %v", rid, ok)
+	}
+	// Phase 27e: フォローアップの -sN サフィックス
+	rid2, ok := recipientIDFromMessageID("cmp-11111111-2222-3333-4444-555555555555-s3@0utl1er.tech")
+	if !ok || rid2 != rid {
+		t.Fatalf("followup id parse failed: %v %v", rid2, ok)
+	}
+	if _, ok := recipientIDFromMessageID("phox-11111111-2222-3333-4444-555555555555@phox.local"); ok {
+		t.Fatal("non-campaign id should not match")
+	}
+}

@@ -49,6 +49,8 @@ type Querier interface {
 	CreateCampaignLink(ctx context.Context, arg CreateCampaignLinkParams) error
 	// ─── CampaignRecipient ───────────────────────────────────────────
 	CreateCampaignRecipients(ctx context.Context, arg []CreateCampaignRecipientsParams) (int64, error)
+	// ─── CampaignStep (Phase 27e: フォローアップシーケンス) ─────────
+	CreateCampaignStep(ctx context.Context, arg CreateCampaignStepParams) error
 	CreateCompany(ctx context.Context, arg CreateCompanyParams) (Company, error)
 	CreateContact(ctx context.Context, arg CreateContactParams) (Contact, error)
 	CreateCustomer(ctx context.Context, arg CreateCustomerParams) (Customer, error)
@@ -70,6 +72,7 @@ type Querier interface {
 	DeleteCampaign(ctx context.Context, id uuid.UUID) error
 	DeleteCampaignLinks(ctx context.Context, campaignID uuid.UUID) error
 	DeleteCampaignMailboxes(ctx context.Context, campaignID uuid.UUID) error
+	DeleteCampaignSteps(ctx context.Context, campaignID uuid.UUID) error
 	DeleteCompany(ctx context.Context, id uuid.UUID) error
 	DeleteContact(ctx context.Context, id uuid.UUID) error
 	DeleteCustomer(ctx context.Context, id uuid.UUID) error
@@ -85,6 +88,9 @@ type Querier interface {
 	DeleteUserICalFeed(ctx context.Context, userID string) error
 	// janitor: claim したまま落ちた行。自動再送はしない (二重送信の方が害)。
 	FailStaleSendingRecipients(ctx context.Context, lockedAt pgtype.Timestamptz) (int64, error)
+	// 返信/配信停止/バウンスが付いた「フォローアップ待ち」受信者のシーケンスを
+	// 終了する (status='sent' で確定)。worker が tick 毎に呼ぶ。
+	FinalizeStoppedFollowups(ctx context.Context, campaignID uuid.UUID) (int64, error)
 	// MCP create_customer の upsert 判定用。book 内で Customer.mail / Contact.mail の
 	// どちらかが一致する最初の Customer を返す。
 	FindCustomerByBookAndEmail(ctx context.Context, arg FindCustomerByBookAndEmailParams) (uuid.UUID, error)
@@ -180,6 +186,7 @@ type Querier interface {
 	ListCampaignMailboxes(ctx context.Context, campaignID uuid.UUID) ([]Mailbox, error)
 	// status フィルタ (narg) + ページング。顧客名も返す。
 	ListCampaignRecipients(ctx context.Context, arg ListCampaignRecipientsParams) ([]ListCampaignRecipientsRow, error)
+	ListCampaignSteps(ctx context.Context, campaignID uuid.UUID) ([]CampaignStep, error)
 	ListCampaignsByCompany(ctx context.Context, arg ListCampaignsByCompanyParams) ([]Campaign, error)
 	ListCompanies(ctx context.Context) ([]Company, error)
 	ListContacts(ctx context.Context, customerID uuid.UUID) ([]Contact, error)
@@ -213,6 +220,10 @@ type Querier interface {
 	MarkRecipientReplied(ctx context.Context, id uuid.UUID) error
 	MarkRecipientSent(ctx context.Context, arg MarkRecipientSentParams) error
 	MarkRecipientSkipped(ctx context.Context, arg MarkRecipientSkippedParams) error
+	// step 送信完了。次ステップがある (next_step_at 非 NULL) 場合は queued に
+	// 戻して待機、無ければ sent で確定。narg を複数箇所で使うため全て明示キャスト
+	// (42P08 対策 — SetCampaignStatus で実績のある罠)。
+	MarkRecipientStepSent(ctx context.Context, arg MarkRecipientStepSentParams) error
 	// 冪等: 未設定のときだけ時刻を打つ。
 	MarkRecipientUnsubscribed(ctx context.Context, id uuid.UUID) (CampaignRecipient, error)
 	// 「失敗分を再キュー」ボタン (27c)。明示操作のみ。attempts はリセットする。

@@ -37,11 +37,13 @@ SET status = 'sending', locked_at = now(), mailbox_id = $2
 WHERE id = (
   SELECT cr.id FROM "CampaignRecipient" cr
   WHERE cr.campaign_id = $1 AND cr.status = 'queued'
+    AND (cr.next_step_at IS NULL OR cr.next_step_at <= now())
+    AND cr.replied_at IS NULL AND cr.unsubscribed_at IS NULL AND cr.bounced_at IS NULL
   ORDER BY cr.attempts ASC, cr.created_at ASC
   LIMIT 1
   FOR UPDATE SKIP LOCKED
 )
-RETURNING id, campaign_id, customer_id, email, status, attempts, mailbox_id, message_id, error, sent_at, first_opened_at, first_clicked_at, replied_at, bounced_at, unsubscribed_at, locked_at, created_at
+RETURNING id, campaign_id, customer_id, email, status, attempts, mailbox_id, message_id, error, sent_at, first_opened_at, first_clicked_at, replied_at, bounced_at, unsubscribed_at, locked_at, created_at, current_step, next_step_at, first_message_id
 `
 
 type ClaimCampaignRecipientParams struct {
@@ -72,6 +74,9 @@ func (q *Queries) ClaimCampaignRecipient(ctx context.Context, arg ClaimCampaignR
 		&i.UnsubscribedAt,
 		&i.LockedAt,
 		&i.CreatedAt,
+		&i.CurrentStep,
+		&i.NextStepAt,
+		&i.FirstMessageID,
 	)
 	return i, err
 }
@@ -290,6 +295,32 @@ type CreateCampaignRecipientsParams struct {
 	Error      string    `json:"error"`
 }
 
+const createCampaignStep = `-- name: CreateCampaignStep :exec
+
+INSERT INTO "CampaignStep" (campaign_id, step_no, wait_days, subject, body)
+VALUES ($1, $2, $3, $4, $5)
+`
+
+type CreateCampaignStepParams struct {
+	CampaignID uuid.UUID `json:"campaign_id"`
+	StepNo     int32     `json:"step_no"`
+	WaitDays   int32     `json:"wait_days"`
+	Subject    string    `json:"subject"`
+	Body       string    `json:"body"`
+}
+
+// ─── CampaignStep (Phase 27e: フォローアップシーケンス) ─────────
+func (q *Queries) CreateCampaignStep(ctx context.Context, arg CreateCampaignStepParams) error {
+	_, err := q.db.Exec(ctx, createCampaignStep,
+		arg.CampaignID,
+		arg.StepNo,
+		arg.WaitDays,
+		arg.Subject,
+		arg.Body,
+	)
+	return err
+}
+
 const createSuppression = `-- name: CreateSuppression :exec
 
 INSERT INTO "Suppression" (id, company_id, email, reason, campaign_id, note)
@@ -347,6 +378,15 @@ func (q *Queries) DeleteCampaignMailboxes(ctx context.Context, campaignID uuid.U
 	return err
 }
 
+const deleteCampaignSteps = `-- name: DeleteCampaignSteps :exec
+DELETE FROM "CampaignStep" WHERE campaign_id = $1
+`
+
+func (q *Queries) DeleteCampaignSteps(ctx context.Context, campaignID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteCampaignSteps, campaignID)
+	return err
+}
+
 const deleteSuppression = `-- name: DeleteSuppression :exec
 DELETE FROM "Suppression" WHERE id = $1
 `
@@ -371,8 +411,25 @@ func (q *Queries) FailStaleSendingRecipients(ctx context.Context, lockedAt pgtyp
 	return result.RowsAffected(), nil
 }
 
+const finalizeStoppedFollowups = `-- name: FinalizeStoppedFollowups :execrows
+UPDATE "CampaignRecipient"
+SET status = 'sent', next_step_at = NULL, locked_at = NULL
+WHERE campaign_id = $1 AND status = 'queued' AND sent_at IS NOT NULL
+  AND (replied_at IS NOT NULL OR unsubscribed_at IS NOT NULL OR bounced_at IS NOT NULL)
+`
+
+// 返信/配信停止/バウンスが付いた「フォローアップ待ち」受信者のシーケンスを
+// 終了する (status='sent' で確定)。worker が tick 毎に呼ぶ。
+func (q *Queries) FinalizeStoppedFollowups(ctx context.Context, campaignID uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, finalizeStoppedFollowups, campaignID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const findSentRecipientByFromAddr = `-- name: FindSentRecipientByFromAddr :many
-SELECT r.id, r.campaign_id, r.customer_id, r.email, r.status, r.attempts, r.mailbox_id, r.message_id, r.error, r.sent_at, r.first_opened_at, r.first_clicked_at, r.replied_at, r.bounced_at, r.unsubscribed_at, r.locked_at, r.created_at FROM "CampaignRecipient" r
+SELECT r.id, r.campaign_id, r.customer_id, r.email, r.status, r.attempts, r.mailbox_id, r.message_id, r.error, r.sent_at, r.first_opened_at, r.first_clicked_at, r.replied_at, r.bounced_at, r.unsubscribed_at, r.locked_at, r.created_at, r.current_step, r.next_step_at, r.first_message_id FROM "CampaignRecipient" r
 WHERE r.email = $1 AND r.status = 'sent' AND r.sent_at > $2
 ORDER BY r.sent_at DESC
 `
@@ -411,6 +468,9 @@ func (q *Queries) FindSentRecipientByFromAddr(ctx context.Context, arg FindSentR
 			&i.UnsubscribedAt,
 			&i.LockedAt,
 			&i.CreatedAt,
+			&i.CurrentStep,
+			&i.NextStepAt,
+			&i.FirstMessageID,
 		); err != nil {
 			return nil, err
 		}
@@ -543,7 +603,7 @@ func (q *Queries) GetCampaignLink(ctx context.Context, arg GetCampaignLinkParams
 }
 
 const getCampaignRecipient = `-- name: GetCampaignRecipient :one
-SELECT id, campaign_id, customer_id, email, status, attempts, mailbox_id, message_id, error, sent_at, first_opened_at, first_clicked_at, replied_at, bounced_at, unsubscribed_at, locked_at, created_at FROM "CampaignRecipient" WHERE id = $1
+SELECT id, campaign_id, customer_id, email, status, attempts, mailbox_id, message_id, error, sent_at, first_opened_at, first_clicked_at, replied_at, bounced_at, unsubscribed_at, locked_at, created_at, current_step, next_step_at, first_message_id FROM "CampaignRecipient" WHERE id = $1
 `
 
 func (q *Queries) GetCampaignRecipient(ctx context.Context, id uuid.UUID) (CampaignRecipient, error) {
@@ -567,12 +627,15 @@ func (q *Queries) GetCampaignRecipient(ctx context.Context, id uuid.UUID) (Campa
 		&i.UnsubscribedAt,
 		&i.LockedAt,
 		&i.CreatedAt,
+		&i.CurrentStep,
+		&i.NextStepAt,
+		&i.FirstMessageID,
 	)
 	return i, err
 }
 
 const getCampaignRecipientByMessageID = `-- name: GetCampaignRecipientByMessageID :one
-SELECT id, campaign_id, customer_id, email, status, attempts, mailbox_id, message_id, error, sent_at, first_opened_at, first_clicked_at, replied_at, bounced_at, unsubscribed_at, locked_at, created_at FROM "CampaignRecipient" WHERE message_id = $1
+SELECT id, campaign_id, customer_id, email, status, attempts, mailbox_id, message_id, error, sent_at, first_opened_at, first_clicked_at, replied_at, bounced_at, unsubscribed_at, locked_at, created_at, current_step, next_step_at, first_message_id FROM "CampaignRecipient" WHERE message_id = $1
 `
 
 func (q *Queries) GetCampaignRecipientByMessageID(ctx context.Context, messageID pgtype.Text) (CampaignRecipient, error) {
@@ -596,6 +659,9 @@ func (q *Queries) GetCampaignRecipientByMessageID(ctx context.Context, messageID
 		&i.UnsubscribedAt,
 		&i.LockedAt,
 		&i.CreatedAt,
+		&i.CurrentStep,
+		&i.NextStepAt,
+		&i.FirstMessageID,
 	)
 	return i, err
 }
@@ -603,8 +669,9 @@ func (q *Queries) GetCampaignRecipientByMessageID(ctx context.Context, messageID
 const getCampaignStats = `-- name: GetCampaignStats :one
 SELECT
   count(*)                                          AS total,
-  count(*) FILTER (WHERE status IN ('queued','sending')) AS queued,
-  count(*) FILTER (WHERE status = 'sent')           AS sent,
+  count(*) FILTER (WHERE status IN ('queued','sending') AND sent_at IS NULL) AS queued,
+  count(*) FILTER (WHERE sent_at IS NOT NULL)       AS sent,
+  count(*) FILTER (WHERE status = 'queued' AND sent_at IS NOT NULL) AS waiting_followup,
   count(*) FILTER (WHERE status = 'failed')         AS failed,
   count(*) FILTER (WHERE status = 'skipped')        AS skipped,
   count(*) FILTER (WHERE first_opened_at IS NOT NULL)  AS opened,
@@ -618,17 +685,18 @@ WHERE campaign_id = $1
 `
 
 type GetCampaignStatsRow struct {
-	Total        int64       `json:"total"`
-	Queued       int64       `json:"queued"`
-	Sent         int64       `json:"sent"`
-	Failed       int64       `json:"failed"`
-	Skipped      int64       `json:"skipped"`
-	Opened       int64       `json:"opened"`
-	Clicked      int64       `json:"clicked"`
-	Replied      int64       `json:"replied"`
-	Bounced      int64       `json:"bounced"`
-	Unsubscribed int64       `json:"unsubscribed"`
-	LastSentAt   interface{} `json:"last_sent_at"`
+	Total           int64       `json:"total"`
+	Queued          int64       `json:"queued"`
+	Sent            int64       `json:"sent"`
+	WaitingFollowup int64       `json:"waiting_followup"`
+	Failed          int64       `json:"failed"`
+	Skipped         int64       `json:"skipped"`
+	Opened          int64       `json:"opened"`
+	Clicked         int64       `json:"clicked"`
+	Replied         int64       `json:"replied"`
+	Bounced         int64       `json:"bounced"`
+	Unsubscribed    int64       `json:"unsubscribed"`
+	LastSentAt      interface{} `json:"last_sent_at"`
 }
 
 // 非正規化時刻列の FILTER 集計 1 スキャンで済ませる (CampaignEvent 不要)。
@@ -639,6 +707,7 @@ func (q *Queries) GetCampaignStats(ctx context.Context, campaignID uuid.UUID) (G
 		&i.Total,
 		&i.Queued,
 		&i.Sent,
+		&i.WaitingFollowup,
 		&i.Failed,
 		&i.Skipped,
 		&i.Opened,
@@ -838,7 +907,7 @@ func (q *Queries) ListCampaignMailboxes(ctx context.Context, campaignID uuid.UUI
 }
 
 const listCampaignRecipients = `-- name: ListCampaignRecipients :many
-SELECT r.id, r.campaign_id, r.customer_id, r.email, r.status, r.attempts, r.mailbox_id, r.message_id, r.error, r.sent_at, r.first_opened_at, r.first_clicked_at, r.replied_at, r.bounced_at, r.unsubscribed_at, r.locked_at, r.created_at, c.name AS customer_name, c.corporation AS customer_corporation
+SELECT r.id, r.campaign_id, r.customer_id, r.email, r.status, r.attempts, r.mailbox_id, r.message_id, r.error, r.sent_at, r.first_opened_at, r.first_clicked_at, r.replied_at, r.bounced_at, r.unsubscribed_at, r.locked_at, r.created_at, r.current_step, r.next_step_at, r.first_message_id, c.name AS customer_name, c.corporation AS customer_corporation
 FROM "CampaignRecipient" r
 JOIN "Customer" c ON c.id = r.customer_id
 WHERE r.campaign_id = $1
@@ -872,6 +941,9 @@ type ListCampaignRecipientsRow struct {
 	UnsubscribedAt      pgtype.Timestamptz `json:"unsubscribed_at"`
 	LockedAt            pgtype.Timestamptz `json:"locked_at"`
 	CreatedAt           time.Time          `json:"created_at"`
+	CurrentStep         int32              `json:"current_step"`
+	NextStepAt          pgtype.Timestamptz `json:"next_step_at"`
+	FirstMessageID      pgtype.Text        `json:"first_message_id"`
 	CustomerName        string             `json:"customer_name"`
 	CustomerCorporation string             `json:"customer_corporation"`
 }
@@ -909,8 +981,41 @@ func (q *Queries) ListCampaignRecipients(ctx context.Context, arg ListCampaignRe
 			&i.UnsubscribedAt,
 			&i.LockedAt,
 			&i.CreatedAt,
+			&i.CurrentStep,
+			&i.NextStepAt,
+			&i.FirstMessageID,
 			&i.CustomerName,
 			&i.CustomerCorporation,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCampaignSteps = `-- name: ListCampaignSteps :many
+SELECT campaign_id, step_no, wait_days, subject, body FROM "CampaignStep" WHERE campaign_id = $1 ORDER BY step_no ASC
+`
+
+func (q *Queries) ListCampaignSteps(ctx context.Context, campaignID uuid.UUID) ([]CampaignStep, error) {
+	rows, err := q.db.Query(ctx, listCampaignSteps, campaignID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CampaignStep{}
+	for rows.Next() {
+		var i CampaignStep
+		if err := rows.Scan(
+			&i.CampaignID,
+			&i.StepNo,
+			&i.WaitDays,
+			&i.Subject,
+			&i.Body,
 		); err != nil {
 			return nil, err
 		}
@@ -1199,11 +1304,44 @@ func (q *Queries) MarkRecipientSkipped(ctx context.Context, arg MarkRecipientSki
 	return err
 }
 
+const markRecipientStepSent = `-- name: MarkRecipientStepSent :exec
+UPDATE "CampaignRecipient"
+SET status = CASE WHEN $1::timestamptz IS NULL THEN 'sent' ELSE 'queued' END,
+    sent_at = now(),
+    message_id = $2,
+    error = '',
+    locked_at = NULL,
+    current_step = $3,
+    next_step_at = $1::timestamptz,
+    first_message_id = COALESCE(first_message_id, $2)
+WHERE id = $4
+`
+
+type MarkRecipientStepSentParams struct {
+	NextStepAt  pgtype.Timestamptz `json:"next_step_at"`
+	MessageID   pgtype.Text        `json:"message_id"`
+	CurrentStep int32              `json:"current_step"`
+	ID          uuid.UUID          `json:"id"`
+}
+
+// step 送信完了。次ステップがある (next_step_at 非 NULL) 場合は queued に
+// 戻して待機、無ければ sent で確定。narg を複数箇所で使うため全て明示キャスト
+// (42P08 対策 — SetCampaignStatus で実績のある罠)。
+func (q *Queries) MarkRecipientStepSent(ctx context.Context, arg MarkRecipientStepSentParams) error {
+	_, err := q.db.Exec(ctx, markRecipientStepSent,
+		arg.NextStepAt,
+		arg.MessageID,
+		arg.CurrentStep,
+		arg.ID,
+	)
+	return err
+}
+
 const markRecipientUnsubscribed = `-- name: MarkRecipientUnsubscribed :one
 UPDATE "CampaignRecipient"
 SET unsubscribed_at = COALESCE(unsubscribed_at, now())
 WHERE id = $1
-RETURNING id, campaign_id, customer_id, email, status, attempts, mailbox_id, message_id, error, sent_at, first_opened_at, first_clicked_at, replied_at, bounced_at, unsubscribed_at, locked_at, created_at
+RETURNING id, campaign_id, customer_id, email, status, attempts, mailbox_id, message_id, error, sent_at, first_opened_at, first_clicked_at, replied_at, bounced_at, unsubscribed_at, locked_at, created_at, current_step, next_step_at, first_message_id
 `
 
 // 冪等: 未設定のときだけ時刻を打つ。
@@ -1228,6 +1366,9 @@ func (q *Queries) MarkRecipientUnsubscribed(ctx context.Context, id uuid.UUID) (
 		&i.UnsubscribedAt,
 		&i.LockedAt,
 		&i.CreatedAt,
+		&i.CurrentStep,
+		&i.NextStepAt,
+		&i.FirstMessageID,
 	)
 	return i, err
 }

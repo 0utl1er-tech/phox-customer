@@ -56,6 +56,16 @@ message CampaignSchedule {
   bool warmup_enabled = 6;
 }
 
+// フォローアップ (Phase 27e): 前ステップ送信後、返信が無ければ wait_days 日後に
+// 送る追いメール。同一スレッドへの返信として送られる (In-Reply-To/References)。
+message CampaignFollowup {
+  int32 step_no = 1; // 2.. (1 通目は Campaign.subject/body)。Create/Update では無視され自動採番
+  int32 wait_days = 2 [(buf.validate.field).int32 = {gte: 1, lte: 60}];
+  // 空なら "Re: <1通目の件名>" (スレッド返信の体裁)。
+  string subject = 3;
+  string body = 4 [(buf.validate.field).string.min_len = 1];
+}
+
 // 特定電子メール法の送信者表示。全メールのフッターに自動挿入される。
 message CampaignSender {
   string sender_org = 1;     // 会社名/氏名
@@ -76,6 +86,8 @@ message CampaignStats {
   int32 unsubscribed = 10;
   // 最後に送信した時刻 (「今動いている」表示用)。
   optional google.protobuf.Timestamp last_sent_at = 11;
+  // フォローアップ待ち (1 通以上送信済みで次ステップの時期待ち)。
+  int32 waiting_followup = 12;
 }
 
 message Campaign {
@@ -98,6 +110,8 @@ message Campaign {
   // running 中のみ: ペーシング設定と残数から算出した完了予定時刻 (JST 送信窓・
   // 曜日・日次上限・warmup を考慮したシミュレーション値、目安)。
   optional google.protobuf.Timestamp estimated_completion_at = 17;
+  // フォローアップステップ (2 通目以降)。空 = 単発キャンペーン。
+  repeated CampaignFollowup followups = 18;
 }
 
 message CreateCampaignRequest {
@@ -110,6 +124,8 @@ message CreateCampaignRequest {
   CampaignSender sender = 7;
   bool track_opens = 8;
   bool track_clicks = 9;
+  // フォローアップ (2 通目以降)。最大 5 ステップ。
+  repeated CampaignFollowup followups = 10 [(buf.validate.field).repeated.max_items = 5];
 }
 message CreateCampaignResponse {
   Campaign campaign = 1;
@@ -146,6 +162,8 @@ message UpdateCampaignRequest {
   CampaignSchedule schedule = 7;   // 未指定なら変更しない
   CampaignSender sender = 8;       // 未指定なら変更しない
   repeated string mailbox_ids = 9; // 空なら変更しない
+  // 空なら変更しない。変更する場合は全ステップを送る (全置換)。
+  repeated CampaignFollowup followups = 10 [(buf.validate.field).repeated.max_items = 5];
 }
 message UpdateCampaignResponse {
   Campaign campaign = 1;
@@ -193,6 +211,10 @@ message CampaignRecipient {
   optional google.protobuf.Timestamp replied_at = 11;
   optional google.protobuf.Timestamp bounced_at = 12;
   optional google.protobuf.Timestamp unsubscribed_at = 13;
+  // 現在のステップ (1 = 1 通目)。
+  int32 current_step = 14;
+  // 次のフォローアップ送信予定 (待機中のみ)。
+  optional google.protobuf.Timestamp next_step_at = 15;
 }
 
 message ListCampaignRecipientsRequest {

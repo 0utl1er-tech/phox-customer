@@ -149,6 +149,17 @@ type CampaignRecipient struct {
 	UnsubscribedAt pgtype.Timestamptz `json:"unsubscribed_at"`
 	LockedAt       pgtype.Timestamptz `json:"locked_at"`
 	CreatedAt      time.Time          `json:"created_at"`
+	CurrentStep    int32              `json:"current_step"`
+	NextStepAt     pgtype.Timestamptz `json:"next_step_at"`
+	FirstMessageID pgtype.Text        `json:"first_message_id"`
+}
+
+type CampaignStep struct {
+	CampaignID uuid.UUID `json:"campaign_id"`
+	StepNo     int32     `json:"step_no"`
+	WaitDays   int32     `json:"wait_days"`
+	Subject    string    `json:"subject"`
+	Body       string    `json:"body"`
 }
 
 type Company struct {
