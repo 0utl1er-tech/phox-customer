@@ -244,6 +244,57 @@ func (q *Queries) FindCustomersByPhoneDigits(ctx context.Context, dollar_1 strin
 	return items, nil
 }
 
+const findRecentManualCall = `-- name: FindRecentManualCall :one
+SELECT id, customer_id, contact_id, type, user_id, status_id, phone, mail_from, mail_to, mail_cc, subject, body, message_id, occurred_at, created_at, updated_at, duration_seconds, recording_url, zoom_call_id, mailbox_id FROM "Activity"
+WHERE type = 'call' AND zoom_call_id IS NULL
+  AND customer_id = $1 AND user_id = $2 AND phone = $3
+  AND occurred_at > $4
+ORDER BY occurred_at DESC
+LIMIT 1
+`
+
+type FindRecentManualCallParams struct {
+	CustomerID uuid.UUID   `json:"customer_id"`
+	UserID     string      `json:"user_id"`
+	Phone      pgtype.Text `json:"phone"`
+	OccurredAt time.Time   `json:"occurred_at"`
+}
+
+// 手動コール記録の多重送信ガード (連打/リトライ対策)。直近の同一
+// customer×user×phone の手動記録 (zoom_call_id 無し) を返す。
+func (q *Queries) FindRecentManualCall(ctx context.Context, arg FindRecentManualCallParams) (Activity, error) {
+	row := q.db.QueryRow(ctx, findRecentManualCall,
+		arg.CustomerID,
+		arg.UserID,
+		arg.Phone,
+		arg.OccurredAt,
+	)
+	var i Activity
+	err := row.Scan(
+		&i.ID,
+		&i.CustomerID,
+		&i.ContactID,
+		&i.Type,
+		&i.UserID,
+		&i.StatusID,
+		&i.Phone,
+		&i.MailFrom,
+		&i.MailTo,
+		&i.MailCc,
+		&i.Subject,
+		&i.Body,
+		&i.MessageID,
+		&i.OccurredAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DurationSeconds,
+		&i.RecordingUrl,
+		&i.ZoomCallID,
+		&i.MailboxID,
+	)
+	return i, err
+}
+
 const getActivity = `-- name: GetActivity :one
 SELECT id, customer_id, contact_id, type, user_id, status_id, phone, mail_from, mail_to, mail_cc, subject, body, message_id, occurred_at, created_at, updated_at, duration_seconds, recording_url, zoom_call_id, mailbox_id FROM "Activity" WHERE id = $1
 `

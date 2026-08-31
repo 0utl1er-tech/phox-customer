@@ -59,6 +59,25 @@ func (s *ActivityService) CreateActivityCall(
 		occurredAt = req.Msg.OccurredAt.AsTime()
 	}
 
+	// 多重送信ガード (連打/並列リクエスト対策): 直近 10 秒以内に同一
+	// customer×user×phone の手動コール記録があればそれを返す (冪等)。
+	// 電話番号クリック発信の UI 連打で 1 通話が何件も記録される実害があった。
+	// 過去日時を明示指定した手動追加 (occurred_at 付き) はガード対象外。
+	if req.Msg.OccurredAt == nil {
+		if recent, rerr := s.queries.FindRecentManualCall(ctx, db.FindRecentManualCallParams{
+			CustomerID: customerID,
+			UserID:     userID,
+			Phone:      pgtype.Text{String: req.Msg.Phone, Valid: true},
+			OccurredAt: occurredAt.Add(-10 * time.Second),
+		}); rerr == nil {
+			dup := modelToProto(recent)
+			if u, uerr := s.queries.GetUser(ctx, userID); uerr == nil {
+				dup.UserName = u.Name
+			}
+			return connect.NewResponse(&activityv1.CreateActivityCallResponse{Activity: dup}), nil
+		}
+	}
+
 	act, err := s.queries.CreateActivity(ctx, db.CreateActivityParams{
 		ID:         uuid.New(),
 		CustomerID: customerID,

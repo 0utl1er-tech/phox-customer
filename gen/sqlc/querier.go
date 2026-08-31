@@ -104,6 +104,9 @@ type Querier interface {
 	// 1 つの番号が複数 Customer/Contact に紐づく場合 (= 家族で共有 etc) は
 	// 全行返し、呼び出し側が occurred_at ベースで disambiguation する。
 	FindCustomersByPhoneDigits(ctx context.Context, dollar_1 string) ([]FindCustomersByPhoneDigitsRow, error)
+	// 手動コール記録の多重送信ガード (連打/リトライ対策)。直近の同一
+	// customer×user×phone の手動記録 (zoom_call_id 無し) を返す。
+	FindRecentManualCall(ctx context.Context, arg FindRecentManualCallParams) (Activity, error)
 	// 返信検出のフォールバック (27c): ヘッダで紐付かない「新規メールでの返信」を
 	// from アドレスで直近の sent 受信者に当てる。
 	FindSentRecipientByFromAddr(ctx context.Context, arg FindSentRecipientByFromAddrParams) ([]CampaignRecipient, error)

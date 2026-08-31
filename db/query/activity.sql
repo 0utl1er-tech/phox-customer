@@ -266,3 +266,13 @@ WHERE ct.phone IS NOT NULL
   AND ct.phone <> ''
   AND length(regexp_replace(ct.phone, '[^0-9]', '', 'g')) >= 10
   AND right(regexp_replace(ct.phone, '[^0-9]', '', 'g'), 10) = $1::text;
+
+-- name: FindRecentManualCall :one
+-- 手動コール記録の多重送信ガード (連打/リトライ対策)。直近の同一
+-- customer×user×phone の手動記録 (zoom_call_id 無し) を返す。
+SELECT * FROM "Activity"
+WHERE type = 'call' AND zoom_call_id IS NULL
+  AND customer_id = $1 AND user_id = $2 AND phone = $3
+  AND occurred_at > $4
+ORDER BY occurred_at DESC
+LIMIT 1;
