@@ -72,6 +72,9 @@ const (
 	// CampaignServiceSendTestEmailProcedure is the fully-qualified name of the CampaignService's
 	// SendTestEmail RPC.
 	CampaignServiceSendTestEmailProcedure = "/campaign.v1.CampaignService/SendTestEmail"
+	// CampaignServiceCheckMailboxHealthProcedure is the fully-qualified name of the CampaignService's
+	// CheckMailboxHealth RPC.
+	CampaignServiceCheckMailboxHealthProcedure = "/campaign.v1.CampaignService/CheckMailboxHealth"
 	// CampaignServiceListSuppressionsProcedure is the fully-qualified name of the CampaignService's
 	// ListSuppressions RPC.
 	CampaignServiceListSuppressionsProcedure = "/campaign.v1.CampaignService/ListSuppressions"
@@ -108,6 +111,9 @@ type CampaignServiceClient interface {
 	RequeueFailedRecipients(context.Context, *connect.Request[v1.RequeueFailedRecipientsRequest]) (*connect.Response[v1.RequeueFailedRecipientsResponse], error)
 	// レンダリング済み本文 (フッター込み) を指定アドレスへテスト送信。
 	SendTestEmail(context.Context, *connect.Request[v1.SendTestEmailRequest]) (*connect.Response[v1.SendTestEmailResponse], error)
+	// 送信元メールボックスの健全性 (Phase 27f)。SPF/DKIM/DMARC/MX の DNS 点検 +
+	// 直近のバウンス率・配信停止率。DNS を実引きするので数秒かかることがある。
+	CheckMailboxHealth(context.Context, *connect.Request[v1.CheckMailboxHealthRequest]) (*connect.Response[v1.CheckMailboxHealthResponse], error)
 	// サプレッションリスト (会社単位の配信停止/バウンス/手動除外)。
 	ListSuppressions(context.Context, *connect.Request[v1.ListSuppressionsRequest]) (*connect.Response[v1.ListSuppressionsResponse], error)
 	AddSuppression(context.Context, *connect.Request[v1.AddSuppressionRequest]) (*connect.Response[v1.AddSuppressionResponse], error)
@@ -204,6 +210,12 @@ func NewCampaignServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(campaignServiceMethods.ByName("SendTestEmail")),
 			connect.WithClientOptions(opts...),
 		),
+		checkMailboxHealth: connect.NewClient[v1.CheckMailboxHealthRequest, v1.CheckMailboxHealthResponse](
+			httpClient,
+			baseURL+CampaignServiceCheckMailboxHealthProcedure,
+			connect.WithSchema(campaignServiceMethods.ByName("CheckMailboxHealth")),
+			connect.WithClientOptions(opts...),
+		),
 		listSuppressions: connect.NewClient[v1.ListSuppressionsRequest, v1.ListSuppressionsResponse](
 			httpClient,
 			baseURL+CampaignServiceListSuppressionsProcedure,
@@ -240,6 +252,7 @@ type campaignServiceClient struct {
 	getCampaignTimeseries   *connect.Client[v1.GetCampaignTimeseriesRequest, v1.GetCampaignTimeseriesResponse]
 	requeueFailedRecipients *connect.Client[v1.RequeueFailedRecipientsRequest, v1.RequeueFailedRecipientsResponse]
 	sendTestEmail           *connect.Client[v1.SendTestEmailRequest, v1.SendTestEmailResponse]
+	checkMailboxHealth      *connect.Client[v1.CheckMailboxHealthRequest, v1.CheckMailboxHealthResponse]
 	listSuppressions        *connect.Client[v1.ListSuppressionsRequest, v1.ListSuppressionsResponse]
 	addSuppression          *connect.Client[v1.AddSuppressionRequest, v1.AddSuppressionResponse]
 	removeSuppression       *connect.Client[v1.RemoveSuppressionRequest, v1.RemoveSuppressionResponse]
@@ -310,6 +323,11 @@ func (c *campaignServiceClient) SendTestEmail(ctx context.Context, req *connect.
 	return c.sendTestEmail.CallUnary(ctx, req)
 }
 
+// CheckMailboxHealth calls campaign.v1.CampaignService.CheckMailboxHealth.
+func (c *campaignServiceClient) CheckMailboxHealth(ctx context.Context, req *connect.Request[v1.CheckMailboxHealthRequest]) (*connect.Response[v1.CheckMailboxHealthResponse], error) {
+	return c.checkMailboxHealth.CallUnary(ctx, req)
+}
+
 // ListSuppressions calls campaign.v1.CampaignService.ListSuppressions.
 func (c *campaignServiceClient) ListSuppressions(ctx context.Context, req *connect.Request[v1.ListSuppressionsRequest]) (*connect.Response[v1.ListSuppressionsResponse], error) {
 	return c.listSuppressions.CallUnary(ctx, req)
@@ -350,6 +368,9 @@ type CampaignServiceHandler interface {
 	RequeueFailedRecipients(context.Context, *connect.Request[v1.RequeueFailedRecipientsRequest]) (*connect.Response[v1.RequeueFailedRecipientsResponse], error)
 	// レンダリング済み本文 (フッター込み) を指定アドレスへテスト送信。
 	SendTestEmail(context.Context, *connect.Request[v1.SendTestEmailRequest]) (*connect.Response[v1.SendTestEmailResponse], error)
+	// 送信元メールボックスの健全性 (Phase 27f)。SPF/DKIM/DMARC/MX の DNS 点検 +
+	// 直近のバウンス率・配信停止率。DNS を実引きするので数秒かかることがある。
+	CheckMailboxHealth(context.Context, *connect.Request[v1.CheckMailboxHealthRequest]) (*connect.Response[v1.CheckMailboxHealthResponse], error)
 	// サプレッションリスト (会社単位の配信停止/バウンス/手動除外)。
 	ListSuppressions(context.Context, *connect.Request[v1.ListSuppressionsRequest]) (*connect.Response[v1.ListSuppressionsResponse], error)
 	AddSuppression(context.Context, *connect.Request[v1.AddSuppressionRequest]) (*connect.Response[v1.AddSuppressionResponse], error)
@@ -442,6 +463,12 @@ func NewCampaignServiceHandler(svc CampaignServiceHandler, opts ...connect.Handl
 		connect.WithSchema(campaignServiceMethods.ByName("SendTestEmail")),
 		connect.WithHandlerOptions(opts...),
 	)
+	campaignServiceCheckMailboxHealthHandler := connect.NewUnaryHandler(
+		CampaignServiceCheckMailboxHealthProcedure,
+		svc.CheckMailboxHealth,
+		connect.WithSchema(campaignServiceMethods.ByName("CheckMailboxHealth")),
+		connect.WithHandlerOptions(opts...),
+	)
 	campaignServiceListSuppressionsHandler := connect.NewUnaryHandler(
 		CampaignServiceListSuppressionsProcedure,
 		svc.ListSuppressions,
@@ -488,6 +515,8 @@ func NewCampaignServiceHandler(svc CampaignServiceHandler, opts ...connect.Handl
 			campaignServiceRequeueFailedRecipientsHandler.ServeHTTP(w, r)
 		case CampaignServiceSendTestEmailProcedure:
 			campaignServiceSendTestEmailHandler.ServeHTTP(w, r)
+		case CampaignServiceCheckMailboxHealthProcedure:
+			campaignServiceCheckMailboxHealthHandler.ServeHTTP(w, r)
 		case CampaignServiceListSuppressionsProcedure:
 			campaignServiceListSuppressionsHandler.ServeHTTP(w, r)
 		case CampaignServiceAddSuppressionProcedure:
@@ -553,6 +582,10 @@ func (UnimplementedCampaignServiceHandler) RequeueFailedRecipients(context.Conte
 
 func (UnimplementedCampaignServiceHandler) SendTestEmail(context.Context, *connect.Request[v1.SendTestEmailRequest]) (*connect.Response[v1.SendTestEmailResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("campaign.v1.CampaignService.SendTestEmail is not implemented"))
+}
+
+func (UnimplementedCampaignServiceHandler) CheckMailboxHealth(context.Context, *connect.Request[v1.CheckMailboxHealthRequest]) (*connect.Response[v1.CheckMailboxHealthResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("campaign.v1.CampaignService.CheckMailboxHealth is not implemented"))
 }
 
 func (UnimplementedCampaignServiceHandler) ListSuppressions(context.Context, *connect.Request[v1.ListSuppressionsRequest]) (*connect.Response[v1.ListSuppressionsResponse], error) {

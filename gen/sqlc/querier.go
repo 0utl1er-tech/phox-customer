@@ -25,6 +25,8 @@ type Querier interface {
 	// worker の per-recipient CAS claim。Redis ロックが破れても FOR UPDATE
 	// SKIP LOCKED で at-most-once を担保する二重防御。
 	ClaimCampaignRecipient(ctx context.Context, arg ClaimCampaignRecipientParams) (CampaignRecipient, error)
+	// 人が再開したら理由を消す (再開は既存の StartCampaign 経由)。
+	ClearHealthPauseReason(ctx context.Context, id uuid.UUID) error
 	ClearRedialGcalSync(ctx context.Context, id uuid.UUID) (Redial, error)
 	// ListActivitiesByBookID のページネーション用 total。フィルタ条件は同一に保つこと。
 	CountActivitiesByBookID(ctx context.Context, arg CountActivitiesByBookIDParams) (int64, error)
@@ -124,6 +126,9 @@ type Querier interface {
 	// 「Status 削除済み / 未設定」のコールを表す。
 	GetCallStatsByBook(ctx context.Context, arg GetCallStatsByBookParams) ([]GetCallStatsByBookRow, error)
 	GetCampaign(ctx context.Context, id uuid.UUID) (Campaign, error)
+	// ─── Phase 27f: 健全性チェック ──────────────────────────────────
+	// サーキットブレーカー判定用。ハードバウンス率 = bounced / sent。
+	GetCampaignBounceStats(ctx context.Context, campaignID uuid.UUID) (GetCampaignBounceStatsRow, error)
 	// ダッシュボードの折れ線グラフ用 (JST 日次)。各指標は各時刻列の日付で集計。
 	GetCampaignDailyStats(ctx context.Context, campaignID uuid.UUID) ([]GetCampaignDailyStatsRow, error)
 	GetCampaignLink(ctx context.Context, arg GetCampaignLinkParams) (CampaignLink, error)
@@ -143,6 +148,8 @@ type Querier interface {
 	// スナップショット作成用。book_id は RBAC チェックに使う。
 	GetCustomersByIDs(ctx context.Context, ids []uuid.UUID) ([]GetCustomersByIDsRow, error)
 	GetDefaultStatusByBookID(ctx context.Context, bookID uuid.UUID) (Status, error)
+	// ─── DomainHealth (MX 検証キャッシュ) ───────────────────────────
+	GetDomainHealth(ctx context.Context, lower string) (DomainHealth, error)
 	// email_received を「その顧客に最後に email_sent した担当者」に帰属させて
 	// 返信数を集計する。Activity には in_reply_to が無くスレッド追跡が
 	// できないため、顧客単位の近似で十分という判断 (1 顧客 1 担当が通常運用)。
@@ -153,6 +160,9 @@ type Querier interface {
 	GetMailSentStatsByBook(ctx context.Context, arg GetMailSentStatsByBookParams) ([]GetMailSentStatsByBookRow, error)
 	GetMailTemplate(ctx context.Context, id uuid.UUID) (MailTemplate, error)
 	GetMailbox(ctx context.Context, id uuid.UUID) (Mailbox, error)
+	// mailbox 単位の健全性 (全キャンペーン横断・直近 N 日)。
+	// 送信元の評価は mailbox/ドメインに紐づくのでキャンペーンを跨いで見る。
+	GetMailboxBounceStats(ctx context.Context, arg GetMailboxBounceStatsParams) (GetMailboxBounceStatsRow, error)
 	GetMailboxMessage(ctx context.Context, id uuid.UUID) (MailboxMessage, error)
 	GetMailboxPermitByMailboxIDAndUserID(ctx context.Context, arg GetMailboxPermitByMailboxIDAndUserIDParams) (MailboxPermit, error)
 	GetMaxStatusPriority(ctx context.Context, bookID uuid.UUID) (interface{}, error)
@@ -194,6 +204,8 @@ type Querier interface {
 	ListCompanies(ctx context.Context) ([]Company, error)
 	ListContacts(ctx context.Context, customerID uuid.UUID) ([]Contact, error)
 	ListCustomers(ctx context.Context, arg ListCustomersParams) ([]ListCustomersRow, error)
+	// 指定ドメイン群のうち、まだ有効期限内のキャッシュだけ返す。
+	ListFreshDomainHealth(ctx context.Context, arg ListFreshDomainHealthParams) ([]DomainHealth, error)
 	ListMailTemplatesByBook(ctx context.Context, bookID uuid.UUID) ([]MailTemplate, error)
 	// 本文は返さない (一覧用メタデータ)。has_attachments 判定用に attachment_names は返す。
 	ListMailboxMessages(ctx context.Context, arg ListMailboxMessagesParams) ([]ListMailboxMessagesRow, error)
@@ -229,6 +241,8 @@ type Querier interface {
 	MarkRecipientStepSent(ctx context.Context, arg MarkRecipientStepSentParams) error
 	// 冪等: 未設定のときだけ時刻を打つ。
 	MarkRecipientUnsubscribed(ctx context.Context, id uuid.UUID) (CampaignRecipient, error)
+	// サーキットブレーカーによる自動一時停止 (理由付き)。running のみ対象。
+	PauseCampaignForHealth(ctx context.Context, arg PauseCampaignForHealthParams) error
 	// 「失敗分を再キュー」ボタン (27c)。明示操作のみ。attempts はリセットする。
 	RequeueFailedRecipients(ctx context.Context, campaignID uuid.UUID) (int64, error)
 	// transient エラー (SMTP 4xx / dial 失敗)。attempts を増やして queued に戻す。
@@ -244,6 +258,7 @@ type Querier interface {
 	UpdateActivityRecordingURL(ctx context.Context, arg UpdateActivityRecordingURLParams) error
 	UpdateActivityStatus(ctx context.Context, arg UpdateActivityStatusParams) (Activity, error)
 	UpdateBook(ctx context.Context, arg UpdateBookParams) (Book, error)
+	UpdateCampaignBounceThreshold(ctx context.Context, arg UpdateCampaignBounceThresholdParams) error
 	// draft / paused のみ編集可 (状態チェックは service 層)。
 	UpdateCampaignDraft(ctx context.Context, arg UpdateCampaignDraftParams) (Campaign, error)
 	UpdateCompany(ctx context.Context, arg UpdateCompanyParams) (Company, error)
@@ -259,6 +274,7 @@ type Querier interface {
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)
 	// refresh_token は保持、access_token と expiry だけ更新 (oauth2 library が refresh した後)。
 	UpdateUserGoogleTokenAccess(ctx context.Context, arg UpdateUserGoogleTokenAccessParams) (UserGoogleToken, error)
+	UpsertDomainHealth(ctx context.Context, arg UpsertDomainHealthParams) error
 	UpsertUserGoogleToken(ctx context.Context, arg UpsertUserGoogleTokenParams) (UserGoogleToken, error)
 	UpsertUserICalFeed(ctx context.Context, arg UpsertUserICalFeedParams) (UserICalFeed, error)
 }

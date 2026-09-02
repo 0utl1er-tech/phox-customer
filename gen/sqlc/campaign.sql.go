@@ -81,6 +81,16 @@ func (q *Queries) ClaimCampaignRecipient(ctx context.Context, arg ClaimCampaignR
 	return i, err
 }
 
+const clearHealthPauseReason = `-- name: ClearHealthPauseReason :exec
+UPDATE "Campaign" SET health_paused_reason = '' WHERE id = $1
+`
+
+// 人が再開したら理由を消す (再開は既存の StartCampaign 経由)。
+func (q *Queries) ClearHealthPauseReason(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, clearHealthPauseReason, id)
+	return err
+}
+
 const countCampaignRecipients = `-- name: CountCampaignRecipients :one
 SELECT count(*) FROM "CampaignRecipient"
 WHERE campaign_id = $1
@@ -165,31 +175,33 @@ INSERT INTO "Campaign" (
     track_opens, track_clicks,
     send_start_hour, send_end_hour, send_days,
     daily_cap_per_mailbox, min_interval_sec, warmup_enabled,
+    bounce_pause_threshold,
     sender_org, sender_address, sender_contact
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
 )
-RETURNING id, company_id, created_by, name, status, subject, body, track_opens, track_clicks, send_start_hour, send_end_hour, send_days, daily_cap_per_mailbox, min_interval_sec, warmup_enabled, sender_org, sender_address, sender_contact, started_at, completed_at, created_at, updated_at
+RETURNING id, company_id, created_by, name, status, subject, body, track_opens, track_clicks, send_start_hour, send_end_hour, send_days, daily_cap_per_mailbox, min_interval_sec, warmup_enabled, sender_org, sender_address, sender_contact, started_at, completed_at, created_at, updated_at, bounce_pause_threshold, health_paused_reason
 `
 
 type CreateCampaignParams struct {
-	ID                 uuid.UUID `json:"id"`
-	CompanyID          uuid.UUID `json:"company_id"`
-	CreatedBy          string    `json:"created_by"`
-	Name               string    `json:"name"`
-	Subject            string    `json:"subject"`
-	Body               string    `json:"body"`
-	TrackOpens         bool      `json:"track_opens"`
-	TrackClicks        bool      `json:"track_clicks"`
-	SendStartHour      int32     `json:"send_start_hour"`
-	SendEndHour        int32     `json:"send_end_hour"`
-	SendDays           int32     `json:"send_days"`
-	DailyCapPerMailbox int32     `json:"daily_cap_per_mailbox"`
-	MinIntervalSec     int32     `json:"min_interval_sec"`
-	WarmupEnabled      bool      `json:"warmup_enabled"`
-	SenderOrg          string    `json:"sender_org"`
-	SenderAddress      string    `json:"sender_address"`
-	SenderContact      string    `json:"sender_contact"`
+	ID                   uuid.UUID `json:"id"`
+	CompanyID            uuid.UUID `json:"company_id"`
+	CreatedBy            string    `json:"created_by"`
+	Name                 string    `json:"name"`
+	Subject              string    `json:"subject"`
+	Body                 string    `json:"body"`
+	TrackOpens           bool      `json:"track_opens"`
+	TrackClicks          bool      `json:"track_clicks"`
+	SendStartHour        int32     `json:"send_start_hour"`
+	SendEndHour          int32     `json:"send_end_hour"`
+	SendDays             int32     `json:"send_days"`
+	DailyCapPerMailbox   int32     `json:"daily_cap_per_mailbox"`
+	MinIntervalSec       int32     `json:"min_interval_sec"`
+	WarmupEnabled        bool      `json:"warmup_enabled"`
+	BouncePauseThreshold int32     `json:"bounce_pause_threshold"`
+	SenderOrg            string    `json:"sender_org"`
+	SenderAddress        string    `json:"sender_address"`
+	SenderContact        string    `json:"sender_contact"`
 }
 
 // Phase 27: キャンペーン (コールドメール一斉送信)
@@ -209,6 +221,7 @@ func (q *Queries) CreateCampaign(ctx context.Context, arg CreateCampaignParams) 
 		arg.DailyCapPerMailbox,
 		arg.MinIntervalSec,
 		arg.WarmupEnabled,
+		arg.BouncePauseThreshold,
 		arg.SenderOrg,
 		arg.SenderAddress,
 		arg.SenderContact,
@@ -237,6 +250,8 @@ func (q *Queries) CreateCampaign(ctx context.Context, arg CreateCampaignParams) 
 		&i.CompletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.BouncePauseThreshold,
+		&i.HealthPausedReason,
 	)
 	return i, err
 }
@@ -483,7 +498,7 @@ func (q *Queries) FindSentRecipientByFromAddr(ctx context.Context, arg FindSentR
 }
 
 const getCampaign = `-- name: GetCampaign :one
-SELECT id, company_id, created_by, name, status, subject, body, track_opens, track_clicks, send_start_hour, send_end_hour, send_days, daily_cap_per_mailbox, min_interval_sec, warmup_enabled, sender_org, sender_address, sender_contact, started_at, completed_at, created_at, updated_at FROM "Campaign" WHERE id = $1
+SELECT id, company_id, created_by, name, status, subject, body, track_opens, track_clicks, send_start_hour, send_end_hour, send_days, daily_cap_per_mailbox, min_interval_sec, warmup_enabled, sender_org, sender_address, sender_contact, started_at, completed_at, created_at, updated_at, bounce_pause_threshold, health_paused_reason FROM "Campaign" WHERE id = $1
 `
 
 func (q *Queries) GetCampaign(ctx context.Context, id uuid.UUID) (Campaign, error) {
@@ -512,7 +527,32 @@ func (q *Queries) GetCampaign(ctx context.Context, id uuid.UUID) (Campaign, erro
 		&i.CompletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.BouncePauseThreshold,
+		&i.HealthPausedReason,
 	)
+	return i, err
+}
+
+const getCampaignBounceStats = `-- name: GetCampaignBounceStats :one
+
+SELECT
+  count(*) FILTER (WHERE sent_at IS NOT NULL)    AS sent,
+  count(*) FILTER (WHERE bounced_at IS NOT NULL) AS bounced
+FROM "CampaignRecipient"
+WHERE campaign_id = $1
+`
+
+type GetCampaignBounceStatsRow struct {
+	Sent    int64 `json:"sent"`
+	Bounced int64 `json:"bounced"`
+}
+
+// ─── Phase 27f: 健全性チェック ──────────────────────────────────
+// サーキットブレーカー判定用。ハードバウンス率 = bounced / sent。
+func (q *Queries) GetCampaignBounceStats(ctx context.Context, campaignID uuid.UUID) (GetCampaignBounceStatsRow, error) {
+	row := q.db.QueryRow(ctx, getCampaignBounceStats, campaignID)
+	var i GetCampaignBounceStatsRow
+	err := row.Scan(&i.Sent, &i.Bounced)
 	return i, err
 }
 
@@ -765,6 +805,60 @@ func (q *Queries) GetCustomersByIDs(ctx context.Context, ids []uuid.UUID) ([]Get
 		return nil, err
 	}
 	return items, nil
+}
+
+const getDomainHealth = `-- name: GetDomainHealth :one
+
+SELECT domain, has_mx, mx_host, checked_at FROM "DomainHealth" WHERE domain = lower($1)
+`
+
+// ─── DomainHealth (MX 検証キャッシュ) ───────────────────────────
+func (q *Queries) GetDomainHealth(ctx context.Context, lower string) (DomainHealth, error) {
+	row := q.db.QueryRow(ctx, getDomainHealth, lower)
+	var i DomainHealth
+	err := row.Scan(
+		&i.Domain,
+		&i.HasMx,
+		&i.MxHost,
+		&i.CheckedAt,
+	)
+	return i, err
+}
+
+const getMailboxBounceStats = `-- name: GetMailboxBounceStats :one
+SELECT
+  count(*) FILTER (WHERE sent_at IS NOT NULL)         AS sent,
+  count(*) FILTER (WHERE bounced_at IS NOT NULL)      AS bounced,
+  count(*) FILTER (WHERE unsubscribed_at IS NOT NULL) AS unsubscribed,
+  count(*) FILTER (WHERE replied_at IS NOT NULL)      AS replied
+FROM "CampaignRecipient"
+WHERE mailbox_id = $1 AND sent_at >= $2
+`
+
+type GetMailboxBounceStatsParams struct {
+	MailboxID pgtype.UUID        `json:"mailbox_id"`
+	SentAt    pgtype.Timestamptz `json:"sent_at"`
+}
+
+type GetMailboxBounceStatsRow struct {
+	Sent         int64 `json:"sent"`
+	Bounced      int64 `json:"bounced"`
+	Unsubscribed int64 `json:"unsubscribed"`
+	Replied      int64 `json:"replied"`
+}
+
+// mailbox 単位の健全性 (全キャンペーン横断・直近 N 日)。
+// 送信元の評価は mailbox/ドメインに紐づくのでキャンペーンを跨いで見る。
+func (q *Queries) GetMailboxBounceStats(ctx context.Context, arg GetMailboxBounceStatsParams) (GetMailboxBounceStatsRow, error) {
+	row := q.db.QueryRow(ctx, getMailboxBounceStats, arg.MailboxID, arg.SentAt)
+	var i GetMailboxBounceStatsRow
+	err := row.Scan(
+		&i.Sent,
+		&i.Bounced,
+		&i.Unsubscribed,
+		&i.Replied,
+	)
+	return i, err
 }
 
 const getSuppression = `-- name: GetSuppression :one
@@ -1028,7 +1122,7 @@ func (q *Queries) ListCampaignSteps(ctx context.Context, campaignID uuid.UUID) (
 }
 
 const listCampaignsByCompany = `-- name: ListCampaignsByCompany :many
-SELECT id, company_id, created_by, name, status, subject, body, track_opens, track_clicks, send_start_hour, send_end_hour, send_days, daily_cap_per_mailbox, min_interval_sec, warmup_enabled, sender_org, sender_address, sender_contact, started_at, completed_at, created_at, updated_at FROM "Campaign"
+SELECT id, company_id, created_by, name, status, subject, body, track_opens, track_clicks, send_start_hour, send_end_hour, send_days, daily_cap_per_mailbox, min_interval_sec, warmup_enabled, sender_org, sender_address, sender_contact, started_at, completed_at, created_at, updated_at, bounce_pause_threshold, health_paused_reason FROM "Campaign"
 WHERE company_id = $1
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3
@@ -1072,6 +1166,44 @@ func (q *Queries) ListCampaignsByCompany(ctx context.Context, arg ListCampaignsB
 			&i.CompletedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.BouncePauseThreshold,
+			&i.HealthPausedReason,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listFreshDomainHealth = `-- name: ListFreshDomainHealth :many
+SELECT domain, has_mx, mx_host, checked_at FROM "DomainHealth"
+WHERE domain = ANY($1::varchar[]) AND checked_at > $2
+`
+
+type ListFreshDomainHealthParams struct {
+	Domains    []string  `json:"domains"`
+	FreshAfter time.Time `json:"fresh_after"`
+}
+
+// 指定ドメイン群のうち、まだ有効期限内のキャッシュだけ返す。
+func (q *Queries) ListFreshDomainHealth(ctx context.Context, arg ListFreshDomainHealthParams) ([]DomainHealth, error) {
+	rows, err := q.db.Query(ctx, listFreshDomainHealth, arg.Domains, arg.FreshAfter)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DomainHealth{}
+	for rows.Next() {
+		var i DomainHealth
+		if err := rows.Scan(
+			&i.Domain,
+			&i.HasMx,
+			&i.MxHost,
+			&i.CheckedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -1084,7 +1216,7 @@ func (q *Queries) ListCampaignsByCompany(ctx context.Context, arg ListCampaignsB
 }
 
 const listRunningCampaigns = `-- name: ListRunningCampaigns :many
-SELECT id, company_id, created_by, name, status, subject, body, track_opens, track_clicks, send_start_hour, send_end_hour, send_days, daily_cap_per_mailbox, min_interval_sec, warmup_enabled, sender_org, sender_address, sender_contact, started_at, completed_at, created_at, updated_at FROM "Campaign"
+SELECT id, company_id, created_by, name, status, subject, body, track_opens, track_clicks, send_start_hour, send_end_hour, send_days, daily_cap_per_mailbox, min_interval_sec, warmup_enabled, sender_org, sender_address, sender_contact, started_at, completed_at, created_at, updated_at, bounce_pause_threshold, health_paused_reason FROM "Campaign"
 WHERE status = 'running'
 ORDER BY created_at ASC
 `
@@ -1122,6 +1254,8 @@ func (q *Queries) ListRunningCampaigns(ctx context.Context) ([]Campaign, error) 
 			&i.CompletedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.BouncePauseThreshold,
+			&i.HealthPausedReason,
 		); err != nil {
 			return nil, err
 		}
@@ -1373,6 +1507,23 @@ func (q *Queries) MarkRecipientUnsubscribed(ctx context.Context, id uuid.UUID) (
 	return i, err
 }
 
+const pauseCampaignForHealth = `-- name: PauseCampaignForHealth :exec
+UPDATE "Campaign"
+SET status = 'paused', health_paused_reason = $2, updated_at = now()
+WHERE id = $1 AND status = 'running'
+`
+
+type PauseCampaignForHealthParams struct {
+	ID                 uuid.UUID `json:"id"`
+	HealthPausedReason string    `json:"health_paused_reason"`
+}
+
+// サーキットブレーカーによる自動一時停止 (理由付き)。running のみ対象。
+func (q *Queries) PauseCampaignForHealth(ctx context.Context, arg PauseCampaignForHealthParams) error {
+	_, err := q.db.Exec(ctx, pauseCampaignForHealth, arg.ID, arg.HealthPausedReason)
+	return err
+}
+
 const requeueFailedRecipients = `-- name: RequeueFailedRecipients :execrows
 UPDATE "CampaignRecipient"
 SET status = 'queued', attempts = 0, error = '', locked_at = NULL
@@ -1412,7 +1563,7 @@ SET status = $2,
     completed_at = CASE WHEN $2::varchar IN ('completed', 'cancelled') THEN now() ELSE completed_at END,
     updated_at = now()
 WHERE id = $1
-RETURNING id, company_id, created_by, name, status, subject, body, track_opens, track_clicks, send_start_hour, send_end_hour, send_days, daily_cap_per_mailbox, min_interval_sec, warmup_enabled, sender_org, sender_address, sender_contact, started_at, completed_at, created_at, updated_at
+RETURNING id, company_id, created_by, name, status, subject, body, track_opens, track_clicks, send_start_hour, send_end_hour, send_days, daily_cap_per_mailbox, min_interval_sec, warmup_enabled, sender_org, sender_address, sender_contact, started_at, completed_at, created_at, updated_at, bounce_pause_threshold, health_paused_reason
 `
 
 type SetCampaignStatusParams struct {
@@ -1448,8 +1599,24 @@ func (q *Queries) SetCampaignStatus(ctx context.Context, arg SetCampaignStatusPa
 		&i.CompletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.BouncePauseThreshold,
+		&i.HealthPausedReason,
 	)
 	return i, err
+}
+
+const updateCampaignBounceThreshold = `-- name: UpdateCampaignBounceThreshold :exec
+UPDATE "Campaign" SET bounce_pause_threshold = $2, updated_at = now() WHERE id = $1
+`
+
+type UpdateCampaignBounceThresholdParams struct {
+	ID                   uuid.UUID `json:"id"`
+	BouncePauseThreshold int32     `json:"bounce_pause_threshold"`
+}
+
+func (q *Queries) UpdateCampaignBounceThreshold(ctx context.Context, arg UpdateCampaignBounceThresholdParams) error {
+	_, err := q.db.Exec(ctx, updateCampaignBounceThreshold, arg.ID, arg.BouncePauseThreshold)
+	return err
 }
 
 const updateCampaignDraft = `-- name: UpdateCampaignDraft :one
@@ -1466,30 +1633,32 @@ SET
   daily_cap_per_mailbox = COALESCE($9, daily_cap_per_mailbox),
   min_interval_sec      = COALESCE($10, min_interval_sec),
   warmup_enabled        = COALESCE($11, warmup_enabled),
-  sender_org            = COALESCE($12, sender_org),
-  sender_address        = COALESCE($13, sender_address),
-  sender_contact        = COALESCE($14, sender_contact),
+  bounce_pause_threshold = COALESCE($12, bounce_pause_threshold),
+  sender_org            = COALESCE($13, sender_org),
+  sender_address        = COALESCE($14, sender_address),
+  sender_contact        = COALESCE($15, sender_contact),
   updated_at            = now()
-WHERE id = $15
-RETURNING id, company_id, created_by, name, status, subject, body, track_opens, track_clicks, send_start_hour, send_end_hour, send_days, daily_cap_per_mailbox, min_interval_sec, warmup_enabled, sender_org, sender_address, sender_contact, started_at, completed_at, created_at, updated_at
+WHERE id = $16
+RETURNING id, company_id, created_by, name, status, subject, body, track_opens, track_clicks, send_start_hour, send_end_hour, send_days, daily_cap_per_mailbox, min_interval_sec, warmup_enabled, sender_org, sender_address, sender_contact, started_at, completed_at, created_at, updated_at, bounce_pause_threshold, health_paused_reason
 `
 
 type UpdateCampaignDraftParams struct {
-	Name               pgtype.Text `json:"name"`
-	Subject            pgtype.Text `json:"subject"`
-	Body               pgtype.Text `json:"body"`
-	TrackOpens         pgtype.Bool `json:"track_opens"`
-	TrackClicks        pgtype.Bool `json:"track_clicks"`
-	SendStartHour      pgtype.Int4 `json:"send_start_hour"`
-	SendEndHour        pgtype.Int4 `json:"send_end_hour"`
-	SendDays           pgtype.Int4 `json:"send_days"`
-	DailyCapPerMailbox pgtype.Int4 `json:"daily_cap_per_mailbox"`
-	MinIntervalSec     pgtype.Int4 `json:"min_interval_sec"`
-	WarmupEnabled      pgtype.Bool `json:"warmup_enabled"`
-	SenderOrg          pgtype.Text `json:"sender_org"`
-	SenderAddress      pgtype.Text `json:"sender_address"`
-	SenderContact      pgtype.Text `json:"sender_contact"`
-	ID                 uuid.UUID   `json:"id"`
+	Name                 pgtype.Text `json:"name"`
+	Subject              pgtype.Text `json:"subject"`
+	Body                 pgtype.Text `json:"body"`
+	TrackOpens           pgtype.Bool `json:"track_opens"`
+	TrackClicks          pgtype.Bool `json:"track_clicks"`
+	SendStartHour        pgtype.Int4 `json:"send_start_hour"`
+	SendEndHour          pgtype.Int4 `json:"send_end_hour"`
+	SendDays             pgtype.Int4 `json:"send_days"`
+	DailyCapPerMailbox   pgtype.Int4 `json:"daily_cap_per_mailbox"`
+	MinIntervalSec       pgtype.Int4 `json:"min_interval_sec"`
+	WarmupEnabled        pgtype.Bool `json:"warmup_enabled"`
+	BouncePauseThreshold pgtype.Int4 `json:"bounce_pause_threshold"`
+	SenderOrg            pgtype.Text `json:"sender_org"`
+	SenderAddress        pgtype.Text `json:"sender_address"`
+	SenderContact        pgtype.Text `json:"sender_contact"`
+	ID                   uuid.UUID   `json:"id"`
 }
 
 // draft / paused のみ編集可 (状態チェックは service 層)。
@@ -1506,6 +1675,7 @@ func (q *Queries) UpdateCampaignDraft(ctx context.Context, arg UpdateCampaignDra
 		arg.DailyCapPerMailbox,
 		arg.MinIntervalSec,
 		arg.WarmupEnabled,
+		arg.BouncePauseThreshold,
 		arg.SenderOrg,
 		arg.SenderAddress,
 		arg.SenderContact,
@@ -1535,6 +1705,26 @@ func (q *Queries) UpdateCampaignDraft(ctx context.Context, arg UpdateCampaignDra
 		&i.CompletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.BouncePauseThreshold,
+		&i.HealthPausedReason,
 	)
 	return i, err
+}
+
+const upsertDomainHealth = `-- name: UpsertDomainHealth :exec
+INSERT INTO "DomainHealth" (domain, has_mx, mx_host, checked_at)
+VALUES (lower($1), $2, $3, now())
+ON CONFLICT (domain) DO UPDATE
+SET has_mx = EXCLUDED.has_mx, mx_host = EXCLUDED.mx_host, checked_at = now()
+`
+
+type UpsertDomainHealthParams struct {
+	Lower  string `json:"lower"`
+	HasMx  bool   `json:"has_mx"`
+	MxHost string `json:"mx_host"`
+}
+
+func (q *Queries) UpsertDomainHealth(ctx context.Context, arg UpsertDomainHealthParams) error {
+	_, err := q.db.Exec(ctx, upsertDomainHealth, arg.Lower, arg.HasMx, arg.MxHost)
+	return err
 }

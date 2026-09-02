@@ -6,9 +6,10 @@ INSERT INTO "Campaign" (
     track_opens, track_clicks,
     send_start_hour, send_end_hour, send_days,
     daily_cap_per_mailbox, min_interval_sec, warmup_enabled,
+    bounce_pause_threshold,
     sender_org, sender_address, sender_contact
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
 )
 RETURNING *;
 
@@ -39,6 +40,7 @@ SET
   daily_cap_per_mailbox = COALESCE(sqlc.narg(daily_cap_per_mailbox), daily_cap_per_mailbox),
   min_interval_sec      = COALESCE(sqlc.narg(min_interval_sec), min_interval_sec),
   warmup_enabled        = COALESCE(sqlc.narg(warmup_enabled), warmup_enabled),
+  bounce_pause_threshold = COALESCE(sqlc.narg(bounce_pause_threshold), bounce_pause_threshold),
   sender_org            = COALESCE(sqlc.narg(sender_org), sender_org),
   sender_address        = COALESCE(sqlc.narg(sender_address), sender_address),
   sender_contact        = COALESCE(sqlc.narg(sender_contact), sender_contact),
@@ -353,3 +355,53 @@ UPDATE "CampaignRecipient"
 SET status = 'sent', next_step_at = NULL, locked_at = NULL
 WHERE campaign_id = $1 AND status = 'queued' AND sent_at IS NOT NULL
   AND (replied_at IS NOT NULL OR unsubscribed_at IS NOT NULL OR bounced_at IS NOT NULL);
+
+-- ─── Phase 27f: 健全性チェック ──────────────────────────────────
+
+-- name: GetCampaignBounceStats :one
+-- サーキットブレーカー判定用。ハードバウンス率 = bounced / sent。
+SELECT
+  count(*) FILTER (WHERE sent_at IS NOT NULL)    AS sent,
+  count(*) FILTER (WHERE bounced_at IS NOT NULL) AS bounced
+FROM "CampaignRecipient"
+WHERE campaign_id = $1;
+
+-- name: GetMailboxBounceStats :one
+-- mailbox 単位の健全性 (全キャンペーン横断・直近 N 日)。
+-- 送信元の評価は mailbox/ドメインに紐づくのでキャンペーンを跨いで見る。
+SELECT
+  count(*) FILTER (WHERE sent_at IS NOT NULL)         AS sent,
+  count(*) FILTER (WHERE bounced_at IS NOT NULL)      AS bounced,
+  count(*) FILTER (WHERE unsubscribed_at IS NOT NULL) AS unsubscribed,
+  count(*) FILTER (WHERE replied_at IS NOT NULL)      AS replied
+FROM "CampaignRecipient"
+WHERE mailbox_id = $1 AND sent_at >= $2;
+
+-- name: PauseCampaignForHealth :exec
+-- サーキットブレーカーによる自動一時停止 (理由付き)。running のみ対象。
+UPDATE "Campaign"
+SET status = 'paused', health_paused_reason = $2, updated_at = now()
+WHERE id = $1 AND status = 'running';
+
+-- name: ClearHealthPauseReason :exec
+-- 人が再開したら理由を消す (再開は既存の StartCampaign 経由)。
+UPDATE "Campaign" SET health_paused_reason = '' WHERE id = $1;
+
+-- name: UpdateCampaignBounceThreshold :exec
+UPDATE "Campaign" SET bounce_pause_threshold = $2, updated_at = now() WHERE id = $1;
+
+-- ─── DomainHealth (MX 検証キャッシュ) ───────────────────────────
+
+-- name: GetDomainHealth :one
+SELECT * FROM "DomainHealth" WHERE domain = lower($1);
+
+-- name: UpsertDomainHealth :exec
+INSERT INTO "DomainHealth" (domain, has_mx, mx_host, checked_at)
+VALUES (lower($1), $2, $3, now())
+ON CONFLICT (domain) DO UPDATE
+SET has_mx = EXCLUDED.has_mx, mx_host = EXCLUDED.mx_host, checked_at = now();
+
+-- name: ListFreshDomainHealth :many
+-- 指定ドメイン群のうち、まだ有効期限内のキャッシュだけ返す。
+SELECT * FROM "DomainHealth"
+WHERE domain = ANY(sqlc.arg(domains)::varchar[]) AND checked_at > sqlc.arg(fresh_after);

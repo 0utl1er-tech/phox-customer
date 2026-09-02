@@ -56,6 +56,7 @@ func (s *CampaignService) UpdateCampaign(
 		params.DailyCapPerMailbox = pgtype.Int4{Int32: sc.DailyCapPerMailbox, Valid: true}
 		params.MinIntervalSec = pgtype.Int4{Int32: sc.MinIntervalSec, Valid: true}
 		params.WarmupEnabled = pgtype.Bool{Bool: sc.WarmupEnabled, Valid: true}
+		params.BouncePauseThreshold = pgtype.Int4{Int32: sc.BouncePauseThreshold, Valid: true}
 	}
 	if sd := req.Msg.Sender; sd != nil {
 		params.SenderOrg = pgtype.Text{String: sd.SenderOrg, Valid: true}
