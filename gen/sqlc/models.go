@@ -165,10 +165,11 @@ type CampaignStep struct {
 }
 
 type Company struct {
-	ID        uuid.UUID `json:"id"`
-	Name      string    `json:"name"`
-	UpdatedAt time.Time `json:"updated_at"`
-	CreatedAt time.Time `json:"created_at"`
+	ID          uuid.UUID `json:"id"`
+	Name        string    `json:"name"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	CreatedAt   time.Time `json:"created_at"`
+	CallLogMode string    `json:"call_log_mode"`
 }
 
 type Contact struct {

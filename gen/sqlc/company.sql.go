@@ -15,7 +15,7 @@ import (
 const createCompany = `-- name: CreateCompany :one
 INSERT INTO "Company" (id, name)
 VALUES ($1, $2)
-RETURNING id, name, updated_at, created_at
+RETURNING id, name, updated_at, created_at, call_log_mode
 `
 
 type CreateCompanyParams struct {
@@ -31,6 +31,7 @@ func (q *Queries) CreateCompany(ctx context.Context, arg CreateCompanyParams) (C
 		&i.Name,
 		&i.UpdatedAt,
 		&i.CreatedAt,
+		&i.CallLogMode,
 	)
 	return i, err
 }
@@ -45,7 +46,7 @@ func (q *Queries) DeleteCompany(ctx context.Context, id uuid.UUID) error {
 }
 
 const getCompany = `-- name: GetCompany :one
-SELECT id, name, updated_at, created_at FROM "Company"
+SELECT id, name, updated_at, created_at, call_log_mode FROM "Company"
 WHERE id = $1
 `
 
@@ -57,12 +58,32 @@ func (q *Queries) GetCompany(ctx context.Context, id uuid.UUID) (Company, error)
 		&i.Name,
 		&i.UpdatedAt,
 		&i.CreatedAt,
+		&i.CallLogMode,
 	)
 	return i, err
 }
 
+const getCompanySettings = `-- name: GetCompanySettings :one
+
+SELECT id, call_log_mode FROM "Company"
+WHERE id = $1
+`
+
+type GetCompanySettingsRow struct {
+	ID          uuid.UUID `json:"id"`
+	CallLogMode string    `json:"call_log_mode"`
+}
+
+// Phase 27f: 通話記録モード (管理者設定)
+func (q *Queries) GetCompanySettings(ctx context.Context, id uuid.UUID) (GetCompanySettingsRow, error) {
+	row := q.db.QueryRow(ctx, getCompanySettings, id)
+	var i GetCompanySettingsRow
+	err := row.Scan(&i.ID, &i.CallLogMode)
+	return i, err
+}
+
 const listCompanies = `-- name: ListCompanies :many
-SELECT id, name, updated_at, created_at FROM "Company"
+SELECT id, name, updated_at, created_at, call_log_mode FROM "Company"
 `
 
 func (q *Queries) ListCompanies(ctx context.Context) ([]Company, error) {
@@ -79,6 +100,7 @@ func (q *Queries) ListCompanies(ctx context.Context) ([]Company, error) {
 			&i.Name,
 			&i.UpdatedAt,
 			&i.CreatedAt,
+			&i.CallLogMode,
 		); err != nil {
 			return nil, err
 		}
@@ -96,7 +118,7 @@ SET
   name = COALESCE($1, name),
   updated_at = CURRENT_TIMESTAMP
 WHERE id = $2
-RETURNING id, name, updated_at, created_at
+RETURNING id, name, updated_at, created_at, call_log_mode
 `
 
 type UpdateCompanyParams struct {
@@ -112,6 +134,33 @@ func (q *Queries) UpdateCompany(ctx context.Context, arg UpdateCompanyParams) (C
 		&i.Name,
 		&i.UpdatedAt,
 		&i.CreatedAt,
+		&i.CallLogMode,
 	)
+	return i, err
+}
+
+const updateCompanyCallLogMode = `-- name: UpdateCompanyCallLogMode :one
+UPDATE "Company"
+SET
+  call_log_mode = $2,
+  updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+RETURNING id, call_log_mode
+`
+
+type UpdateCompanyCallLogModeParams struct {
+	ID          uuid.UUID `json:"id"`
+	CallLogMode string    `json:"call_log_mode"`
+}
+
+type UpdateCompanyCallLogModeRow struct {
+	ID          uuid.UUID `json:"id"`
+	CallLogMode string    `json:"call_log_mode"`
+}
+
+func (q *Queries) UpdateCompanyCallLogMode(ctx context.Context, arg UpdateCompanyCallLogModeParams) (UpdateCompanyCallLogModeRow, error) {
+	row := q.db.QueryRow(ctx, updateCompanyCallLogMode, arg.ID, arg.CallLogMode)
+	var i UpdateCompanyCallLogModeRow
+	err := row.Scan(&i.ID, &i.CallLogMode)
 	return i, err
 }

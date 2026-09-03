@@ -137,6 +137,8 @@ type Querier interface {
 	// 非正規化時刻列の FILTER 集計 1 スキャンで済ませる (CampaignEvent 不要)。
 	GetCampaignStats(ctx context.Context, campaignID uuid.UUID) (GetCampaignStatsRow, error)
 	GetCompany(ctx context.Context, id uuid.UUID) (Company, error)
+	// Phase 27f: 通話記録モード (管理者設定)
+	GetCompanySettings(ctx context.Context, id uuid.UUID) (GetCompanySettingsRow, error)
 	GetContact(ctx context.Context, id uuid.UUID) (Contact, error)
 	GetCustomer(ctx context.Context, id uuid.UUID) (GetCustomerRow, error)
 	GetCustomerByBookId(ctx context.Context, bookID uuid.UUID) (GetCustomerByBookIdRow, error)
@@ -262,6 +264,7 @@ type Querier interface {
 	// draft / paused のみ編集可 (状態チェックは service 層)。
 	UpdateCampaignDraft(ctx context.Context, arg UpdateCampaignDraftParams) (Campaign, error)
 	UpdateCompany(ctx context.Context, arg UpdateCompanyParams) (Company, error)
+	UpdateCompanyCallLogMode(ctx context.Context, arg UpdateCompanyCallLogModeParams) (UpdateCompanyCallLogModeRow, error)
 	UpdateContact(ctx context.Context, arg UpdateContactParams) (Contact, error)
 	UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) (Customer, error)
 	UpdateMailTemplate(ctx context.Context, arg UpdateMailTemplateParams) (MailTemplate, error)

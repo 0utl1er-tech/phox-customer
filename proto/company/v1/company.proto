@@ -18,3 +18,30 @@ message GetCompanyRequest {
 message GetCompanyResponse {
   Company company = 1;
 }
+
+// CompanyService は会社単位の管理者設定を扱う (Phase 27f)。
+// 閲覧は同じ会社のユーザーなら誰でも可、更新は User.role = owner のみ。
+service CompanyService {
+  // GetSettings は呼び出しユーザーの会社の設定を返す。
+  rpc GetSettings(GetSettingsRequest) returns (GetSettingsResponse);
+
+  // UpdateSettings は通話記録モードを更新する (owner のみ)。
+  rpc UpdateSettings(UpdateSettingsRequest) returns (UpdateSettingsResponse);
+}
+
+message GetSettingsRequest {}
+
+message GetSettingsResponse {
+  // 通話記録モード: 'click' (従来 — クリック時に記録) | 'zoom' (Zoom マスター)。
+  string call_log_mode = 1;
+  // 呼び出しユーザーが設定を変更できるか (User.role = owner)。
+  bool can_edit = 2;
+}
+
+message UpdateSettingsRequest {
+  string call_log_mode = 1 [(buf.validate.field).string = {in: ["click", "zoom"]}];
+}
+
+message UpdateSettingsResponse {
+  string call_log_mode = 1;
+}

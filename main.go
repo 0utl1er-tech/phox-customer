@@ -14,6 +14,7 @@ import (
 	activityv1connect "github.com/0utl1er-tech/phox-customer/gen/pb/activity/v1/activityv1connect"
 	"github.com/0utl1er-tech/phox-customer/gen/pb/book/v1/bookv1connect"
 	campaignv1connect "github.com/0utl1er-tech/phox-customer/gen/pb/campaign/v1/campaignv1connect"
+	companyv1connect "github.com/0utl1er-tech/phox-customer/gen/pb/company/v1/companyv1connect"
 	contactv1connect "github.com/0utl1er-tech/phox-customer/gen/pb/contact/v1/contactv1connect"
 	customerv1connect "github.com/0utl1er-tech/phox-customer/gen/pb/customer/v1/customerv1connect"
 	googleoauthv1connect "github.com/0utl1er-tech/phox-customer/gen/pb/googleoauth/v1/googleoauthv1connect"
@@ -43,6 +44,7 @@ import (
 	"github.com/0utl1er-tech/phox-customer/internal/service/auth"
 	"github.com/0utl1er-tech/phox-customer/internal/service/book"
 	campaignservice "github.com/0utl1er-tech/phox-customer/internal/service/campaign"
+	companyservice "github.com/0utl1er-tech/phox-customer/internal/service/company"
 	"github.com/0utl1er-tech/phox-customer/internal/service/contact"
 	"github.com/0utl1er-tech/phox-customer/internal/service/customer"
 	"github.com/0utl1er-tech/phox-customer/internal/service/googleoauth"
@@ -248,6 +250,8 @@ func main() {
 	permitService := permit.NewPermitService(queries)
 	contactService := contact.NewContactService(queries)
 	statusService := status.NewStatusService(queries)
+	// Phase 27f: 会社単位の管理者設定 (通話記録モード)。
+	companyService := companyservice.NewCompanyService(queries)
 
 	// Phase 25: MailboxService — MAILBOX_SECRET_KEY 設定時のみ有効。
 	// 鍵はメールボックスパスワードの AES-GCM 暗号化に使う。cipher と共有 mailu
@@ -585,6 +589,7 @@ func main() {
 	googleOAuthPath, googleOAuthHandler := googleoauthv1connect.NewGoogleOAuthServiceHandler(googleOAuthService, interceptors)
 	icalFeedPath, icalFeedHandler := icalfeedv1connect.NewICalFeedServiceHandler(icalFeedService, interceptors)
 	zoomPhonePath, zoomPhoneHandler := zoomphonev1connect.NewZoomPhoneServiceHandler(zoomPhoneService, interceptors)
+	companyPath, companyHandler := companyv1connect.NewCompanyServiceHandler(companyService, interceptors)
 
 	mux.Handle(customerPath, customerHandler)
 	mux.Handle(bookPath, bookHandler)
@@ -599,6 +604,7 @@ func main() {
 	mux.Handle(googleOAuthPath, googleOAuthHandler)
 	mux.Handle(icalFeedPath, icalFeedHandler)
 	mux.Handle(zoomPhonePath, zoomPhoneHandler)
+	mux.Handle(companyPath, companyHandler)
 
 	// OAuth HTTP endpoints (not Connect RPC — plain HTTP for browser redirects)
 	mux.HandleFunc("/oauth/google/start", oauthHandler.StartHandler)
@@ -698,6 +704,14 @@ func main() {
 			return campaignWorker.Run(ctx)
 		})
 	}
+
+	// Phase 27f: Zoom call_logs 定期リコンシリエーション worker。
+	// call_log_mode = 'zoom' の会社でのみ実働 (それ以外は毎時 skip ログのみ)。
+	// zoom_call_id UNIQUE の冪等 upsert なので replicas=2 で二重実行しても安全。
+	zoomReconcileWorker := zoom.NewReconcileWorker(zoomClient, queries, recordingArchiver, "system")
+	waitGroup.Go(func() error {
+		return zoomReconcileWorker.Run(ctx)
+	})
 
 	waitGroup.Go(func() error {
 		log.Info().Msgf("Start Connect-Go server at %s", server.Addr)
