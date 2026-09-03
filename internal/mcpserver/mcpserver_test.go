@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/lestrrat-go/jwx/v2/jwt"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
@@ -23,6 +24,7 @@ import (
 	"github.com/0utl1er-tech/phox-customer/internal/service/activity"
 	"github.com/0utl1er-tech/phox-customer/internal/service/auth"
 	"github.com/0utl1er-tech/phox-customer/internal/service/book"
+	"github.com/0utl1er-tech/phox-customer/internal/service/campaign"
 	"github.com/0utl1er-tech/phox-customer/internal/service/contact"
 	"github.com/0utl1er-tech/phox-customer/internal/service/customer"
 	"github.com/0utl1er-tech/phox-customer/internal/service/mailbox"
@@ -52,10 +54,17 @@ func (s stubAuth) Authenticate(ctx context.Context, header string) (context.Cont
 // ─── helpers ────────────────────────────────────────────────────
 
 // newTestHandler builds the /mcp handler with real services on the test DB.
-func newTestHandler(t *testing.T, q *db.Queries, sub string) http.Handler {
+// pool は CampaignService (CreateCampaign のトランザクション) 用。nil なら
+// キャンペーン系ツールは登録されない (本番の gating と同じ)。
+func newTestHandler(t *testing.T, pool *pgxpool.Pool, q *db.Queries, sub string) http.Handler {
 	t.Helper()
 	cipher, err := crypto.NewCipherFromBase64("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
 	require.NoError(t, err)
+	var campaignService *campaign.CampaignService
+	if pool != nil {
+		// sender/cipher/tokenizer nil — SendTestEmail 以外は使わない。
+		campaignService = campaign.NewCampaignService(q, pool, nil, nil, nil, "")
+	}
 	return mcpserver.NewHandler(stubAuth{sub: sub}, mcpserver.Deps{
 		Book:     book.NewBookService(q, nil),
 		Customer: customer.NewCustomerService(q, nil),
@@ -63,6 +72,7 @@ func newTestHandler(t *testing.T, q *db.Queries, sub string) http.Handler {
 		Search:   search.NewSearchService(q, nil), // ES nil → search_customers はツールエラー
 		Activity: activity.NewActivityService(q, nil, nil),
 		Mailbox:  mailbox.NewMailboxService(q, cipher, nil),
+		Campaign: campaignService,
 		Queries:  q,
 	}, "")
 }
@@ -160,11 +170,50 @@ func TestListTools(t *testing.T) {
 	}, got)
 }
 
+// tools/list (Phase 27i): Campaign 有効時はキャンペーン系 7 ツールが載る。
+// スキーマ推論 (createCampaignDraftIn のネスト構造含む) が panic しないこと
+// もここで担保する。
+func TestListToolsWithCampaign(t *testing.T) {
+	h := mcpserver.NewHandler(stubAuth{sub: "u"}, mcpserver.Deps{
+		// 登録判定 (nil チェック) にしか使わないので依存は全部 nil で良い。
+		Campaign: campaign.NewCampaignService(nil, nil, nil, nil, nil, ""),
+	}, "")
+	session := connectClient(t, h)
+
+	res, err := session.ListTools(context.Background(), nil)
+	require.NoError(t, err)
+
+	got := make([]string, 0, len(res.Tools))
+	byName := map[string]*mcp.Tool{}
+	for _, tool := range res.Tools {
+		got = append(got, tool.Name)
+		byName[tool.Name] = tool
+	}
+	for _, name := range []string{
+		"list_campaigns",
+		"get_campaign",
+		"create_campaign_draft",
+		"start_campaign",
+		"pause_campaign",
+		"cancel_campaign",
+		"get_campaign_stats",
+	} {
+		assert.Contains(t, got, name)
+	}
+	// 実送信ツールには明示確認の但し書きが載っていること。
+	require.NotNil(t, byName["start_campaign"])
+	assert.Contains(t, byName["start_campaign"].Description, "ユーザーの明示的な確認")
+	// array パラメータが null union になっていないこと (91f8dac の再発防止)。
+	schema, err := json.Marshal(byName["create_campaign_draft"].InputSchema)
+	require.NoError(t, err)
+	assert.NotContains(t, string(schema), `"null"`)
+}
+
 // list_books / get_customer / list_book_activities のハッピーパス + 認可。
 // testutil.SetupTestDB は DB が無い環境では skip する (CI では postgres
 // service が立つので実行される)。
 func TestToolsAgainstDB(t *testing.T) {
-	_, q := testutil.SetupTestDB(t)
+	pool, q := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
 	cid := testutil.TestCompanyID(t, q)
@@ -190,7 +239,7 @@ func TestToolsAgainstDB(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("list_books returns the seeded book", func(t *testing.T) {
-		session := connectClient(t, newTestHandler(t, q, owner.ID))
+		session := connectClient(t, newTestHandler(t, pool, q, owner.ID))
 		res, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "list_books"})
 		require.NoError(t, err)
 		require.False(t, res.IsError, "unexpected tool error: %s", textOf(t, res))
@@ -211,7 +260,7 @@ func TestToolsAgainstDB(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		session := connectClient(t, newTestHandler(t, q, owner.ID))
+		session := connectClient(t, newTestHandler(t, pool, q, owner.ID))
 		res, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "list_mailboxes"})
 		require.NoError(t, err)
 		require.False(t, res.IsError, "unexpected tool error: %s", textOf(t, res))
@@ -246,7 +295,7 @@ func TestToolsAgainstDB(t *testing.T) {
 		assert.Contains(t, textOf(t, res), "詳しく知りたい", "get は本文を返す")
 
 		// permit の無い outsider には見えない。
-		xsession := connectClient(t, newTestHandler(t, q, outsider.ID))
+		xsession := connectClient(t, newTestHandler(t, pool, q, outsider.ID))
 		res, err = xsession.CallTool(ctx, &mcp.CallToolParams{
 			Name:      "list_mailbox_messages",
 			Arguments: map[string]any{"mailbox_id": mbID.String()},
@@ -256,7 +305,7 @@ func TestToolsAgainstDB(t *testing.T) {
 	})
 
 	t.Run("create_customer creates then upserts by mail", func(t *testing.T) {
-		session := connectClient(t, newTestHandler(t, q, owner.ID))
+		session := connectClient(t, newTestHandler(t, pool, q, owner.ID))
 		mail := "inquiry-" + uuid.NewString() + "@example.com"
 
 		res, err := session.CallTool(ctx, &mcp.CallToolParams{
@@ -292,7 +341,7 @@ func TestToolsAgainstDB(t *testing.T) {
 		assert.Equal(t, f1.Customer.Id, f2.Customer.Id, "同一 mail は同一顧客に upsert")
 
 		// editor 権限の無い outsider は作れない。
-		xsession := connectClient(t, newTestHandler(t, q, outsider.ID))
+		xsession := connectClient(t, newTestHandler(t, pool, q, outsider.ID))
 		res, err = xsession.CallTool(ctx, &mcp.CallToolParams{
 			Name: "create_customer",
 			Arguments: map[string]any{
@@ -320,7 +369,7 @@ func TestToolsAgainstDB(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		session := connectClient(t, newTestHandler(t, q, owner.ID))
+		session := connectClient(t, newTestHandler(t, pool, q, owner.ID))
 		custMail := "levtech-main-" + uuid.NewString() + "@levtech.jp"
 		res, err := session.CallTool(ctx, &mcp.CallToolParams{
 			Name: "create_customer",
@@ -370,7 +419,7 @@ func TestToolsAgainstDB(t *testing.T) {
 	})
 
 	t.Run("get_customer returns the customer", func(t *testing.T) {
-		session := connectClient(t, newTestHandler(t, q, owner.ID))
+		session := connectClient(t, newTestHandler(t, pool, q, owner.ID))
 		res, err := session.CallTool(ctx, &mcp.CallToolParams{
 			Name:      "get_customer",
 			Arguments: map[string]any{"customer_id": cust.ID.String()},
@@ -381,7 +430,7 @@ func TestToolsAgainstDB(t *testing.T) {
 	})
 
 	t.Run("list_book_activities returns the seeded call", func(t *testing.T) {
-		session := connectClient(t, newTestHandler(t, q, owner.ID))
+		session := connectClient(t, newTestHandler(t, pool, q, owner.ID))
 		res, err := session.CallTool(ctx, &mcp.CallToolParams{
 			Name: "list_book_activities",
 			Arguments: map[string]any{
@@ -397,7 +446,7 @@ func TestToolsAgainstDB(t *testing.T) {
 	})
 
 	t.Run("permit のないユーザーはツールエラー (PermissionDenied)", func(t *testing.T) {
-		session := connectClient(t, newTestHandler(t, q, outsider.ID))
+		session := connectClient(t, newTestHandler(t, pool, q, outsider.ID))
 		res, err := session.CallTool(ctx, &mcp.CallToolParams{
 			Name:      "list_book_activities",
 			Arguments: map[string]any{"book_id": bk.ID.String()},
@@ -408,7 +457,7 @@ func TestToolsAgainstDB(t *testing.T) {
 	})
 
 	t.Run("不正な activity type はツールエラー", func(t *testing.T) {
-		session := connectClient(t, newTestHandler(t, q, owner.ID))
+		session := connectClient(t, newTestHandler(t, pool, q, owner.ID))
 		res, err := session.CallTool(ctx, &mcp.CallToolParams{
 			Name: "list_book_activities",
 			Arguments: map[string]any{
@@ -427,7 +476,7 @@ func TestToolsAgainstDB(t *testing.T) {
 		// が無い stubAuth token では failed_precondition が先に出るため、
 		// ここでは「書き込み tool が認可・前提チェックを service 層から
 		// 引き継いでいる」ことをエラー種別で確認する。
-		session := connectClient(t, newTestHandler(t, q, owner.ID))
+		session := connectClient(t, newTestHandler(t, pool, q, owner.ID))
 		res, err := session.CallTool(ctx, &mcp.CallToolParams{
 			Name: "send_customer_email",
 			Arguments: map[string]any{
@@ -443,7 +492,7 @@ func TestToolsAgainstDB(t *testing.T) {
 	})
 
 	t.Run("permit の無いユーザーは send_customer_email できない", func(t *testing.T) {
-		session := connectClient(t, newTestHandler(t, q, outsider.ID))
+		session := connectClient(t, newTestHandler(t, pool, q, outsider.ID))
 		res, err := session.CallTool(ctx, &mcp.CallToolParams{
 			Name: "send_customer_email",
 			Arguments: map[string]any{
@@ -457,7 +506,7 @@ func TestToolsAgainstDB(t *testing.T) {
 	})
 
 	t.Run("search_customers は ES 未設定だと unavailable のツールエラー", func(t *testing.T) {
-		session := connectClient(t, newTestHandler(t, q, owner.ID))
+		session := connectClient(t, newTestHandler(t, pool, q, owner.ID))
 		res, err := session.CallTool(ctx, &mcp.CallToolParams{
 			Name:      "search_customers",
 			Arguments: map[string]any{"query": "田中"},
@@ -465,5 +514,132 @@ func TestToolsAgainstDB(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, res.IsError)
 		assert.Contains(t, textOf(t, res), "unavailable")
+	})
+
+	t.Run("campaign draft lifecycle (Phase 27i)", func(t *testing.T) {
+		// MX チェックが CI の DNS 事情に左右されないよう、受信者ドメインの
+		// 判定結果をキャッシュに seed しておく (Check はキャッシュ優先)。
+		require.NoError(t, q.UpsertDomainHealth(ctx, db.UpsertDomainHealthParams{
+			Lower: "example.com", HasMx: true, MxHost: "mx.example.com",
+		}))
+
+		// 送信プール mailbox (owner が editor 以上)。
+		mbID := uuid.New()
+		_, err := q.CreateMailbox(ctx, db.CreateMailboxParams{
+			ID: mbID, CompanyID: cid, Address: "camp-" + mbID.String()[:8] + "@0utl1er.tech",
+			SmtpUsername: "camp@0utl1er.tech", PasswordEnc: []byte("x"), Active: true,
+		})
+		require.NoError(t, err)
+		_, err = q.CreateMailboxPermit(ctx, db.CreateMailboxPermitParams{
+			ID: uuid.New(), MailboxID: mbID, UserID: owner.ID, Role: db.RoleOwner,
+		})
+		require.NoError(t, err)
+
+		session := connectClient(t, newTestHandler(t, pool, q, owner.ID))
+
+		// ── create_campaign_draft: draft で作られ、送信はされない ──
+		res, err := session.CallTool(ctx, &mcp.CallToolParams{
+			Name: "create_campaign_draft",
+			Arguments: map[string]any{
+				"name":         "mcp-test-campaign",
+				"customer_ids": []string{cust.ID.String()},
+				"mailbox_ids":  []string{mbID.String()},
+				"subject":      "{{customer_name}} 様へのご案内",
+				"body":         "本文です。",
+				"followups": []any{
+					map[string]any{"wait_days": 3, "body": "その後いかがでしょうか。"},
+				},
+			},
+		})
+		require.NoError(t, err)
+		require.False(t, res.IsError, "unexpected tool error: %s", textOf(t, res))
+		draftJSON := textOf(t, res)
+		assert.Contains(t, draftJSON, `"status":"draft"`)
+		assert.Contains(t, draftJSON, `"queuedCount":1`)
+		// 2 要素目に「start_campaign を明示的に」の注意文が付く。
+		require.Len(t, res.Content, 2)
+		notice, ok := res.Content[1].(*mcp.TextContent)
+		require.True(t, ok)
+		assert.Contains(t, notice.Text, "start_campaign")
+		assert.Contains(t, notice.Text, "送信されていません")
+
+		var created struct {
+			Campaign struct {
+				Id string `json:"id"`
+			} `json:"campaign"`
+		}
+		require.NoError(t, json.Unmarshal([]byte(draftJSON), &created))
+		campID := created.Campaign.Id
+		require.NotEmpty(t, campID)
+
+		// ── get_campaign: followups 込みで読める ──
+		res, err = session.CallTool(ctx, &mcp.CallToolParams{
+			Name:      "get_campaign",
+			Arguments: map[string]any{"campaign_id": campID},
+		})
+		require.NoError(t, err)
+		require.False(t, res.IsError, "unexpected tool error: %s", textOf(t, res))
+		gotCampaign := textOf(t, res)
+		assert.Contains(t, gotCampaign, `"status":"draft"`)
+		assert.Contains(t, gotCampaign, "その後いかがでしょうか")
+
+		// ── list_campaigns: 一覧に載る ──
+		res, err = session.CallTool(ctx, &mcp.CallToolParams{Name: "list_campaigns"})
+		require.NoError(t, err)
+		require.False(t, res.IsError, "unexpected tool error: %s", textOf(t, res))
+		assert.Contains(t, textOf(t, res), campID)
+
+		// ── get_campaign_stats: stats + timeseries が返る ──
+		res, err = session.CallTool(ctx, &mcp.CallToolParams{
+			Name:      "get_campaign_stats",
+			Arguments: map[string]any{"campaign_id": campID},
+		})
+		require.NoError(t, err)
+		require.False(t, res.IsError, "unexpected tool error: %s", textOf(t, res))
+		statsJSON := textOf(t, res)
+		assert.Contains(t, statsJSON, `"stats"`)
+		assert.Contains(t, statsJSON, `"timeseries"`)
+		assert.Contains(t, statsJSON, `"queued":1`)
+
+		// ── start_campaign: 特電法の送信者表示が空なので失敗する ──
+		res, err = session.CallTool(ctx, &mcp.CallToolParams{
+			Name:      "start_campaign",
+			Arguments: map[string]any{"campaign_id": campID},
+		})
+		require.NoError(t, err)
+		assert.True(t, res.IsError, "sender 未設定の開始は failed_precondition になるべき")
+		assert.Contains(t, textOf(t, res), "特定電子メール法")
+
+		// ── pause_campaign: draft は一時停止できない ──
+		res, err = session.CallTool(ctx, &mcp.CallToolParams{
+			Name:      "pause_campaign",
+			Arguments: map[string]any{"campaign_id": campID},
+		})
+		require.NoError(t, err)
+		assert.True(t, res.IsError)
+
+		// ── mailbox permit の無い outsider は draft を作れない ──
+		xsession := connectClient(t, newTestHandler(t, pool, q, outsider.ID))
+		res, err = xsession.CallTool(ctx, &mcp.CallToolParams{
+			Name: "create_campaign_draft",
+			Arguments: map[string]any{
+				"name":         "no-permission",
+				"customer_ids": []string{cust.ID.String()},
+				"mailbox_ids":  []string{mbID.String()},
+				"subject":      "x",
+				"body":         "x",
+			},
+		})
+		require.NoError(t, err)
+		assert.True(t, res.IsError, "mailbox editor なしは permission_denied になるべき")
+
+		// ── cancel_campaign: 後始末 (draft → cancelled) ──
+		res, err = session.CallTool(ctx, &mcp.CallToolParams{
+			Name:      "cancel_campaign",
+			Arguments: map[string]any{"campaign_id": campID},
+		})
+		require.NoError(t, err)
+		require.False(t, res.IsError, "unexpected tool error: %s", textOf(t, res))
+		assert.Contains(t, textOf(t, res), `"status":"cancelled"`)
 	})
 }

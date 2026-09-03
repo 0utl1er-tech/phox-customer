@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -18,6 +19,7 @@ import (
 
 	activityv1 "github.com/0utl1er-tech/phox-customer/gen/pb/activity/v1"
 	bookv1 "github.com/0utl1er-tech/phox-customer/gen/pb/book/v1"
+	campaignv1 "github.com/0utl1er-tech/phox-customer/gen/pb/campaign/v1"
 	contactv1 "github.com/0utl1er-tech/phox-customer/gen/pb/contact/v1"
 	customerv1 "github.com/0utl1er-tech/phox-customer/gen/pb/customer/v1"
 	mailboxv1 "github.com/0utl1er-tech/phox-customer/gen/pb/mailbox/v1"
@@ -105,6 +107,86 @@ type sendCustomerEmailIn struct {
 	Body       string `json:"body,omitempty" jsonschema:"plain-text mail body"`
 	ContactID  string `json:"contact_id,omitempty" jsonschema:"optional contact UUID to associate the mail with"`
 	MailboxID  string `json:"mailbox_id,omitempty" jsonschema:"optional mailbox UUID (from list_mailboxes) to send as — the From address becomes that mailbox and replies flow back to it; requires editor role on the mailbox. Omit for the legacy send-as-yourself behaviour"`
+}
+
+// ─── campaign input types (Phase 27i) ───────────────────────────
+
+type listCampaignsIn struct {
+	Limit  int32 `json:"limit,omitempty" jsonschema:"page size (server default 50, max 100)"`
+	Offset int32 `json:"offset,omitempty" jsonschema:"pagination offset"`
+}
+
+type campaignIDIn struct {
+	CampaignID string `json:"campaign_id" jsonschema:"campaign UUID (from list_campaigns or create_campaign_draft)"`
+}
+
+type campaignFollowupIn struct {
+	WaitDays int32  `json:"wait_days" jsonschema:"days to wait after the previous step (1-60); the followup is skipped automatically once the recipient replies"`
+	Subject  string `json:"subject,omitempty" jsonschema:"followup subject; empty = 'Re: <first subject>' so it threads as a reply"`
+	Body     string `json:"body" jsonschema:"followup plain-text body (required); same placeholders as the first body"`
+}
+
+// campaignScheduleIn — 全フィールド省略可。省略したフィールドはサービス既定値
+// (9-18 時 JST / 平日 / 100 通/日/mailbox / 90 秒間隔 / warmup on / bounce 5%)
+// に落ちる。pointer なのは bool/0 と「未指定」を区別するため。
+type campaignScheduleIn struct {
+	SendStartHour        *int32 `json:"send_start_hour,omitempty" jsonschema:"JST hour to start sending (0-23); default 9"`
+	SendEndHour          *int32 `json:"send_end_hour,omitempty" jsonschema:"JST hour to stop sending (1-24, must be after send_start_hour); default 18"`
+	SendDays             *int32 `json:"send_days,omitempty" jsonschema:"weekday bitmask Mon=1 Tue=2 Wed=4 Thu=8 Fri=16 Sat=32 Sun=64; default 31 (weekdays)"`
+	DailyCapPerMailbox   *int32 `json:"daily_cap_per_mailbox,omitempty" jsonschema:"max mails per mailbox per day (1-1000); default 100"`
+	MinIntervalSec       *int32 `json:"min_interval_sec,omitempty" jsonschema:"min seconds between two sends from the same mailbox (10-3600); default 90"`
+	WarmupEnabled        *bool  `json:"warmup_enabled,omitempty" jsonschema:"ramp up daily volume gradually for fresh mailboxes; default true"`
+	BouncePauseThreshold *int32 `json:"bounce_pause_threshold,omitempty" jsonschema:"auto-pause the campaign when hard-bounce rate (%) exceeds this; 0 disables; default 5"`
+}
+
+func (in *campaignScheduleIn) toProto() *campaignv1.CampaignSchedule {
+	// 既定値は create_campaign.go の schedule 未指定時デフォルトと同一。
+	p := &campaignv1.CampaignSchedule{
+		SendStartHour: 9, SendEndHour: 18, SendDays: 31,
+		DailyCapPerMailbox: 100, MinIntervalSec: 90, WarmupEnabled: true,
+		BouncePauseThreshold: 5,
+	}
+	if in.SendStartHour != nil {
+		p.SendStartHour = *in.SendStartHour
+	}
+	if in.SendEndHour != nil {
+		p.SendEndHour = *in.SendEndHour
+	}
+	if in.SendDays != nil {
+		p.SendDays = *in.SendDays
+	}
+	if in.DailyCapPerMailbox != nil {
+		p.DailyCapPerMailbox = *in.DailyCapPerMailbox
+	}
+	if in.MinIntervalSec != nil {
+		p.MinIntervalSec = *in.MinIntervalSec
+	}
+	if in.WarmupEnabled != nil {
+		p.WarmupEnabled = *in.WarmupEnabled
+	}
+	if in.BouncePauseThreshold != nil {
+		p.BouncePauseThreshold = *in.BouncePauseThreshold
+	}
+	return p
+}
+
+type campaignSenderIn struct {
+	SenderOrg     string `json:"sender_org" jsonschema:"sender organisation or person name (特定電子メール法の法定表示; the campaign cannot start while empty)"`
+	SenderAddress string `json:"sender_address" jsonschema:"sender postal address (法定表示)"`
+	SenderContact string `json:"sender_contact" jsonschema:"sender phone number or contact point (法定表示)"`
+}
+
+type createCampaignDraftIn struct {
+	Name        string               `json:"name" jsonschema:"campaign name (internal label shown in the UI)"`
+	CustomerIDs []string             `json:"customer_ids" jsonschema:"recipient customer UUIDs (immutable snapshot, 1-10000). Customers without an email address, suppressed (unsubscribed/bounced) or duplicated addresses are recorded as skipped — the breakdown is returned"`
+	MailboxIDs  []string             `json:"mailbox_ids" jsonschema:"sending mailbox pool UUIDs (from list_mailboxes); requires editor role on every mailbox. Sends rotate across the pool"`
+	Subject     string               `json:"subject" jsonschema:"first email subject. Placeholders: {{customer_name}} {{customer_corporation}} {{customer_mail}} {{customer_phone}} {{sender_name}} {{sender_mail}} {{today}}"`
+	Body        string               `json:"body" jsonschema:"first email plain-text body (same placeholders as subject, plus {{unsubscribe_url}}). The 特定電子メール法 footer (sender info + unsubscribe link) is always appended automatically"`
+	Followups   []campaignFollowupIn `json:"followups,omitempty" jsonschema:"followup emails (2nd mail and later, max 5) sent to recipients who have not replied; each waits wait_days after the previous step and threads as a reply"`
+	Schedule    *campaignScheduleIn  `json:"schedule,omitempty" jsonschema:"pacing settings; omit for the defaults (JST 9-18, weekdays, 100/day/mailbox, 90s interval, warmup on)"`
+	Sender      *campaignSenderIn    `json:"sender,omitempty" jsonschema:"特定電子メール法 sender disclosure printed in every mail footer. Can be omitted on the draft but must be set before start_campaign succeeds"`
+	TrackOpens  bool                 `json:"track_opens,omitempty" jsonschema:"embed an open-tracking pixel"`
+	TrackClicks bool                 `json:"track_clicks,omitempty" jsonschema:"rewrite links for click tracking"`
 }
 
 // ─── registration ───────────────────────────────────────────────
@@ -350,6 +432,189 @@ func addTools(s *mcp.Server, deps Deps) {
 		}
 		resp, rpcErr := deps.Activity.GetMailStats(ctx, connect.NewRequest(req))
 		return protoResult(resp, rpcErr)
+	})
+
+	if deps.Campaign != nil {
+		addCampaignTools(s, deps)
+	}
+}
+
+// ─── campaign tools (Phase 27i) ─────────────────────────────────
+//
+// エージェント運用のゴール: 雑な CSV/台本 → create_customer で正規化登録 →
+// create_campaign_draft で下書き作成 → 人がレビュー → start_campaign。
+// 送信を伴うのは start_campaign だけで、下書き作成はどれだけ呼んでも
+// 実メールは 1 通も出ない。RBAC は CampaignService の in-process 呼び出しに
+// そのまま乗る (プール全 Mailbox editor + 受信者 Book editor)。
+func addCampaignTools(s *mcp.Server, deps Deps) {
+	mcp.AddTool(s, &mcp.Tool{
+		Name: "list_campaigns",
+		Description: "List the company's cold-email campaigns (newest first) with per-campaign " +
+			"summary stats (queued/sent/opened/clicked/replied/bounced/unsubscribed). Returns the " +
+			"campaign ids the other campaign tools take.",
+		InputSchema: mcpInputSchema[listCampaignsIn](),
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in listCampaignsIn) (*mcp.CallToolResult, any, error) {
+		req := &campaignv1.ListCampaignsRequest{}
+		if in.Limit > 0 {
+			req.Limit = proto.Int32(in.Limit)
+		}
+		if in.Offset > 0 {
+			req.Offset = proto.Int32(in.Offset)
+		}
+		resp, err := deps.Campaign.ListCampaigns(ctx, connect.NewRequest(req))
+		return protoResult(resp, err)
+	})
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name: "get_campaign",
+		Description: "Fetch one campaign in full: status, subject/body template, followup steps, " +
+			"schedule (pacing), 特定電子メール法 sender disclosure, mailbox pool, cumulative stats " +
+			"and — while running — the estimated completion time.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in campaignIDIn) (*mcp.CallToolResult, any, error) {
+		resp, err := deps.Campaign.GetCampaign(ctx, connect.NewRequest(&campaignv1.GetCampaignRequest{
+			Id: in.CampaignID,
+		}))
+		return protoResult(resp, err)
+	})
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name: "create_campaign_draft",
+		Description: "Create a cold-email campaign as a DRAFT — no email is sent by this tool, ever. " +
+			"The recipient list is snapshotted from customer_ids (skipping customers without an email, " +
+			"suppressed addresses, duplicates and no-MX domains; the breakdown is returned). " +
+			"Requires editor role on every mailbox in mailbox_ids and on every book the recipients " +
+			"belong to. Present the draft (subject, body, recipients, schedule, sender disclosure) to " +
+			"the user for review; actually sending requires an explicit start_campaign call.",
+		InputSchema: mcpInputSchema[createCampaignDraftIn](),
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in createCampaignDraftIn) (*mcp.CallToolResult, any, error) {
+		// in-process 呼び出しは Connect の buf.validate インターセプタを通らない
+		// ので、proto 制約のうち DB まで行ってから壊れると分かりにくいものだけ
+		// ここで先に検査する。
+		if len(in.Followups) > 5 {
+			return nil, nil, fmt.Errorf("followups: at most 5 steps (got %d)", len(in.Followups))
+		}
+		req := &campaignv1.CreateCampaignRequest{
+			Name:        in.Name,
+			CustomerIds: in.CustomerIDs,
+			MailboxIds:  in.MailboxIDs,
+			Subject:     in.Subject,
+			Body:        in.Body,
+			TrackOpens:  in.TrackOpens,
+			TrackClicks: in.TrackClicks,
+		}
+		for i, fu := range in.Followups {
+			if fu.WaitDays < 1 || fu.WaitDays > 60 {
+				return nil, nil, fmt.Errorf("followups[%d].wait_days: must be 1-60 (got %d)", i, fu.WaitDays)
+			}
+			if fu.Body == "" {
+				return nil, nil, fmt.Errorf("followups[%d].body: required", i)
+			}
+			req.Followups = append(req.Followups, &campaignv1.CampaignFollowup{
+				WaitDays: fu.WaitDays,
+				Subject:  fu.Subject,
+				Body:     fu.Body,
+			})
+		}
+		if in.Schedule != nil {
+			req.Schedule = in.Schedule.toProto()
+		}
+		if in.Sender != nil {
+			req.Sender = &campaignv1.CampaignSender{
+				SenderOrg:     in.Sender.SenderOrg,
+				SenderAddress: in.Sender.SenderAddress,
+				SenderContact: in.Sender.SenderContact,
+			}
+		}
+		resp, err := deps.Campaign.CreateCampaign(ctx, connect.NewRequest(req))
+		res, out, rerr := protoResult(resp, err)
+		if rerr != nil {
+			return nil, nil, rerr
+		}
+		// 下書きのままであること・開始は別操作であることをモデルに明示する。
+		res.Content = append(res.Content, &mcp.TextContent{
+			Text: "注意: このキャンペーンは draft のまま作成されました。メールはまだ 1 通も送信されていません。" +
+				"queued/skipped の内訳と本文をユーザーに提示し、明示的な承認を得てから start_campaign を呼んでください " +
+				"(start_campaign は実メールの送信を開始します)。",
+		})
+		return res, out, nil
+	})
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name: "start_campaign",
+		Description: "実メールを送信する操作。ユーザーの明示的な確認を得てから呼ぶこと。" +
+			"Start (or resume from paused) a campaign: status becomes running and the send worker " +
+			"begins emailing the queued recipients within the schedule window. Fails with " +
+			"failed_precondition when the 特定電子メール法 sender disclosure " +
+			"(sender_org/sender_address/sender_contact) or subject/body is still empty.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in campaignIDIn) (*mcp.CallToolResult, any, error) {
+		resp, err := deps.Campaign.StartCampaign(ctx, connect.NewRequest(&campaignv1.StartCampaignRequest{
+			Id: in.CampaignID,
+		}))
+		return protoResult(resp, err)
+	})
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name: "pause_campaign",
+		Description: "Pause a running campaign (running → paused). Sending stops after the " +
+			"in-flight mail; resume later with start_campaign.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in campaignIDIn) (*mcp.CallToolResult, any, error) {
+		resp, err := deps.Campaign.PauseCampaign(ctx, connect.NewRequest(&campaignv1.PauseCampaignRequest{
+			Id: in.CampaignID,
+		}))
+		return protoResult(resp, err)
+	})
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name: "cancel_campaign",
+		Description: "Cancel a campaign permanently (draft/running/paused → cancelled; cannot be " +
+			"restarted). Use this to discard a draft the user rejected.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in campaignIDIn) (*mcp.CallToolResult, any, error) {
+		resp, err := deps.Campaign.CancelCampaign(ctx, connect.NewRequest(&campaignv1.CancelCampaignRequest{
+			Id: in.CampaignID,
+		}))
+		return protoResult(resp, err)
+	})
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name: "get_campaign_stats",
+		Description: "Dashboard numbers for one campaign: cumulative stats (total/queued/sent/failed/" +
+			"opened/clicked/replied/bounced/unsubscribed/waiting_followup) plus the daily timeseries " +
+			"(sent/opened/clicked/replied/bounced/unsubscribed per JST day).",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in campaignIDIn) (*mcp.CallToolResult, any, error) {
+		getResp, err := deps.Campaign.GetCampaign(ctx, connect.NewRequest(&campaignv1.GetCampaignRequest{
+			Id: in.CampaignID,
+		}))
+		if err != nil {
+			return protoResult(getResp, err)
+		}
+		tsResp, err := deps.Campaign.GetCampaignTimeseries(ctx, connect.NewRequest(&campaignv1.GetCampaignTimeseriesRequest{
+			CampaignId: in.CampaignID,
+		}))
+		if err != nil {
+			return protoResult(tsResp, err)
+		}
+		c := getResp.Msg.Campaign
+		statsJSON, err := protojson.MarshalOptions{EmitUnpopulated: true}.Marshal(c.Stats)
+		if err != nil {
+			return nil, nil, fmt.Errorf("marshal stats: %w", err)
+		}
+		daysJSON, err := protojson.MarshalOptions{EmitUnpopulated: true}.Marshal(tsResp.Msg)
+		if err != nil {
+			return nil, nil, fmt.Errorf("marshal timeseries: %w", err)
+		}
+		combined, err := json.Marshal(map[string]any{
+			"campaignId": c.Id,
+			"name":       c.Name,
+			"status":     c.Status,
+			"stats":      json.RawMessage(statsJSON),
+			"timeseries": json.RawMessage(daysJSON),
+		})
+		if err != nil {
+			return nil, nil, fmt.Errorf("marshal combined stats: %w", err)
+		}
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: string(combined)}},
+		}, nil, nil
 	})
 }
 
