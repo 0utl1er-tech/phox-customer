@@ -272,6 +272,9 @@ type Querier interface {
 	UpdateCampaignDraft(ctx context.Context, arg UpdateCampaignDraftParams) (Campaign, error)
 	UpdateCompany(ctx context.Context, arg UpdateCompanyParams) (Company, error)
 	UpdateCompanyCallLogMode(ctx context.Context, arg UpdateCompanyCallLogModeParams) (UpdateCompanyCallLogModeRow, error)
+	// Phase 27h: キャンペーン反響通知 (管理者設定)
+	// narg = NULL は「変更しない」(部分更新)。
+	UpdateCompanyNotifySettings(ctx context.Context, arg UpdateCompanyNotifySettingsParams) (UpdateCompanyNotifySettingsRow, error)
 	UpdateContact(ctx context.Context, arg UpdateContactParams) (Contact, error)
 	UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) (Customer, error)
 	UpdateMailTemplate(ctx context.Context, arg UpdateMailTemplateParams) (MailTemplate, error)

@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
+	"github.com/0utl1er-tech/phox-customer/internal/notify"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/rs/zerolog/log"
@@ -20,13 +21,36 @@ import (
 type TrackingHandler struct {
 	queries   *db.Queries
 	tokenizer *Tokenizer
+	notifier  notify.Notifier // Phase 27h: 反響通知 (nil = 無効)
 }
 
-func NewTrackingHandler(queries *db.Queries, tokenizer *Tokenizer) *TrackingHandler {
+func NewTrackingHandler(queries *db.Queries, tokenizer *Tokenizer, notifier notify.Notifier) *TrackingHandler {
 	if tokenizer == nil {
 		return nil
 	}
-	return &TrackingHandler{queries: queries, tokenizer: tokenizer}
+	return &TrackingHandler{queries: queries, tokenizer: tokenizer, notifier: notifier}
+}
+
+// notifyEvent は反響通知を送る (Phase 27h)。受信者×種別ごとの初回にだけ
+// 呼ばれる前提 (already 判定は呼び出し側)。顧客名の解決に 1 クエリ増えるが
+// 反響イベントは低頻度なので許容。
+func (h *TrackingHandler) notifyEvent(ctx context.Context, rec db.CampaignRecipient, c db.Campaign, kind, url string) {
+	if h.notifier == nil {
+		return
+	}
+	var name, corp string
+	if cust, err := h.queries.GetCustomer(ctx, rec.CustomerID); err == nil {
+		name, corp = cust.Name, cust.Corporation
+	}
+	h.notifier.NotifyCampaignEvent(ctx, notify.CampaignEventInfo{
+		Kind:         kind,
+		CampaignID:   c.ID,
+		CampaignName: c.Name,
+		CustomerName: name,
+		Corporation:  corp,
+		Email:        rec.Email,
+		URL:          url,
+	})
 }
 
 // Unsubscribe は GET (人間がリンクを踏む) と POST (RFC 8058 One-Click、
@@ -89,6 +113,7 @@ func (h *TrackingHandler) recordUnsubscribe(ctx context.Context, recipientID uui
 			log.Error().Err(err).Msg("campaign: create unsubscribe event failed")
 		}
 		log.Info().Str("recipient", recipientID.String()).Msg("campaign: unsubscribed")
+		h.notifyEvent(ctx, rec, c, "unsubscribe", "")
 	}
 	return c.SenderOrg, true
 }
@@ -110,6 +135,9 @@ func (h *TrackingHandler) Open(w http.ResponseWriter, r *http.Request) {
 	if err == nil && kind == KindOpen {
 		ctx := r.Context()
 		if rec, gerr := h.queries.GetCampaignRecipient(ctx, recipientID); gerr == nil {
+			// Phase 27h: first_opened_at がこのリクエストで初めて立つときだけ通知
+			// (MarkRecipientOpened は COALESCE 冪等なので、更新前の rec で判定)。
+			firstOpen := !rec.FirstOpenedAt.Valid
 			_ = h.queries.MarkRecipientOpened(ctx, rec.ID)
 			if err := h.queries.CreateCampaignEvent(ctx, db.CreateCampaignEventParams{
 				ID:          uuid.New(),
@@ -119,6 +147,11 @@ func (h *TrackingHandler) Open(w http.ResponseWriter, r *http.Request) {
 				UserAgent:   truncate(r.UserAgent(), 255),
 			}); err != nil {
 				log.Error().Err(err).Msg("campaign: create open event failed")
+			}
+			if firstOpen {
+				if c, cerr := h.queries.GetCampaign(ctx, rec.CampaignID); cerr == nil {
+					h.notifyEvent(ctx, rec, c, "open", "")
+				}
 			}
 		}
 	}
@@ -148,6 +181,9 @@ func (h *TrackingHandler) Click(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	// Phase 27h: 初回クリックのみ通知 (first_clicked_at は COALESCE 冪等なので
+	// 更新前の rec で判定)。
+	firstClick := !rec.FirstClickedAt.Valid
 	_ = h.queries.MarkRecipientClicked(ctx, rec.ID)
 	if err := h.queries.CreateCampaignEvent(ctx, db.CreateCampaignEventParams{
 		ID:          uuid.New(),
@@ -157,6 +193,11 @@ func (h *TrackingHandler) Click(w http.ResponseWriter, r *http.Request) {
 		UserAgent:   truncate(r.UserAgent(), 255),
 	}); err != nil {
 		log.Error().Err(err).Msg("campaign: create click event failed")
+	}
+	if firstClick {
+		if c, cerr := h.queries.GetCampaign(ctx, rec.CampaignID); cerr == nil {
+			h.notifyEvent(ctx, rec, c, "click", link.Url)
+		}
 	}
 	http.Redirect(w, r, link.Url, http.StatusFound)
 }

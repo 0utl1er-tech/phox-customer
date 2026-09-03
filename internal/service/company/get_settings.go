@@ -23,8 +23,19 @@ func (s *CompanyService) GetSettings(
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("get company settings: %w", err))
 	}
+	canEdit := u.Role == db.RoleOwner
+
+	// Phase 27h: Webhook URL は秘匿情報 (知っていれば誰でも投稿できる) なので
+	// owner 以外には実値を返さず、設定済みかどうかだけ分かるマスク値にする。
+	webhookURL := row.NotifyWebhookUrl
+	if !canEdit && webhookURL != "" {
+		webhookURL = "(設定済み)"
+	}
+
 	return connect.NewResponse(&companyv1.GetSettingsResponse{
-		CallLogMode: row.CallLogMode,
-		CanEdit:     u.Role == db.RoleOwner,
+		CallLogMode:      row.CallLogMode,
+		CanEdit:          canEdit,
+		NotifyWebhookUrl: webhookURL,
+		NotifyEvents:     row.NotifyEvents,
 	}), nil
 }

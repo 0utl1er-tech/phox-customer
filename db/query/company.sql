@@ -24,7 +24,7 @@ DELETE FROM "Company" WHERE id = $1;
 -- Phase 27f: 通話記録モード (管理者設定)
 
 -- name: GetCompanySettings :one
-SELECT id, call_log_mode FROM "Company"
+SELECT id, call_log_mode, notify_webhook_url, notify_events FROM "Company"
 WHERE id = $1;
 
 -- name: UpdateCompanyCallLogMode :one
@@ -34,3 +34,14 @@ SET
   updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
 RETURNING id, call_log_mode;
+-- Phase 27h: キャンペーン反響通知 (管理者設定)
+
+-- name: UpdateCompanyNotifySettings :one
+-- narg = NULL は「変更しない」(部分更新)。
+UPDATE "Company"
+SET
+  notify_webhook_url = COALESCE(sqlc.narg(notify_webhook_url), notify_webhook_url),
+  notify_events = COALESCE(sqlc.narg(notify_events), notify_events),
+  updated_at = CURRENT_TIMESTAMP
+WHERE id = sqlc.arg(id)
+RETURNING id, notify_webhook_url, notify_events;

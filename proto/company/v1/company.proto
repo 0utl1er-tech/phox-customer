@@ -36,12 +36,25 @@ message GetSettingsResponse {
   string call_log_mode = 1;
   // 呼び出しユーザーが設定を変更できるか (User.role = owner)。
   bool can_edit = 2;
+  // Phase 27h: キャンペーン反響通知 (Discord Webhook)。
+  // can_edit=true なら実 URL、それ以外は設定済みなら "(設定済み)" のマスク値。
+  string notify_webhook_url = 3;
+  // 通知するイベントのカンマ区切り (reply,click,unsubscribe,bounce,open)。
+  string notify_events = 4;
 }
 
 message UpdateSettingsRequest {
-  string call_log_mode = 1 [(buf.validate.field).string = {in: ["click", "zoom"]}];
+  // 空文字は「変更しない」(Phase 27h で部分更新化)。
+  string call_log_mode = 1 [(buf.validate.field).string = {in: ["", "click", "zoom"]}];
+  // Phase 27h: 反響通知。optional = 未指定フィールドは変更しない。
+  // URL は空 (無効化) か http(s):// のみサーバ側で許可。
+  optional string notify_webhook_url = 2;
+  // カンマ区切りの既知イベントのみ (空 = 全 OFF)。
+  optional string notify_events = 3;
 }
 
 message UpdateSettingsResponse {
   string call_log_mode = 1;
+  string notify_webhook_url = 2;
+  string notify_events = 3;
 }

@@ -10,6 +10,7 @@ import (
 
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
 	"github.com/0utl1er-tech/phox-customer/internal/crypto"
+	"github.com/0utl1er-tech/phox-customer/internal/notify"
 )
 
 // MailboxIMAPWorker は DB の active な Mailbox を全て polling する worker
@@ -28,6 +29,7 @@ type MailboxIMAPWorker struct {
 	ingestUserID string
 	queries      *db.Queries
 	cipher       *crypto.Cipher
+	notifier     notify.Notifier // Phase 27h: キャンペーン反響通知 (nil = 無効)
 }
 
 // IMAPConnBase は全メールボックス共通の接続パラメータ (資格情報を除く)。
@@ -40,7 +42,7 @@ type IMAPConnBase struct {
 
 // NewMailboxIMAPWorker は conn.Host が空、または cipher が nil なら
 // nil を返す (機能無効)。
-func NewMailboxIMAPWorker(conn IMAPConnBase, sentMailbox, inboxMailbox, pollInterval, ingestUserID string, queries *db.Queries, cipher *crypto.Cipher) *MailboxIMAPWorker {
+func NewMailboxIMAPWorker(conn IMAPConnBase, sentMailbox, inboxMailbox, pollInterval, ingestUserID string, queries *db.Queries, cipher *crypto.Cipher, notifier notify.Notifier) *MailboxIMAPWorker {
 	if conn.Host == "" || cipher == nil {
 		return nil
 	}
@@ -61,6 +63,7 @@ func NewMailboxIMAPWorker(conn IMAPConnBase, sentMailbox, inboxMailbox, pollInte
 		ingestUserID: ingestUserID,
 		queries:      queries,
 		cipher:       cipher,
+		notifier:     notifier,
 	}
 }
 
@@ -152,13 +155,13 @@ func (w *MailboxIMAPWorker) pollOne(ctx context.Context, mb db.Mailbox, since ti
 		log.Warn().Err(ferr).Str("mailbox", mb.Address).Str("folder", w.sentMailbox).Msg("Mailbox IMAP worker: sent fetch")
 		allOK = false
 	} else {
-		ingestMessages(ctx, w.queries, msgs, "email_sent", w.ingestUserID, mailboxID)
+		ingestMessages(ctx, w.queries, w.notifier, msgs, "email_sent", w.ingestUserID, mailboxID)
 	}
 	if msgs, ferr := client.FetchSinceFull(w.inboxMailbox, since); ferr != nil {
 		log.Warn().Err(ferr).Str("mailbox", mb.Address).Str("folder", w.inboxMailbox).Msg("Mailbox IMAP worker: inbox fetch")
 		allOK = false
 	} else {
-		ingestMessages(ctx, w.queries, msgs, "email_received", w.ingestUserID, mailboxID)
+		ingestMessages(ctx, w.queries, w.notifier, msgs, "email_received", w.ingestUserID, mailboxID)
 	}
 	return allOK
 }
