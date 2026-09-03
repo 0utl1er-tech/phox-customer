@@ -35,6 +35,7 @@ import (
 	"github.com/0utl1er-tech/phox-customer/internal/keycloakadmin"
 	"github.com/0utl1er-tech/phox-customer/internal/mail"
 	"github.com/0utl1er-tech/phox-customer/internal/mailu"
+	"github.com/0utl1er-tech/phox-customer/internal/notify"
 	"github.com/0utl1er-tech/phox-customer/internal/mcpserver"
 	oauthsvc "github.com/0utl1er-tech/phox-customer/internal/oauth"
 	"github.com/0utl1er-tech/phox-customer/internal/recording"
@@ -207,6 +208,11 @@ func main() {
 		log.Warn().Msg("SMTP_HOST not set — email send will be unavailable")
 	}
 
+	// Phase 27h: キャンペーン反響通知 (Discord Webhook)。有効/無効は会社設定
+	// (Company.notify_webhook_url / notify_events) をイベント時に引いて判定
+	// するので、Notifier 自体は常に構築してよい。
+	campaignNotifier := notify.NewDiscordNotifier(queries, cfg.PhoxBaseURL)
+
 	// IMAP worker (Phase 14b 本実装)。IMAP_HOST が空なら起動せず no-op。
 	// dev default は MailHog で IMAP 無し → Enabled() == false。
 	// app.env.local で mailu の SMTPS/IMAPS に向けると polling loop が走る。
@@ -221,7 +227,7 @@ func main() {
 		InboxMailbox:          cfg.IMAPInboxMailbox,
 		PollInterval:          cfg.IMAPPollInterval,
 		IngestUserID:          cfg.IMAPIngestUserID,
-	}, queries)
+	}, queries, campaignNotifier)
 
 	// JIT user provisioning needs a Company UUID to stamp on auto-created
 	// User rows. Single-tenant deployments only have one row — take the
@@ -293,7 +299,7 @@ func main() {
 			TLSInsecureSkipVerify: cfg.IMAPTLSInsecureSkipVerify,
 		},
 		cfg.IMAPSentMailbox, cfg.IMAPInboxMailbox, cfg.IMAPPollInterval, cfg.IMAPIngestUserID,
-		queries, mailboxCipher,
+		queries, mailboxCipher, campaignNotifier,
 	)
 
 	userService := user.NewUserService(queries, keycloakAdmin, connPool)
@@ -572,7 +578,7 @@ func main() {
 	}
 	// Phase 27a: 配信停止エンドポイント (非認証・HMAC トークンで防護)。
 	// GET は人間がリンクを踏む、POST は RFC 8058 One-Click。
-	if trackingHandler := campaignpkg.NewTrackingHandler(queries, campaignTokenizer); trackingHandler != nil {
+	if trackingHandler := campaignpkg.NewTrackingHandler(queries, campaignTokenizer, campaignNotifier); trackingHandler != nil {
 		mux.HandleFunc("GET /u/{token}", trackingHandler.Unsubscribe)
 		mux.HandleFunc("POST /u/{token}", trackingHandler.Unsubscribe)
 		// Phase 27b: 開封ピクセル + クリックリダイレクト

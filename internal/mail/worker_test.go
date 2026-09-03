@@ -32,14 +32,14 @@ func TestNormalizeEmail(t *testing.T) {
 func TestIMAPWorker_NotEnabled(t *testing.T) {
 	w := phoxmail.NewIMAPWorker(phoxmail.IMAPWorkerConfig{
 		// Host 空 → Enabled() = false
-	}, nil)
+	}, nil, nil)
 	assert.False(t, w.Enabled())
 }
 
 func TestIMAPWorker_Enabled(t *testing.T) {
 	w := phoxmail.NewIMAPWorker(phoxmail.IMAPWorkerConfig{
 		Host: "mail.example.com",
-	}, nil)
+	}, nil, nil)
 	assert.True(t, w.Enabled())
 }
 

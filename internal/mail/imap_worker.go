@@ -13,6 +13,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
+	"github.com/0utl1er-tech/phox-customer/internal/notify"
 )
 
 // IMAPWorkerConfig — 接続 + polling + 対象 mailbox の設定。
@@ -46,13 +47,14 @@ type IMAPWorkerConfig struct {
 // 結果を `queries.CreateActivity` で DB に書く。dedup は `message_id` 列の
 // UNIQUE INDEX に任せる (二重取込みは DB が拒否 → ignore)。
 type IMAPWorker struct {
-	cfg     IMAPWorkerConfig
-	queries *db.Queries
+	cfg      IMAPWorkerConfig
+	queries  *db.Queries
+	notifier notify.Notifier // Phase 27h: キャンペーン反響通知 (nil = 無効)
 }
 
 // NewIMAPWorker は cfg と Phox の sqlc queries を受けて worker を返す。
 // cfg.Host が空なら `Enabled()=false` になり、main.go は起動をスキップする。
-func NewIMAPWorker(cfg IMAPWorkerConfig, queries *db.Queries) *IMAPWorker {
+func NewIMAPWorker(cfg IMAPWorkerConfig, queries *db.Queries, notifier notify.Notifier) *IMAPWorker {
 	if cfg.SentMailbox == "" {
 		cfg.SentMailbox = "Sent"
 	}
@@ -62,7 +64,7 @@ func NewIMAPWorker(cfg IMAPWorkerConfig, queries *db.Queries) *IMAPWorker {
 	if cfg.IngestUserID == "" {
 		cfg.IngestUserID = "system"
 	}
-	return &IMAPWorker{cfg: cfg, queries: queries}
+	return &IMAPWorker{cfg: cfg, queries: queries, notifier: notifier}
 }
 
 // Enabled は IMAP_HOST が設定されているかを返す。
@@ -159,7 +161,7 @@ func (w *IMAPWorker) resolveSince(ctx context.Context) time.Time {
 // ingestBatch はレガシー単一メールボックス worker 用の薄いラッパ。
 // mailbox_id は付けない (env 単一アカウント = メールボックス管理対象外)。
 func (w *IMAPWorker) ingestBatch(ctx context.Context, msgs []ParsedMessage, activityType string) {
-	ingestMessages(ctx, w.queries, msgs, activityType, w.cfg.IngestUserID, pgtype.UUID{Valid: false})
+	ingestMessages(ctx, w.queries, w.notifier, msgs, activityType, w.cfg.IngestUserID, pgtype.UUID{Valid: false})
 }
 
 // ingestMessages は fetch 結果を 1 行ずつ DB に insert する共通ロジック。
@@ -169,7 +171,7 @@ func (w *IMAPWorker) ingestBatch(ctx context.Context, msgs []ParsedMessage, acti
 //   - `CreateActivity` で insert。`message_id` UNIQUE INDEX が dedup を保証
 //   - mailboxID を渡すと Activity.mailbox_id に記録する (どのメールボックスで
 //     送受信したか)。
-func ingestMessages(ctx context.Context, queries *db.Queries, msgs []ParsedMessage, activityType, ingestUserID string, mailboxID pgtype.UUID) {
+func ingestMessages(ctx context.Context, queries *db.Queries, notifier notify.Notifier, msgs []ParsedMessage, activityType, ingestUserID string, mailboxID pgtype.UUID) {
 	for _, m := range msgs {
 		if m.MessageID == "" {
 			// RFC5322 準拠ではないメールは skip
@@ -202,10 +204,10 @@ func ingestMessages(ctx context.Context, queries *db.Queries, msgs []ParsedMessa
 		// しない (MAILER-DAEMON は顧客ではない)。それ以外は返信として帰属を試す
 		// (Activity dedup より先 — 再取込みでも replied_at は冪等)。
 		if activityType == "email_received" {
-			if handleCampaignBounce(ctx, queries, m) {
+			if handleCampaignBounce(ctx, queries, notifier, m) {
 				continue
 			}
-			attributeCampaignReply(ctx, queries, m)
+			attributeCampaignReply(ctx, queries, notifier, m)
 		}
 
 		// 既に取込済みなら dedup (UNIQUE INDEX でも止まるが事前チェックでログを減らす)

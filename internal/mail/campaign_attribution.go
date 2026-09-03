@@ -7,10 +7,36 @@ import (
 	"time"
 
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
+	"github.com/0utl1er-tech/phox-customer/internal/notify"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/rs/zerolog/log"
 )
+
+// notifyCampaignEvent は反響通知 (Phase 27h)。受信者×種別の初回にだけ呼ばれる
+// 前提 (already 判定は呼び出し側)。顧客名/キャンペーン名は都度 1 クエリずつ
+// 引くが、反響イベントは低頻度なので許容。
+func notifyCampaignEvent(ctx context.Context, queries *db.Queries, notifier notify.Notifier, rec db.CampaignRecipient, kind string) {
+	if notifier == nil {
+		return
+	}
+	c, err := queries.GetCampaign(ctx, rec.CampaignID)
+	if err != nil {
+		return
+	}
+	var name, corp string
+	if cust, cerr := queries.GetCustomer(ctx, rec.CustomerID); cerr == nil {
+		name, corp = cust.Name, cust.Corporation
+	}
+	notifier.NotifyCampaignEvent(ctx, notify.CampaignEventInfo{
+		Kind:         kind,
+		CampaignID:   c.ID,
+		CampaignName: c.Name,
+		CustomerName: name,
+		Corporation:  corp,
+		Email:        rec.Email,
+	})
+}
 
 // campaignReplyLookbackDays: from アドレスのフォールバック照合で遡る日数。
 // 日本の商習慣では「返信」でなく新規メールで返ってくることが多く、ヘッダの
@@ -22,7 +48,7 @@ const campaignReplyLookbackDays = 60
 //
 //  1. In-Reply-To / References の Message-ID を cmp-* 規約で引き当てる
 //  2. ヘッダで取れなければ from アドレスで直近 60 日の sent 受信者に当てる
-func attributeCampaignReply(ctx context.Context, queries *db.Queries, m ParsedMessage) {
+func attributeCampaignReply(ctx context.Context, queries *db.Queries, notifier notify.Notifier, m ParsedMessage) {
 	rec, ok := findRecipientByHeaders(ctx, queries, m)
 	if !ok && m.From != "" {
 		rows, err := queries.FindSentRecipientByFromAddr(ctx, db.FindSentRecipientByFromAddrParams{
@@ -55,6 +81,7 @@ func attributeCampaignReply(ctx context.Context, queries *db.Queries, m ParsedMe
 			Str("recipient", rec.ID.String()).
 			Str("from", m.From).
 			Msg("campaign: reply attributed")
+		notifyCampaignEvent(ctx, queries, notifier, rec, "reply")
 	}
 }
 
@@ -94,7 +121,7 @@ func findRecipientByHeaders(ctx context.Context, queries *db.Queries, m ParsedMe
 // ハードバウンス (5.x.x) は bounced_at + Suppression(hard_bounce) で以後の
 // 全キャンペーンから恒久除外。ソフト (4.x.x) はイベント記録のみ。
 // 戻り値は「処理した (= DSN として消費した)」かどうか。
-func handleCampaignBounce(ctx context.Context, queries *db.Queries, m ParsedMessage) bool {
+func handleCampaignBounce(ctx context.Context, queries *db.Queries, notifier notify.Notifier, m ParsedMessage) bool {
 	if m.DSN == nil {
 		return false
 	}
@@ -151,6 +178,7 @@ func handleCampaignBounce(ctx context.Context, queries *db.Queries, m ParsedMess
 		}); err != nil {
 			log.Warn().Err(err).Msg("campaign: create bounce event failed")
 		}
+		notifyCampaignEvent(ctx, queries, notifier, rec, "bounce")
 	}
 	log.Info().
 		Str("recipient", rec.ID.String()).

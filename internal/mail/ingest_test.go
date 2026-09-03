@@ -45,7 +45,7 @@ func TestIngestMessages_StampsMailboxID(t *testing.T) {
 		To:        []string{"mb@0utl1er.tech"},
 	}}
 
-	ingestMessages(ctx, q, msgs, "email_received", "system", pgtype.UUID{Bytes: mbID, Valid: true})
+	ingestMessages(ctx, q, nil, msgs, "email_received", "system", pgtype.UUID{Bytes: mbID, Valid: true})
 
 	// Activity が作られ、customer/type/mailbox_id が正しい。
 	act, err := q.GetActivityByMessageID(ctx, pgtype.Text{String: msgID, Valid: true})
@@ -56,7 +56,7 @@ func TestIngestMessages_StampsMailboxID(t *testing.T) {
 	assert.Equal(t, mbID, uuid.UUID(act.MailboxID.Bytes))
 
 	// 再取込みは dedup (message_id UNIQUE) で二重にならない。
-	ingestMessages(ctx, q, msgs, "email_received", "system", pgtype.UUID{Bytes: mbID, Valid: true})
+	ingestMessages(ctx, q, nil, msgs, "email_received", "system", pgtype.UUID{Bytes: mbID, Valid: true})
 	// GetActivityByMessageID は :one なので重複してれば別途エラーになる。
 	_, err = q.GetActivityByMessageID(ctx, pgtype.Text{String: msgID, Valid: true})
 	require.NoError(t, err)
@@ -67,7 +67,7 @@ func TestIngestMessages_SkipsUnknownCustomer(t *testing.T) {
 	_, q := testutil.SetupTestDB(t)
 	ctx := context.Background()
 	msgID := "<" + uuid.NewString() + "@example.com>"
-	ingestMessages(ctx, q, []ParsedMessage{{
+	ingestMessages(ctx, q, nil, []ParsedMessage{{
 		MessageID: msgID, From: "nobody-" + uuid.NewString() + "@nowhere.test", To: []string{"x@y.z"},
 	}}, "email_received", "system", pgtype.UUID{Valid: false})
 
@@ -112,7 +112,7 @@ func TestIngestMessages_StoresAllMailboxMessages(t *testing.T) {
 			Body: "先日の件、承知しました。",
 		},
 	}
-	ingestMessages(ctx, q, msgs, "email_received", "system", pgtype.UUID{Bytes: mbID, Valid: true})
+	ingestMessages(ctx, q, nil, msgs, "email_received", "system", pgtype.UUID{Bytes: mbID, Valid: true})
 
 	rows, err := q.ListMailboxMessages(ctx, db.ListMailboxMessagesParams{MailboxID: mbID, Limit: 10})
 	require.NoError(t, err)
@@ -140,7 +140,7 @@ func TestIngestMessages_StoresAllMailboxMessages(t *testing.T) {
 	assert.Error(t, err)
 
 	// 再取込みしても重複しない (mailbox_id+message_id UNIQUE)。
-	ingestMessages(ctx, q, msgs, "email_received", "system", pgtype.UUID{Bytes: mbID, Valid: true})
+	ingestMessages(ctx, q, nil, msgs, "email_received", "system", pgtype.UUID{Bytes: mbID, Valid: true})
 	rows, err = q.ListMailboxMessages(ctx, db.ListMailboxMessagesParams{MailboxID: mbID, Limit: 10})
 	require.NoError(t, err)
 	assert.Len(t, rows, 2)

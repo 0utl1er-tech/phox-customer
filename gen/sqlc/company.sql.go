@@ -15,7 +15,7 @@ import (
 const createCompany = `-- name: CreateCompany :one
 INSERT INTO "Company" (id, name)
 VALUES ($1, $2)
-RETURNING id, name, updated_at, created_at, call_log_mode
+RETURNING id, name, updated_at, created_at, call_log_mode, notify_webhook_url, notify_events
 `
 
 type CreateCompanyParams struct {
@@ -32,6 +32,8 @@ func (q *Queries) CreateCompany(ctx context.Context, arg CreateCompanyParams) (C
 		&i.UpdatedAt,
 		&i.CreatedAt,
 		&i.CallLogMode,
+		&i.NotifyWebhookUrl,
+		&i.NotifyEvents,
 	)
 	return i, err
 }
@@ -46,7 +48,7 @@ func (q *Queries) DeleteCompany(ctx context.Context, id uuid.UUID) error {
 }
 
 const getCompany = `-- name: GetCompany :one
-SELECT id, name, updated_at, created_at, call_log_mode FROM "Company"
+SELECT id, name, updated_at, created_at, call_log_mode, notify_webhook_url, notify_events FROM "Company"
 WHERE id = $1
 `
 
@@ -59,31 +61,40 @@ func (q *Queries) GetCompany(ctx context.Context, id uuid.UUID) (Company, error)
 		&i.UpdatedAt,
 		&i.CreatedAt,
 		&i.CallLogMode,
+		&i.NotifyWebhookUrl,
+		&i.NotifyEvents,
 	)
 	return i, err
 }
 
 const getCompanySettings = `-- name: GetCompanySettings :one
 
-SELECT id, call_log_mode FROM "Company"
+SELECT id, call_log_mode, notify_webhook_url, notify_events FROM "Company"
 WHERE id = $1
 `
 
 type GetCompanySettingsRow struct {
-	ID          uuid.UUID `json:"id"`
-	CallLogMode string    `json:"call_log_mode"`
+	ID               uuid.UUID `json:"id"`
+	CallLogMode      string    `json:"call_log_mode"`
+	NotifyWebhookUrl string    `json:"notify_webhook_url"`
+	NotifyEvents     string    `json:"notify_events"`
 }
 
 // Phase 27f: 通話記録モード (管理者設定)
 func (q *Queries) GetCompanySettings(ctx context.Context, id uuid.UUID) (GetCompanySettingsRow, error) {
 	row := q.db.QueryRow(ctx, getCompanySettings, id)
 	var i GetCompanySettingsRow
-	err := row.Scan(&i.ID, &i.CallLogMode)
+	err := row.Scan(
+		&i.ID,
+		&i.CallLogMode,
+		&i.NotifyWebhookUrl,
+		&i.NotifyEvents,
+	)
 	return i, err
 }
 
 const listCompanies = `-- name: ListCompanies :many
-SELECT id, name, updated_at, created_at, call_log_mode FROM "Company"
+SELECT id, name, updated_at, created_at, call_log_mode, notify_webhook_url, notify_events FROM "Company"
 `
 
 func (q *Queries) ListCompanies(ctx context.Context) ([]Company, error) {
@@ -101,6 +112,8 @@ func (q *Queries) ListCompanies(ctx context.Context) ([]Company, error) {
 			&i.UpdatedAt,
 			&i.CreatedAt,
 			&i.CallLogMode,
+			&i.NotifyWebhookUrl,
+			&i.NotifyEvents,
 		); err != nil {
 			return nil, err
 		}
@@ -118,7 +131,7 @@ SET
   name = COALESCE($1, name),
   updated_at = CURRENT_TIMESTAMP
 WHERE id = $2
-RETURNING id, name, updated_at, created_at, call_log_mode
+RETURNING id, name, updated_at, created_at, call_log_mode, notify_webhook_url, notify_events
 `
 
 type UpdateCompanyParams struct {
@@ -135,6 +148,8 @@ func (q *Queries) UpdateCompany(ctx context.Context, arg UpdateCompanyParams) (C
 		&i.UpdatedAt,
 		&i.CreatedAt,
 		&i.CallLogMode,
+		&i.NotifyWebhookUrl,
+		&i.NotifyEvents,
 	)
 	return i, err
 }
@@ -162,5 +177,37 @@ func (q *Queries) UpdateCompanyCallLogMode(ctx context.Context, arg UpdateCompan
 	row := q.db.QueryRow(ctx, updateCompanyCallLogMode, arg.ID, arg.CallLogMode)
 	var i UpdateCompanyCallLogModeRow
 	err := row.Scan(&i.ID, &i.CallLogMode)
+	return i, err
+}
+
+const updateCompanyNotifySettings = `-- name: UpdateCompanyNotifySettings :one
+
+UPDATE "Company"
+SET
+  notify_webhook_url = COALESCE($1, notify_webhook_url),
+  notify_events = COALESCE($2, notify_events),
+  updated_at = CURRENT_TIMESTAMP
+WHERE id = $3
+RETURNING id, notify_webhook_url, notify_events
+`
+
+type UpdateCompanyNotifySettingsParams struct {
+	NotifyWebhookUrl pgtype.Text `json:"notify_webhook_url"`
+	NotifyEvents     pgtype.Text `json:"notify_events"`
+	ID               uuid.UUID   `json:"id"`
+}
+
+type UpdateCompanyNotifySettingsRow struct {
+	ID               uuid.UUID `json:"id"`
+	NotifyWebhookUrl string    `json:"notify_webhook_url"`
+	NotifyEvents     string    `json:"notify_events"`
+}
+
+// Phase 27h: キャンペーン反響通知 (管理者設定)
+// narg = NULL は「変更しない」(部分更新)。
+func (q *Queries) UpdateCompanyNotifySettings(ctx context.Context, arg UpdateCompanyNotifySettingsParams) (UpdateCompanyNotifySettingsRow, error) {
+	row := q.db.QueryRow(ctx, updateCompanyNotifySettings, arg.NotifyWebhookUrl, arg.NotifyEvents, arg.ID)
+	var i UpdateCompanyNotifySettingsRow
+	err := row.Scan(&i.ID, &i.NotifyWebhookUrl, &i.NotifyEvents)
 	return i, err
 }
