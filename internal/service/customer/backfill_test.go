@@ -49,7 +49,7 @@ func TestCreateCustomer_BackfillsMailboxTimeline(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	svc := customer.NewCustomerService(q, nil)
+	svc := customer.NewCustomerService(q, nil, nil)
 	ctxAuth := testutil.AuthContext(t, owner.ID, "owner@test.com")
 	resp, err := svc.CreateCustomer(ctxAuth, connect.NewRequest(&customerv1.CreateCustomerRequest{
 		BookId: bk.ID.String(), Name: "見込み客", Mail: prospect,

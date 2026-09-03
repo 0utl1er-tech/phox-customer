@@ -67,7 +67,7 @@ func newTestHandler(t *testing.T, pool *pgxpool.Pool, q *db.Queries, sub string)
 	}
 	return mcpserver.NewHandler(stubAuth{sub: sub}, mcpserver.Deps{
 		Book:     book.NewBookService(q, nil),
-		Customer: customer.NewCustomerService(q, nil),
+		Customer: customer.NewCustomerService(q, nil, nil),
 		Contact:  contact.NewContactService(q),
 		Search:   search.NewSearchService(q, nil), // ES nil → search_customers はツールエラー
 		Activity: activity.NewActivityService(q, nil, nil),

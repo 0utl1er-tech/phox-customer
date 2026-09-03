@@ -21,7 +21,7 @@ func setupCustomerTest(t *testing.T) (*customer.CustomerService, *db.Queries, db
 	user := testutil.TestUser(t, queries, "test-customer-user", companyID)
 	book := testutil.TestBook(t, queries, user.ID)
 	// ES なし (degraded mode) でも全 RPC が成功すること自体がテスト対象
-	svc := customer.NewCustomerService(queries, search.NewIndexer(nil))
+	svc := customer.NewCustomerService(queries, search.NewIndexer(nil), nil)
 	return svc, queries, user, book
 }
 

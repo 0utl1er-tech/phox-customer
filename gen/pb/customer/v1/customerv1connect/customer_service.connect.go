@@ -48,6 +48,12 @@ const (
 	// CustomerServiceDeleteCustomerProcedure is the fully-qualified name of the CustomerService's
 	// DeleteCustomer RPC.
 	CustomerServiceDeleteCustomerProcedure = "/customer.v1.CustomerService/DeleteCustomer"
+	// CustomerServiceEnrichCustomerRowsProcedure is the fully-qualified name of the CustomerService's
+	// EnrichCustomerRows RPC.
+	CustomerServiceEnrichCustomerRowsProcedure = "/customer.v1.CustomerService/EnrichCustomerRows"
+	// CustomerServiceGetEnrichmentStatusProcedure is the fully-qualified name of the CustomerService's
+	// GetEnrichmentStatus RPC.
+	CustomerServiceGetEnrichmentStatusProcedure = "/customer.v1.CustomerService/GetEnrichmentStatus"
 )
 
 // CustomerServiceClient is a client for the customer.v1.CustomerService service.
@@ -57,6 +63,10 @@ type CustomerServiceClient interface {
 	GetCustomer(context.Context, *connect.Request[v1.GetCustomerRequest]) (*connect.Response[v1.GetCustomerResponse], error)
 	UpdateCustomer(context.Context, *connect.Request[v1.UpdateCustomerRequest]) (*connect.Response[v1.UpdateCustomerResponse], error)
 	DeleteCustomer(context.Context, *connect.Request[v1.DeleteCustomerRequest]) (*connect.Response[v1.DeleteCustomerResponse], error)
+	// Phase 27j: CSV 取り込みプレビューの AI 補完 (Gemini)。元データは変更しない。
+	EnrichCustomerRows(context.Context, *connect.Request[v1.EnrichCustomerRowsRequest]) (*connect.Response[v1.EnrichCustomerRowsResponse], error)
+	// Phase 27j: AI 補完が利用可能か (GEMINI_API_KEY 設定有無) を返す。
+	GetEnrichmentStatus(context.Context, *connect.Request[v1.GetEnrichmentStatusRequest]) (*connect.Response[v1.GetEnrichmentStatusResponse], error)
 }
 
 // NewCustomerServiceClient constructs a client for the customer.v1.CustomerService service. By
@@ -100,16 +110,30 @@ func NewCustomerServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(customerServiceMethods.ByName("DeleteCustomer")),
 			connect.WithClientOptions(opts...),
 		),
+		enrichCustomerRows: connect.NewClient[v1.EnrichCustomerRowsRequest, v1.EnrichCustomerRowsResponse](
+			httpClient,
+			baseURL+CustomerServiceEnrichCustomerRowsProcedure,
+			connect.WithSchema(customerServiceMethods.ByName("EnrichCustomerRows")),
+			connect.WithClientOptions(opts...),
+		),
+		getEnrichmentStatus: connect.NewClient[v1.GetEnrichmentStatusRequest, v1.GetEnrichmentStatusResponse](
+			httpClient,
+			baseURL+CustomerServiceGetEnrichmentStatusProcedure,
+			connect.WithSchema(customerServiceMethods.ByName("GetEnrichmentStatus")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // customerServiceClient implements CustomerServiceClient.
 type customerServiceClient struct {
-	createCustomer *connect.Client[v1.CreateCustomerRequest, v1.CreateCustomerResponse]
-	listCustomer   *connect.Client[v1.ListCustomerRequest, v1.ListCustomerResponse]
-	getCustomer    *connect.Client[v1.GetCustomerRequest, v1.GetCustomerResponse]
-	updateCustomer *connect.Client[v1.UpdateCustomerRequest, v1.UpdateCustomerResponse]
-	deleteCustomer *connect.Client[v1.DeleteCustomerRequest, v1.DeleteCustomerResponse]
+	createCustomer      *connect.Client[v1.CreateCustomerRequest, v1.CreateCustomerResponse]
+	listCustomer        *connect.Client[v1.ListCustomerRequest, v1.ListCustomerResponse]
+	getCustomer         *connect.Client[v1.GetCustomerRequest, v1.GetCustomerResponse]
+	updateCustomer      *connect.Client[v1.UpdateCustomerRequest, v1.UpdateCustomerResponse]
+	deleteCustomer      *connect.Client[v1.DeleteCustomerRequest, v1.DeleteCustomerResponse]
+	enrichCustomerRows  *connect.Client[v1.EnrichCustomerRowsRequest, v1.EnrichCustomerRowsResponse]
+	getEnrichmentStatus *connect.Client[v1.GetEnrichmentStatusRequest, v1.GetEnrichmentStatusResponse]
 }
 
 // CreateCustomer calls customer.v1.CustomerService.CreateCustomer.
@@ -137,6 +161,16 @@ func (c *customerServiceClient) DeleteCustomer(ctx context.Context, req *connect
 	return c.deleteCustomer.CallUnary(ctx, req)
 }
 
+// EnrichCustomerRows calls customer.v1.CustomerService.EnrichCustomerRows.
+func (c *customerServiceClient) EnrichCustomerRows(ctx context.Context, req *connect.Request[v1.EnrichCustomerRowsRequest]) (*connect.Response[v1.EnrichCustomerRowsResponse], error) {
+	return c.enrichCustomerRows.CallUnary(ctx, req)
+}
+
+// GetEnrichmentStatus calls customer.v1.CustomerService.GetEnrichmentStatus.
+func (c *customerServiceClient) GetEnrichmentStatus(ctx context.Context, req *connect.Request[v1.GetEnrichmentStatusRequest]) (*connect.Response[v1.GetEnrichmentStatusResponse], error) {
+	return c.getEnrichmentStatus.CallUnary(ctx, req)
+}
+
 // CustomerServiceHandler is an implementation of the customer.v1.CustomerService service.
 type CustomerServiceHandler interface {
 	CreateCustomer(context.Context, *connect.Request[v1.CreateCustomerRequest]) (*connect.Response[v1.CreateCustomerResponse], error)
@@ -144,6 +178,10 @@ type CustomerServiceHandler interface {
 	GetCustomer(context.Context, *connect.Request[v1.GetCustomerRequest]) (*connect.Response[v1.GetCustomerResponse], error)
 	UpdateCustomer(context.Context, *connect.Request[v1.UpdateCustomerRequest]) (*connect.Response[v1.UpdateCustomerResponse], error)
 	DeleteCustomer(context.Context, *connect.Request[v1.DeleteCustomerRequest]) (*connect.Response[v1.DeleteCustomerResponse], error)
+	// Phase 27j: CSV 取り込みプレビューの AI 補完 (Gemini)。元データは変更しない。
+	EnrichCustomerRows(context.Context, *connect.Request[v1.EnrichCustomerRowsRequest]) (*connect.Response[v1.EnrichCustomerRowsResponse], error)
+	// Phase 27j: AI 補完が利用可能か (GEMINI_API_KEY 設定有無) を返す。
+	GetEnrichmentStatus(context.Context, *connect.Request[v1.GetEnrichmentStatusRequest]) (*connect.Response[v1.GetEnrichmentStatusResponse], error)
 }
 
 // NewCustomerServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -183,6 +221,18 @@ func NewCustomerServiceHandler(svc CustomerServiceHandler, opts ...connect.Handl
 		connect.WithSchema(customerServiceMethods.ByName("DeleteCustomer")),
 		connect.WithHandlerOptions(opts...),
 	)
+	customerServiceEnrichCustomerRowsHandler := connect.NewUnaryHandler(
+		CustomerServiceEnrichCustomerRowsProcedure,
+		svc.EnrichCustomerRows,
+		connect.WithSchema(customerServiceMethods.ByName("EnrichCustomerRows")),
+		connect.WithHandlerOptions(opts...),
+	)
+	customerServiceGetEnrichmentStatusHandler := connect.NewUnaryHandler(
+		CustomerServiceGetEnrichmentStatusProcedure,
+		svc.GetEnrichmentStatus,
+		connect.WithSchema(customerServiceMethods.ByName("GetEnrichmentStatus")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/customer.v1.CustomerService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case CustomerServiceCreateCustomerProcedure:
@@ -195,6 +245,10 @@ func NewCustomerServiceHandler(svc CustomerServiceHandler, opts ...connect.Handl
 			customerServiceUpdateCustomerHandler.ServeHTTP(w, r)
 		case CustomerServiceDeleteCustomerProcedure:
 			customerServiceDeleteCustomerHandler.ServeHTTP(w, r)
+		case CustomerServiceEnrichCustomerRowsProcedure:
+			customerServiceEnrichCustomerRowsHandler.ServeHTTP(w, r)
+		case CustomerServiceGetEnrichmentStatusProcedure:
+			customerServiceGetEnrichmentStatusHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -222,4 +276,12 @@ func (UnimplementedCustomerServiceHandler) UpdateCustomer(context.Context, *conn
 
 func (UnimplementedCustomerServiceHandler) DeleteCustomer(context.Context, *connect.Request[v1.DeleteCustomerRequest]) (*connect.Response[v1.DeleteCustomerResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("customer.v1.CustomerService.DeleteCustomer is not implemented"))
+}
+
+func (UnimplementedCustomerServiceHandler) EnrichCustomerRows(context.Context, *connect.Request[v1.EnrichCustomerRowsRequest]) (*connect.Response[v1.EnrichCustomerRowsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("customer.v1.CustomerService.EnrichCustomerRows is not implemented"))
+}
+
+func (UnimplementedCustomerServiceHandler) GetEnrichmentStatus(context.Context, *connect.Request[v1.GetEnrichmentStatusRequest]) (*connect.Response[v1.GetEnrichmentStatusResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("customer.v1.CustomerService.GetEnrichmentStatus is not implemented"))
 }

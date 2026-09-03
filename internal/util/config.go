@@ -140,6 +140,13 @@ type Config struct {
 	// CampaignService は登録されるが送信 worker は起動しない (特電法上、
 	// 配信停止リンク無しの送信は許可しない)。
 	CampaignTrackingKey string `mapstructure:"CAMPAIGN_TRACKING_KEY"`
+
+	// Phase 27j: CSV 取り込みデータの AI 補完 (Gemini)。
+	// GEMINI_API_KEY が空なら機能ごと無効化 (EnrichCustomerRows は
+	// FailedPrecondition、UI はボタン disabled)。
+	// GEMINI_MODEL は省略時 gemini-2.0-flash。
+	GeminiAPIKey string `mapstructure:"GEMINI_API_KEY"`
+	GeminiModel  string `mapstructure:"GEMINI_MODEL"`
 }
 
 // LoadConfig reads configuration from `app.env` and (if present) layers
