@@ -37,6 +37,7 @@ import (
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
 	"github.com/0utl1er-tech/phox-customer/internal/service/activity"
 	"github.com/0utl1er-tech/phox-customer/internal/service/book"
+	campaignsvc "github.com/0utl1er-tech/phox-customer/internal/service/campaign"
 	"github.com/0utl1er-tech/phox-customer/internal/service/contact"
 	"github.com/0utl1er-tech/phox-customer/internal/service/customer"
 	"github.com/0utl1er-tech/phox-customer/internal/service/mailbox"
@@ -68,6 +69,9 @@ type Deps struct {
 	Search   *search.SearchService
 	Activity *activity.ActivityService
 	Mailbox  *mailbox.MailboxService // nil 可 (MAILBOX_SECRET_KEY 未設定時)
+	// Campaign は nil 可 (CampaignService 無効時はキャンペーン系ツール非登録
+	// — mailbox と同様の gating)。
+	Campaign *campaignsvc.CampaignService
 	// Queries は create_customer の upsert 判定 (book 内 mail 一致検索) 専用。
 	// 結果は必ず authz 付きのサービス RPC を通して返すこと (生データを直接
 	// クライアントへ返さない)。nil 可 (その場合 upsert 判定はスキップ)。

@@ -35,8 +35,8 @@ import (
 	"github.com/0utl1er-tech/phox-customer/internal/keycloakadmin"
 	"github.com/0utl1er-tech/phox-customer/internal/mail"
 	"github.com/0utl1er-tech/phox-customer/internal/mailu"
-	"github.com/0utl1er-tech/phox-customer/internal/notify"
 	"github.com/0utl1er-tech/phox-customer/internal/mcpserver"
+	"github.com/0utl1er-tech/phox-customer/internal/notify"
 	oauthsvc "github.com/0utl1er-tech/phox-customer/internal/oauth"
 	"github.com/0utl1er-tech/phox-customer/internal/recording"
 	"github.com/0utl1er-tech/phox-customer/internal/schemaguard"
@@ -649,8 +649,9 @@ func main() {
 			Contact:  contactService,
 			Search:   searchService,
 			Activity: activityService,
-			Mailbox:  mailboxService, // nil 可 (機能無効時は list_mailboxes 非登録)
-			Queries:  queries,        // create_customer の upsert 判定用
+			Mailbox:  mailboxService,  // nil 可 (機能無効時は list_mailboxes 非登録)
+			Campaign: campaignService, // nil 可 (機能無効時はキャンペーン系ツール非登録)
+			Queries:  queries,         // create_customer の upsert 判定用
 		}, metaURL))
 		log.Info().Str("resource_metadata", metaURL).Msg("MCP server mounted at /mcp")
 	}
