@@ -87,28 +87,30 @@ type Book struct {
 }
 
 type Campaign struct {
-	ID                 uuid.UUID          `json:"id"`
-	CompanyID          uuid.UUID          `json:"company_id"`
-	CreatedBy          string             `json:"created_by"`
-	Name               string             `json:"name"`
-	Status             string             `json:"status"`
-	Subject            string             `json:"subject"`
-	Body               string             `json:"body"`
-	TrackOpens         bool               `json:"track_opens"`
-	TrackClicks        bool               `json:"track_clicks"`
-	SendStartHour      int32              `json:"send_start_hour"`
-	SendEndHour        int32              `json:"send_end_hour"`
-	SendDays           int32              `json:"send_days"`
-	DailyCapPerMailbox int32              `json:"daily_cap_per_mailbox"`
-	MinIntervalSec     int32              `json:"min_interval_sec"`
-	WarmupEnabled      bool               `json:"warmup_enabled"`
-	SenderOrg          string             `json:"sender_org"`
-	SenderAddress      string             `json:"sender_address"`
-	SenderContact      string             `json:"sender_contact"`
-	StartedAt          pgtype.Timestamptz `json:"started_at"`
-	CompletedAt        pgtype.Timestamptz `json:"completed_at"`
-	CreatedAt          time.Time          `json:"created_at"`
-	UpdatedAt          time.Time          `json:"updated_at"`
+	ID                   uuid.UUID          `json:"id"`
+	CompanyID            uuid.UUID          `json:"company_id"`
+	CreatedBy            string             `json:"created_by"`
+	Name                 string             `json:"name"`
+	Status               string             `json:"status"`
+	Subject              string             `json:"subject"`
+	Body                 string             `json:"body"`
+	TrackOpens           bool               `json:"track_opens"`
+	TrackClicks          bool               `json:"track_clicks"`
+	SendStartHour        int32              `json:"send_start_hour"`
+	SendEndHour          int32              `json:"send_end_hour"`
+	SendDays             int32              `json:"send_days"`
+	DailyCapPerMailbox   int32              `json:"daily_cap_per_mailbox"`
+	MinIntervalSec       int32              `json:"min_interval_sec"`
+	WarmupEnabled        bool               `json:"warmup_enabled"`
+	SenderOrg            string             `json:"sender_org"`
+	SenderAddress        string             `json:"sender_address"`
+	SenderContact        string             `json:"sender_contact"`
+	StartedAt            pgtype.Timestamptz `json:"started_at"`
+	CompletedAt          pgtype.Timestamptz `json:"completed_at"`
+	CreatedAt            time.Time          `json:"created_at"`
+	UpdatedAt            time.Time          `json:"updated_at"`
+	BouncePauseThreshold int32              `json:"bounce_pause_threshold"`
+	HealthPausedReason   string             `json:"health_paused_reason"`
 }
 
 type CampaignEvent struct {
@@ -163,10 +165,11 @@ type CampaignStep struct {
 }
 
 type Company struct {
-	ID        uuid.UUID `json:"id"`
-	Name      string    `json:"name"`
-	UpdatedAt time.Time `json:"updated_at"`
-	CreatedAt time.Time `json:"created_at"`
+	ID          uuid.UUID `json:"id"`
+	Name        string    `json:"name"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	CreatedAt   time.Time `json:"created_at"`
+	CallLogMode string    `json:"call_log_mode"`
 }
 
 type Contact struct {
@@ -193,6 +196,13 @@ type Customer struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 	CreatedAt   time.Time `json:"created_at"`
 	Mail        string    `json:"mail"`
+}
+
+type DomainHealth struct {
+	Domain    string    `json:"domain"`
+	HasMx     bool      `json:"has_mx"`
+	MxHost    string    `json:"mx_host"`
+	CheckedAt time.Time `json:"checked_at"`
 }
 
 type MailTemplate struct {

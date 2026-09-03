@@ -38,6 +38,15 @@ service CampaignService {
   // レンダリング済み本文 (フッター込み) を指定アドレスへテスト送信。
   rpc SendTestEmail(SendTestEmailRequest) returns (SendTestEmailResponse);
 
+  // 送信元メールボックスの健全性 (Phase 27f)。SPF/DKIM/DMARC/MX の DNS 点検 +
+  // 直近のバウンス率・配信停止率。DNS を実引きするので数秒かかることがある。
+  rpc CheckMailboxHealth(CheckMailboxHealthRequest) returns (CheckMailboxHealthResponse);
+
+  // 呼び出しユーザーが MailboxPermit を持つ全メールボックスの送信実績サマリを
+  // 1 コールで返す (Phase 27g)。DB 集計のみで DNS は引かない (軽い) —
+  // DNS 点検は CheckMailboxHealth をオンデマンドで呼ぶこと。
+  rpc ListMailboxesHealth(ListMailboxesHealthRequest) returns (ListMailboxesHealthResponse);
+
   // サプレッションリスト (会社単位の配信停止/バウンス/手動除外)。
   rpc ListSuppressions(ListSuppressionsRequest) returns (ListSuppressionsResponse);
   rpc AddSuppression(AddSuppressionRequest) returns (AddSuppressionResponse);
@@ -54,6 +63,8 @@ message CampaignSchedule {
   int32 daily_cap_per_mailbox = 4 [(buf.validate.field).int32 = {gte: 1, lte: 1000}];
   int32 min_interval_sec = 5 [(buf.validate.field).int32 = {gte: 10, lte: 3600}];
   bool warmup_enabled = 6;
+  // Phase 27f: ハードバウンス率 (%) の自動停止しきい値。0 で無効、既定 5。
+  int32 bounce_pause_threshold = 7 [(buf.validate.field).int32 = {gte: 0, lte: 100}];
 }
 
 // フォローアップ (Phase 27e): 前ステップ送信後、返信が無ければ wait_days 日後に
@@ -112,6 +123,10 @@ message Campaign {
   optional google.protobuf.Timestamp estimated_completion_at = 17;
   // フォローアップステップ (2 通目以降)。空 = 単発キャンペーン。
   repeated CampaignFollowup followups = 18;
+  // Phase 27f: ハードバウンス率 (%) がこれを超えると自動一時停止。0 で無効。
+  int32 bounce_pause_threshold = 19;
+  // 自動一時停止された理由 (空 = 自動停止されていない)。paused 表示に添える。
+  string health_paused_reason = 20;
 }
 
 message CreateCampaignRequest {
@@ -134,6 +149,88 @@ message CreateCampaignResponse {
   int32 skipped_no_email = 3;
   int32 skipped_suppressed = 4;
   int32 skipped_duplicate = 5;
+  // Phase 27f: MX レコードが無く配信不能と判定して除外した件数。
+  int32 skipped_no_mx = 6;
+  // 送信対象に含まれる role アドレス (info@ 等) の件数。除外はしないが、
+  // 苦情率が上がりやすいので UI で注意喚起する。
+  int32 role_address_count = 7;
+}
+
+// 送信元メールボックスの健全性 (Phase 27f)。
+message MailboxHealth {
+  string mailbox_id = 1;
+  string address = 2;
+  string domain = 3;
+
+  // DNS 点検
+  bool has_mx = 4;
+  string mx_host = 5;
+  bool has_spf = 6;
+  string spf = 7;
+  bool has_dmarc = 8;
+  string dmarc = 9;
+  string dmarc_policy = 10; // none|quarantine|reject
+  bool has_dkim = 11;
+  string dkim_selector = 12;
+
+  // 直近 30 日の送信実績 (全キャンペーン横断)
+  int32 sent = 13;
+  int32 bounced = 14;
+  int32 unsubscribed = 15;
+  int32 replied = 16;
+  double bounce_rate = 17;       // %
+  double unsubscribe_rate = 18;  // %
+
+  // 総合判定: good | warn | bad
+  string grade = 19;
+  // 人が読める指摘 (DNS 設定の不備・バウンス率の高さなど)。
+  repeated string warnings = 20;
+}
+
+message CheckMailboxHealthRequest {
+  string mailbox_id = 1 [(buf.validate.field).string.uuid = true];
+  // DKIM の selector。空なら mailu 既定の "dkim" を使う。
+  string dkim_selector = 2;
+}
+message CheckMailboxHealthResponse {
+  MailboxHealth health = 1;
+}
+
+// メールボックス毎の送信実績サマリ (Phase 27g)。DB 集計のみ (DNS 点検なし)。
+// 30 日系の率 (%) は sent_30d を分母に、その送信分に付いたイベントで計算する。
+message MailboxHealthStats {
+  string mailbox_id = 1;
+  string address = 2;
+
+  // 本日 (JST 0 時起算) の送信数。全キャンペーン横断 — daily cap と同じ起算。
+  int32 sent_today = 3;
+  optional google.protobuf.Timestamp last_sent_at = 4;
+
+  // 直近 30 日 (全キャンペーン横断)
+  int32 sent_30d = 5;
+  int32 bounced_30d = 6;
+  int32 unsubscribed_30d = 7;
+  int32 replied_30d = 8;
+  int32 opened_30d = 9;
+  double bounce_rate = 10;      // %
+  double unsubscribe_rate = 11; // %
+  double reply_rate = 12;       // %
+  double open_rate = 13;        // %
+
+  // このメールボックスをプールに含む running キャンペーン数。
+  int32 running_campaigns = 14;
+  // IMAP 取り込みの最終成功時刻 (未同期なら無し)。
+  optional google.protobuf.Timestamp imap_synced_at = 15;
+
+  // 実績のみの簡易判定: good | warn | bad。
+  // バウンス率 >5% で bad、>2% または配停率 >3% で warn (サンプル 20 通未満は good)。
+  // DNS 込みの総合判定は CheckMailboxHealth の grade を使うこと。
+  string grade = 16;
+}
+
+message ListMailboxesHealthRequest {}
+message ListMailboxesHealthResponse {
+  repeated MailboxHealthStats stats = 1;
 }
 
 message ListCampaignsRequest {

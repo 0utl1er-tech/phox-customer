@@ -8,6 +8,7 @@ import (
 	"connectrpc.com/connect"
 	campaignv1 "github.com/0utl1er-tech/phox-customer/gen/pb/campaign/v1"
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
+	"github.com/rs/zerolog/log"
 )
 
 // StartCampaign — draft/paused から running へ。
@@ -38,6 +39,14 @@ func (s *CampaignService) StartCampaign(
 	updated, err := s.queries.SetCampaignStatus(ctx, db.SetCampaignStatusParams{ID: c.ID, Status: "running"})
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("start campaign: %w", err))
+	}
+	// Phase 27f: 人が原因を確認して再開したので、自動停止の理由は消す。
+	// (しきい値を超えたままならサーキットブレーカーが再び止める。)
+	if c.HealthPausedReason != "" {
+		if cerr := s.queries.ClearHealthPauseReason(ctx, c.ID); cerr != nil {
+			log.Warn().Err(cerr).Str("campaign", c.ID.String()).Msg("campaign: clear health pause reason failed")
+		}
+		updated.HealthPausedReason = ""
 	}
 	p, err := s.campaignToProto(ctx, updated)
 	if err != nil {

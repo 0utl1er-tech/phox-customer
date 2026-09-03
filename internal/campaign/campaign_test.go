@@ -101,7 +101,7 @@ func TestBuildHTMLBody(t *testing.T) {
 		"https://api.example/t/o/pix456")
 
 	for _, want := range []string{
-		"こんにちは &lt;様&gt;<br>",                                                // エスケープ + 改行変換
+		"こんにちは &lt;様&gt;<br>",                                                   // エスケープ + 改行変換
 		`<a href="https://api.example/t/c/tok123">https://example.com/page</a>`, // リンク書き換え (表示は元URL)
 		`<img src="https://api.example/t/o/pix456"`,                             // 開封ピクセル
 	} {
@@ -206,5 +206,60 @@ func TestEffectiveCapWarmup(t *testing.T) {
 	c.WarmupEnabled = false
 	if got := w.effectiveCap(c, now); got != 100 {
 		t.Errorf("warmup off should return cap, got %d", got)
+	}
+}
+
+// ─── Phase 27f: 健全性チェック ──────────────────────────────────
+
+func TestIsRoleAddress(t *testing.T) {
+	for _, e := range []string{"info@example.com", "INFO@Example.com", "no-reply@x.jp", "sales+tag@y.co.jp"} {
+		if !IsRoleAddress(e) {
+			t.Errorf("%q should be role address", e)
+		}
+	}
+	for _, e := range []string{"yamada@example.com", "t.suzuki@example.co.jp", "notanemail", ""} {
+		if IsRoleAddress(e) {
+			t.Errorf("%q should NOT be role address", e)
+		}
+	}
+}
+
+func TestDomainOf(t *testing.T) {
+	cases := map[string]string{
+		"Yamada@Example.COM": "example.com",
+		" a@b.co.jp ":        "b.co.jp",
+		"no-at-sign":         "",
+		"@example.com":       "",
+		"user@":              "",
+		"user@localhost":     "", // ドット無しは不正扱い
+	}
+	for in, want := range cases {
+		if got := DomainOf(in); got != want {
+			t.Errorf("DomainOf(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestBounceBreakerThreshold(t *testing.T) {
+	// tripBreakerIfUnhealthy の判定式そのもの (DB 非依存部分) を確認する。
+	// sent < minSamplesForBreaker では率が高くても止めない。
+	cases := []struct {
+		sent, bounced int64
+		threshold     int32
+		wantTrip      bool
+	}{
+		{sent: 3, bounced: 2, threshold: 5, wantTrip: false},    // サンプル不足
+		{sent: 100, bounced: 3, threshold: 5, wantTrip: false},  // 3% ≤ 5%
+		{sent: 100, bounced: 6, threshold: 5, wantTrip: true},   // 6% > 5%
+		{sent: 20, bounced: 2, threshold: 5, wantTrip: true},    // 10% > 5%
+		{sent: 100, bounced: 50, threshold: 0, wantTrip: false}, // しきい値0=無効
+	}
+	for _, c := range cases {
+		trip := c.threshold > 0 && c.sent >= minSamplesForBreaker &&
+			float64(c.bounced)*100/float64(c.sent) > float64(c.threshold)
+		if trip != c.wantTrip {
+			t.Errorf("sent=%d bounced=%d th=%d: trip=%v want %v",
+				c.sent, c.bounced, c.threshold, trip, c.wantTrip)
+		}
 	}
 }

@@ -41,6 +41,7 @@ type Worker struct {
 	tokenizer  *Tokenizer
 	publicBase string // 例 https://phox-api.0utl1er.tech (末尾スラッシュ無し)
 	lock       *leaderLock
+	mxChecker  *MXChecker // Phase 27f: 宛先ドメインの配信可否 (キャッシュ付き)
 
 	// leader は単一 pod なので in-memory で十分 (ロック喪失時はリセットされるが
 	// daily cap は DB 起算なので安全側に働く)。
@@ -74,6 +75,7 @@ func NewWorker(
 		tokenizer:     tokenizer,
 		publicBase:    strings.TrimSuffix(publicBase, "/"),
 		lock:          newLeaderLock(rdb, lockKey, host+"-"+uuid.NewString(), lockTTL),
+		mxChecker:     NewMXChecker(queries),
 		nextAllowed:   map[uuid.UUID]time.Time{},
 		cooldownUntil: map[uuid.UUID]time.Time{},
 	}
@@ -121,6 +123,10 @@ func (w *Worker) tick(ctx context.Context) {
 		} else if n > 0 {
 			log.Info().Int64("count", n).Str("campaign", c.ID.String()).Msg("campaign: followup sequences stopped (reply/unsub/bounce)")
 		}
+		// Phase 27f: バウンス率のサーキットブレーカー。人が気付く前に止める。
+		if w.tripBreakerIfUnhealthy(ctx, c) {
+			continue
+		}
 		// 完了判定は送信窓の外でも行う (窓の外で queued 0 になっても閉じたい)。
 		if done, err := w.completeIfDrained(ctx, c); err != nil || done {
 			continue
@@ -130,6 +136,53 @@ func (w *Worker) tick(ctx context.Context) {
 		}
 		w.sendOne(ctx, c, now)
 	}
+}
+
+// minSamplesForBreaker: これ未満の送信数ではバウンス率を信用しない
+// (3 通中 1 通バウンス = 33% で止めてしまうのを防ぐ)。
+const minSamplesForBreaker = 20
+
+// tripBreakerIfUnhealthy はハードバウンス率がしきい値を超えていたら
+// キャンペーンを自動一時停止する (Phase 27f サーキットブレーカー)。
+//
+// バウンス率が高いまま送り続けると送信ドメイン全体の評価が落ち、以後の
+// 通常業務メールまでスパム判定される。1 キャンペーンの完走より送信ドメインの
+// 保護を優先する。再開は人が原因を確認した上で明示的に行う。
+func (w *Worker) tripBreakerIfUnhealthy(ctx context.Context, c db.Campaign) bool {
+	if c.BouncePauseThreshold <= 0 {
+		return false // 無効化されている
+	}
+	st, err := w.queries.GetCampaignBounceStats(ctx, c.ID)
+	if err != nil {
+		log.Error().Err(err).Str("campaign", c.ID.String()).Msg("campaign: bounce stats failed")
+		return false
+	}
+	if st.Sent < minSamplesForBreaker {
+		return false
+	}
+	rate := float64(st.Bounced) * 100 / float64(st.Sent)
+	if rate <= float64(c.BouncePauseThreshold) {
+		return false
+	}
+
+	reason := fmt.Sprintf(
+		"バウンス率 %.1f%% がしきい値 %d%% を超えたため自動停止しました (送信 %d 通中 %d 件がバウンス)。"+
+			"宛先リストの品質を確認してから再開してください。",
+		rate, c.BouncePauseThreshold, st.Sent, st.Bounced)
+	if err := w.queries.PauseCampaignForHealth(ctx, db.PauseCampaignForHealthParams{
+		ID: c.ID, HealthPausedReason: reason,
+	}); err != nil {
+		log.Error().Err(err).Str("campaign", c.ID.String()).Msg("campaign: health pause failed")
+		return false
+	}
+	log.Warn().
+		Str("campaign", c.ID.String()).
+		Str("name", c.Name).
+		Float64("bounce_rate", rate).
+		Int64("sent", st.Sent).
+		Int64("bounced", st.Bounced).
+		Msg("campaign: paused by bounce-rate circuit breaker")
+	return true
 }
 
 // completeIfDrained marks the campaign completed when nothing is left to send.
@@ -192,6 +245,16 @@ func (w *Worker) sendOne(ctx context.Context, c db.Campaign, now time.Time) {
 	}); serr == nil {
 		_ = w.queries.MarkRecipientSkipped(ctx, db.MarkRecipientSkippedParams{
 			ID: rec.ID, Error: "suppressed after snapshot",
+		})
+		return
+	}
+
+	// Phase 27f: 送信直前の MX 検証。MX が無いドメインは送ればほぼ確実に
+	// ハードバウンスになるので、送らずに skipped にしてバウンス率を汚さない
+	// (作成時にも検証済みだが、その後のドメイン失効やキャッシュ切れを拾う)。
+	if res := w.mxChecker.Check(ctx, DomainOf(rec.Email)); !res.HasMX && !res.Unknown {
+		_ = w.queries.MarkRecipientSkipped(ctx, db.MarkRecipientSkippedParams{
+			ID: rec.ID, Error: "配信不能ドメイン (MX レコードなし)",
 		})
 		return
 	}

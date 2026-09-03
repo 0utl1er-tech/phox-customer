@@ -6,11 +6,19 @@ import (
 	"fmt"
 	"strings"
 
+	"time"
+
 	"connectrpc.com/connect"
 	campaignv1 "github.com/0utl1er-tech/phox-customer/gen/pb/campaign/v1"
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
+	campaignpkg "github.com/0utl1er-tech/phox-customer/internal/campaign"
 	"github.com/google/uuid"
 )
+
+// mxCheckBudget は作成時 MX 検証の全体予算。これを超えた分は「判定不能」
+// として送信対象に残す (作成 API を待たせない)。未検証ドメインは送信直前に
+// worker 側でも検証されるので取りこぼしにはならない。
+const mxCheckBudget = 15 * time.Second
 
 // CreateCampaign は受信者スナップショットごと draft キャンペーンを作る。
 //
@@ -110,11 +118,29 @@ func (s *CampaignService) CreateCampaign(
 		suppressed[e] = true
 	}
 
+	// ── Phase 27f: 宛先ドメインの MX 検証 ──
+	// MX が無いドメインは送ればほぼ確実にハードバウンスになる。送る前に落として
+	// バウンス率 (= 送信ドメインの評価) を汚さない。DNS 障害時は判定不能として
+	// 送信対象に残す (安全側)。全体にタイムアウトを掛け、作成 API を待たせない。
+	mxCtx, mxCancel := context.WithTimeout(ctx, mxCheckBudget)
+	defer mxCancel()
+	uniqueDomains := map[string]bool{}
+	for _, e := range emails {
+		if d := campaignpkg.DomainOf(e); d != "" {
+			uniqueDomains[d] = true
+		}
+	}
+	domainList := make([]string, 0, len(uniqueDomains))
+	for d := range uniqueDomains {
+		domainList = append(domainList, d)
+	}
+	mxResults := campaignpkg.NewMXChecker(s.queries).CheckMany(mxCtx, domainList)
+
 	// ── 受信者行の組み立て (queued / skipped 分類) ──
 	campaignID := uuid.New()
 	rows := make([]db.CreateCampaignRecipientsParams, 0, len(customers))
 	seenEmail := map[string]bool{}
-	var queued, noEmail, wasSuppressed, duplicate int32
+	var queued, noEmail, wasSuppressed, duplicate, noMX, roleAddr int32
 	for _, c := range customers {
 		email := normalizeEmail(c.Mail)
 		row := db.CreateCampaignRecipientsParams{
@@ -124,6 +150,7 @@ func (s *CampaignService) CreateCampaign(
 			Email:      email,
 			Status:     "queued",
 		}
+		mx, mxKnown := mxResults[campaignpkg.DomainOf(email)]
 		switch {
 		case email == "":
 			row.Status, row.Error = "skipped", "メールアドレス未登録"
@@ -134,15 +161,22 @@ func (s *CampaignService) CreateCampaign(
 		case seenEmail[email]:
 			row.Status, row.Error = "skipped", "キャンペーン内でアドレス重複"
 			duplicate++
+		case mxKnown && !mx.HasMX && !mx.Unknown:
+			row.Status, row.Error = "skipped", "配信不能ドメイン (MX レコードなし)"
+			noMX++
 		default:
 			seenEmail[email] = true
 			queued++
+			// 除外はしないが、苦情率が上がりやすいので件数だけ返す。
+			if campaignpkg.IsRoleAddress(email) {
+				roleAddr++
+			}
 		}
 		rows = append(rows, row)
 	}
 	if queued == 0 {
 		return nil, connect.NewError(connect.CodeInvalidArgument,
-			errors.New("送信可能な受信者が 0 件です (メールアドレス未登録・配信停止済みを除外した結果)"))
+			errors.New("送信可能な受信者が 0 件です (メールアドレス未登録・配信停止済み・配信不能ドメインを除外した結果)"))
 	}
 
 	// ── スケジュール/送信者情報 (未指定はデフォルト) ──
@@ -151,6 +185,7 @@ func (s *CampaignService) CreateCampaign(
 		sched = &campaignv1.CampaignSchedule{
 			SendStartHour: 9, SendEndHour: 18, SendDays: 31,
 			DailyCapPerMailbox: 100, MinIntervalSec: 90, WarmupEnabled: true,
+			BouncePauseThreshold: 5,
 		}
 	}
 	if sched.SendEndHour <= sched.SendStartHour {
@@ -170,23 +205,24 @@ func (s *CampaignService) CreateCampaign(
 	q := s.queries.WithTx(tx)
 
 	created, err := q.CreateCampaign(ctx, db.CreateCampaignParams{
-		ID:                 campaignID,
-		CompanyID:          u.CompanyID,
-		CreatedBy:          u.ID,
-		Name:               req.Msg.Name,
-		Subject:            req.Msg.Subject,
-		Body:               req.Msg.Body,
-		TrackOpens:         req.Msg.TrackOpens,
-		TrackClicks:        req.Msg.TrackClicks,
-		SendStartHour:      sched.SendStartHour,
-		SendEndHour:        sched.SendEndHour,
-		SendDays:           sched.SendDays,
-		DailyCapPerMailbox: sched.DailyCapPerMailbox,
-		MinIntervalSec:     sched.MinIntervalSec,
-		WarmupEnabled:      sched.WarmupEnabled,
-		SenderOrg:          sender.SenderOrg,
-		SenderAddress:      sender.SenderAddress,
-		SenderContact:      sender.SenderContact,
+		ID:                   campaignID,
+		CompanyID:            u.CompanyID,
+		CreatedBy:            u.ID,
+		Name:                 req.Msg.Name,
+		Subject:              req.Msg.Subject,
+		Body:                 req.Msg.Body,
+		TrackOpens:           req.Msg.TrackOpens,
+		TrackClicks:          req.Msg.TrackClicks,
+		SendStartHour:        sched.SendStartHour,
+		SendEndHour:          sched.SendEndHour,
+		SendDays:             sched.SendDays,
+		DailyCapPerMailbox:   sched.DailyCapPerMailbox,
+		MinIntervalSec:       sched.MinIntervalSec,
+		WarmupEnabled:        sched.WarmupEnabled,
+		BouncePauseThreshold: sched.BouncePauseThreshold,
+		SenderOrg:            sender.SenderOrg,
+		SenderAddress:        sender.SenderAddress,
+		SenderContact:        sender.SenderContact,
 	})
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("create campaign: %w", err))
@@ -227,6 +263,8 @@ func (s *CampaignService) CreateCampaign(
 		SkippedNoEmail:    noEmail,
 		SkippedSuppressed: wasSuppressed,
 		SkippedDuplicate:  duplicate,
+		SkippedNoMx:       noMX,
+		RoleAddressCount:  roleAddr,
 	}), nil
 }
 
