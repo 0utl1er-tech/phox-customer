@@ -25,6 +25,7 @@ import (
 	mailboxv1 "github.com/0utl1er-tech/phox-customer/gen/pb/mailbox/v1"
 	searchv1 "github.com/0utl1er-tech/phox-customer/gen/pb/search/v1"
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
+	"github.com/0utl1er-tech/phox-customer/internal/service/auth"
 	"github.com/0utl1er-tech/phox-customer/internal/service/customer"
 )
 
@@ -107,6 +108,17 @@ type sendCustomerEmailIn struct {
 	Body       string `json:"body,omitempty" jsonschema:"plain-text mail body"`
 	ContactID  string `json:"contact_id,omitempty" jsonschema:"optional contact UUID to associate the mail with"`
 	MailboxID  string `json:"mailbox_id,omitempty" jsonschema:"optional mailbox UUID (from list_mailboxes) to send as — the From address becomes that mailbox and replies flow back to it; requires editor role on the mailbox. Omit for the legacy send-as-yourself behaviour"`
+}
+
+type importCustomersCSVIn struct {
+	BookName   string `json:"book_name" jsonschema:"name for the NEW customer book that is created to hold the imported rows"`
+	CSVContent string `json:"csv_content" jsonschema:"raw CSV text, first line = header row. Recognised headers (case-insensitive): name, corporation, phone, mail (or email), category, address, memo, id (optional customer UUID); other columns are ignored — reshape messy CSVs into these canonical headers before calling"`
+}
+
+type enrichCustomerRowsIn struct {
+	Headers      []string   `json:"headers" jsonschema:"the raw CSV column names as-is (Japanese or arbitrary labels are fine), 1-64 columns"`
+	Rows         [][]string `json:"rows" jsonschema:"raw row data: one array of cell values per row, in the same order as headers (max 500 rows per call — split larger files)"`
+	TargetFields []string   `json:"target_fields,omitempty" jsonschema:"restrict which canonical fields to fill: phone | category | name | corporation | address | memo | mail; empty = all"`
 }
 
 // ─── campaign input types (Phase 27i) ───────────────────────────
@@ -310,6 +322,75 @@ func addTools(s *mcp.Server, deps Deps) {
 				return nil, nil, cerr
 			}
 		}
+		return protoResult(resp, err)
+	})
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name: "import_customers_csv",
+		Description: "Bulk-import customers from CSV text. CREATES A NEW BOOK named book_name, owned " +
+			"by the authenticated user, and inserts one customer per data row — it cannot append to an " +
+			"existing book (use create_customer for that). The first CSV line must be a header row; " +
+			"recognised columns (case-insensitive) are: name, corporation, phone, mail (or email), " +
+			"category, address, memo, and optionally id (customer UUID, auto-generated when absent). " +
+			"Unknown columns are silently ignored, so reshape a messy CSV into these canonical headers " +
+			"first (enrich_customer_rows can propose the normalised values). Missing/empty cells are " +
+			"fine (stored as empty strings — rows without an email import too). Max 50,000 rows. " +
+			"Returns book_id, imported/failed counts and per-line errors for rows that could not be " +
+			"inserted (e.g. malformed CSV line or invalid id). No email is involved at any point.",
+		InputSchema: mcpInputSchema[importCustomersCSVIn](),
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in importCustomersCSVIn) (*mcp.CallToolResult, any, error) {
+		if strings.TrimSpace(in.BookName) == "" {
+			return nil, nil, fmt.Errorf("book_name: required")
+		}
+		if strings.TrimSpace(in.CSVContent) == "" {
+			return nil, nil, fmt.Errorf("csv_content: required")
+		}
+		// owner はツール引数ではなく認証済みトークンの subject。呼び出し元が
+		// 他人を owner に指定できてはいけない (ImportBook RPC 自体は owner_id を
+		// 信用するので、ここで固定するのが MCP 経路の権限境界)。
+		token, err := auth.AuthorizeUser(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		// ImportBook は file_name から ".csv" を落としたものを book 名にする。
+		resp, rpcErr := deps.Book.ImportBook(ctx, connect.NewRequest(&bookv1.ImportBookRequest{
+			FileName:    in.BookName + ".csv",
+			FileContent: []byte(in.CSVContent),
+			OwnerId:     token.Subject(),
+		}))
+		return protoResult(resp, rpcErr)
+	})
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name: "enrich_customer_rows",
+		Description: "Normalise/enrich messy customer-list rows with the server-side LLM (Gemini) — " +
+			"suggestions only, NOTHING is written to the database. Give the raw CSV headers (any " +
+			"labels, Japanese OK) and raw rows; returns, per row, proposed values for the canonical " +
+			"fields (phone/category/name/corporation/address/memo/mail) with a confidence score and a " +
+			"changed flag. To apply accepted suggestions, reshape them yourself into " +
+			"import_customers_csv (new book) or create_customer calls. Max 500 rows per call — split " +
+			"larger lists. Fails with failed_precondition when the server has no GEMINI_API_KEY " +
+			"configured (currently the case in production) — calling it is also how you detect " +
+			"whether AI enrichment is enabled in this environment.",
+		InputSchema: mcpInputSchema[enrichCustomerRowsIn](),
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in enrichCustomerRowsIn) (*mcp.CallToolResult, any, error) {
+		// proto の buf.validate 相当の前置チェック (in-process 呼び出しは
+		// validate インターセプタを通らない)。headers/rows の必須・500 行上限は
+		// サービス側でも検査されるが、64 列上限はここでしか守れない。
+		if len(in.Headers) > 64 {
+			return nil, nil, fmt.Errorf("headers: at most 64 columns (got %d)", len(in.Headers))
+		}
+		req := &customerv1.EnrichCustomerRowsRequest{
+			Headers:      in.Headers,
+			TargetFields: in.TargetFields,
+		}
+		for i, cells := range in.Rows {
+			if len(cells) > 64 {
+				return nil, nil, fmt.Errorf("rows[%d]: at most 64 cells (got %d)", i, len(cells))
+			}
+			req.Rows = append(req.Rows, &customerv1.CustomerRowValues{Cells: cells})
+		}
+		resp, err := deps.Customer.EnrichCustomerRows(ctx, connect.NewRequest(req))
 		return protoResult(resp, err)
 	})
 

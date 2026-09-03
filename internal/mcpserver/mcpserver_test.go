@@ -167,6 +167,8 @@ func TestListTools(t *testing.T) {
 		"get_mail_stats",
 		"send_customer_email",
 		"create_customer",
+		"import_customers_csv",
+		"enrich_customer_rows",
 	}, got)
 }
 
@@ -646,6 +648,69 @@ func TestToolsAgainstDB(t *testing.T) {
 		require.NoError(t, err)
 		require.False(t, res.IsError, "unexpected tool error: %s", textOf(t, res))
 		assert.Contains(t, textOf(t, res), `"status":"cancelled"`)
+	})
+
+	t.Run("import_customers_csv creates a new book and reports per-line errors", func(t *testing.T) {
+		session := connectClient(t, newTestHandler(t, pool, q, owner.ID))
+		bookName := "CSV取込検証-" + uuid.NewString()[:8]
+		dupID := uuid.NewString()
+		// 3 データ行: 2 行目はメール欠損 (エラーにならず取り込まれる)、
+		// 3 行目は id 重複で insert 失敗 → errors に載る。
+		csv := "name,corporation,mail,phone,id\n" +
+			"山田 太郎,株式会社さくら,yamada@example.com,03-1111-2222," + dupID + "\n" +
+			"鈴木 花子,ミドリ薬局,,090-3333-4444,\n" +
+			"重複 次郎,duplicate Inc,dup@example.com,," + dupID + "\n"
+		res, err := session.CallTool(ctx, &mcp.CallToolParams{
+			Name:      "import_customers_csv",
+			Arguments: map[string]any{"book_name": bookName, "csv_content": csv},
+		})
+		require.NoError(t, err)
+		require.False(t, res.IsError, "unexpected tool error: %s", textOf(t, res))
+		var out struct {
+			BookId        string `json:"bookId"`
+			ImportedCount int32  `json:"importedCount"`
+			FailedCount   int32  `json:"failedCount"`
+			Errors        []struct {
+				LineNumber   int32  `json:"lineNumber"`
+				ErrorMessage string `json:"errorMessage"`
+			} `json:"errors"`
+		}
+		require.NoError(t, json.Unmarshal([]byte(textOf(t, res)), &out))
+		assert.Equal(t, int32(2), out.ImportedCount, "メール欠損行も取り込まれる")
+		assert.Equal(t, int32(1), out.FailedCount, "id 重複行だけ失敗")
+		require.Len(t, out.Errors, 1)
+		assert.Contains(t, out.Errors[0].ErrorMessage, "failed to insert customer")
+
+		// 新規 book が作られ、呼び出しユーザーが owner (list_books に載る)。
+		res, err = session.CallTool(ctx, &mcp.CallToolParams{Name: "list_books"})
+		require.NoError(t, err)
+		require.False(t, res.IsError, "unexpected tool error: %s", textOf(t, res))
+		assert.Contains(t, textOf(t, res), out.BookId)
+		assert.Contains(t, textOf(t, res), bookName)
+
+		// 取り込まれた顧客が book に居る (dup 行の id は 1 件のみ)。
+		bkID, perr := uuid.Parse(out.BookId)
+		require.NoError(t, perr)
+		got, gerr := q.ListCustomers(ctx, db.ListCustomersParams{BookID: bkID, Limit: 100})
+		require.NoError(t, gerr)
+		assert.Len(t, got, 2)
+	})
+
+	t.Run("enrich_customer_rows は GEMINI_API_KEY 未設定だと failed_precondition", func(t *testing.T) {
+		// newTestHandler は gemini nil で CustomerService を組む — staging/prod の
+		// キー未設定環境と同じ経路。
+		session := connectClient(t, newTestHandler(t, pool, q, owner.ID))
+		res, err := session.CallTool(ctx, &mcp.CallToolParams{
+			Name: "enrich_customer_rows",
+			Arguments: map[string]any{
+				"headers": []string{"会社名", "電話"},
+				"rows":    []any{[]string{"（株）さくら整骨院", "０３−１２３４−５６７８"}},
+			},
+		})
+		require.NoError(t, err)
+		assert.True(t, res.IsError)
+		assert.Contains(t, textOf(t, res), "failed_precondition")
+		assert.Contains(t, textOf(t, res), "GEMINI_API_KEY")
 	})
 
 	t.Run("update_campaign_draft (partial update)", func(t *testing.T) {
