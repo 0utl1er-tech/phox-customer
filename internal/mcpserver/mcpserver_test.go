@@ -167,6 +167,8 @@ func TestListTools(t *testing.T) {
 		"get_mail_stats",
 		"send_customer_email",
 		"create_customer",
+		"import_customers_csv",
+		"enrich_customer_rows",
 	}, got)
 }
 
@@ -193,6 +195,7 @@ func TestListToolsWithCampaign(t *testing.T) {
 		"list_campaigns",
 		"get_campaign",
 		"create_campaign_draft",
+		"update_campaign_draft",
 		"start_campaign",
 		"pause_campaign",
 		"cancel_campaign",
@@ -200,6 +203,10 @@ func TestListToolsWithCampaign(t *testing.T) {
 	} {
 		assert.Contains(t, got, name)
 	}
+	// update_campaign_draft は部分更新であること・送信しないことを謳っている。
+	require.NotNil(t, byName["update_campaign_draft"])
+	assert.Contains(t, byName["update_campaign_draft"].Description, "partial update")
+	assert.Contains(t, byName["update_campaign_draft"].Description, "never sends")
 	// 実送信ツールには明示確認の但し書きが載っていること。
 	require.NotNil(t, byName["start_campaign"])
 	assert.Contains(t, byName["start_campaign"].Description, "ユーザーの明示的な確認")
@@ -641,5 +648,201 @@ func TestToolsAgainstDB(t *testing.T) {
 		require.NoError(t, err)
 		require.False(t, res.IsError, "unexpected tool error: %s", textOf(t, res))
 		assert.Contains(t, textOf(t, res), `"status":"cancelled"`)
+	})
+
+	t.Run("import_customers_csv creates a new book and reports per-line errors", func(t *testing.T) {
+		session := connectClient(t, newTestHandler(t, pool, q, owner.ID))
+		bookName := "CSV取込検証-" + uuid.NewString()[:8]
+		dupID := uuid.NewString()
+		// 3 データ行: 2 行目はメール欠損 (エラーにならず取り込まれる)、
+		// 3 行目は id 重複で insert 失敗 → errors に載る。
+		csv := "name,corporation,mail,phone,id\n" +
+			"山田 太郎,株式会社さくら,yamada@example.com,03-1111-2222," + dupID + "\n" +
+			"鈴木 花子,ミドリ薬局,,090-3333-4444,\n" +
+			"重複 次郎,duplicate Inc,dup@example.com,," + dupID + "\n"
+		res, err := session.CallTool(ctx, &mcp.CallToolParams{
+			Name:      "import_customers_csv",
+			Arguments: map[string]any{"book_name": bookName, "csv_content": csv},
+		})
+		require.NoError(t, err)
+		require.False(t, res.IsError, "unexpected tool error: %s", textOf(t, res))
+		var out struct {
+			BookId        string `json:"bookId"`
+			ImportedCount int32  `json:"importedCount"`
+			FailedCount   int32  `json:"failedCount"`
+			Errors        []struct {
+				LineNumber   int32  `json:"lineNumber"`
+				ErrorMessage string `json:"errorMessage"`
+			} `json:"errors"`
+		}
+		require.NoError(t, json.Unmarshal([]byte(textOf(t, res)), &out))
+		assert.Equal(t, int32(2), out.ImportedCount, "メール欠損行も取り込まれる")
+		assert.Equal(t, int32(1), out.FailedCount, "id 重複行だけ失敗")
+		require.Len(t, out.Errors, 1)
+		assert.Contains(t, out.Errors[0].ErrorMessage, "failed to insert customer")
+
+		// 新規 book が作られ、呼び出しユーザーが owner (list_books に載る)。
+		res, err = session.CallTool(ctx, &mcp.CallToolParams{Name: "list_books"})
+		require.NoError(t, err)
+		require.False(t, res.IsError, "unexpected tool error: %s", textOf(t, res))
+		assert.Contains(t, textOf(t, res), out.BookId)
+		assert.Contains(t, textOf(t, res), bookName)
+
+		// 取り込まれた顧客が book に居る (dup 行の id は 1 件のみ)。
+		bkID, perr := uuid.Parse(out.BookId)
+		require.NoError(t, perr)
+		got, gerr := q.ListCustomers(ctx, db.ListCustomersParams{BookID: bkID, Limit: 100})
+		require.NoError(t, gerr)
+		assert.Len(t, got, 2)
+	})
+
+	t.Run("enrich_customer_rows は GEMINI_API_KEY 未設定だと failed_precondition", func(t *testing.T) {
+		// newTestHandler は gemini nil で CustomerService を組む — staging/prod の
+		// キー未設定環境と同じ経路。
+		session := connectClient(t, newTestHandler(t, pool, q, owner.ID))
+		res, err := session.CallTool(ctx, &mcp.CallToolParams{
+			Name: "enrich_customer_rows",
+			Arguments: map[string]any{
+				"headers": []string{"会社名", "電話"},
+				"rows":    []any{[]string{"（株）さくら整骨院", "０３−１２３４−５６７８"}},
+			},
+		})
+		require.NoError(t, err)
+		assert.True(t, res.IsError)
+		assert.Contains(t, textOf(t, res), "failed_precondition")
+		assert.Contains(t, textOf(t, res), "GEMINI_API_KEY")
+	})
+
+	t.Run("update_campaign_draft (partial update)", func(t *testing.T) {
+		require.NoError(t, q.UpsertDomainHealth(ctx, db.UpsertDomainHealthParams{
+			Lower: "example.com", HasMx: true, MxHost: "mx.example.com",
+		}))
+		mbID := uuid.New()
+		_, err := q.CreateMailbox(ctx, db.CreateMailboxParams{
+			ID: mbID, CompanyID: cid, Address: "upd-" + mbID.String()[:8] + "@0utl1er.tech",
+			SmtpUsername: "upd@0utl1er.tech", PasswordEnc: []byte("x"), Active: true,
+		})
+		require.NoError(t, err)
+		_, err = q.CreateMailboxPermit(ctx, db.CreateMailboxPermitParams{
+			ID: uuid.New(), MailboxID: mbID, UserID: owner.ID, Role: db.RoleOwner,
+		})
+		require.NoError(t, err)
+
+		session := connectClient(t, newTestHandler(t, pool, q, owner.ID))
+		res, err := session.CallTool(ctx, &mcp.CallToolParams{
+			Name: "create_campaign_draft",
+			Arguments: map[string]any{
+				"name":         "mcp-update-target",
+				"customer_ids": []string{cust.ID.String()},
+				"mailbox_ids":  []string{mbID.String()},
+				"subject":      "初版の件名",
+				"body":         "初版の本文です。",
+				"followups": []any{
+					map[string]any{"wait_days": 3, "body": "追いメール初版"},
+				},
+			},
+		})
+		require.NoError(t, err)
+		require.False(t, res.IsError, "unexpected tool error: %s", textOf(t, res))
+		var created struct {
+			Campaign struct {
+				Id string `json:"id"`
+			} `json:"campaign"`
+		}
+		require.NoError(t, json.Unmarshal([]byte(textOf(t, res)), &created))
+		campID := created.Campaign.Id
+
+		// ── 部分更新: subject だけ変更 → name/body/followups は不変 ──
+		res, err = session.CallTool(ctx, &mcp.CallToolParams{
+			Name: "update_campaign_draft",
+			Arguments: map[string]any{
+				"campaign_id": campID,
+				"subject":     "改訂版の件名",
+			},
+		})
+		require.NoError(t, err)
+		require.False(t, res.IsError, "unexpected tool error: %s", textOf(t, res))
+		updated := textOf(t, res)
+		assert.Contains(t, updated, "改訂版の件名")
+		assert.Contains(t, updated, "mcp-update-target", "name は不変のはず")
+		assert.Contains(t, updated, "初版の本文です", "body は不変のはず")
+		assert.Contains(t, updated, "追いメール初版", "followups は不変のはず")
+		assert.Contains(t, updated, `"status":"draft"`, "更新しても draft のまま")
+
+		// ── followups の全置換: wait_days 3→7 + 2 ステップ目追加 ──
+		res, err = session.CallTool(ctx, &mcp.CallToolParams{
+			Name: "update_campaign_draft",
+			Arguments: map[string]any{
+				"campaign_id": campID,
+				"followups": []any{
+					map[string]any{"wait_days": 7, "body": "追いメール改訂版"},
+					map[string]any{"wait_days": 14, "body": "最終確認のご連絡"},
+				},
+			},
+		})
+		require.NoError(t, err)
+		require.False(t, res.IsError, "unexpected tool error: %s", textOf(t, res))
+		updated = textOf(t, res)
+		assert.Contains(t, updated, `"waitDays":7`)
+		assert.Contains(t, updated, "最終確認のご連絡")
+		assert.NotContains(t, updated, "追いメール初版", "followups は全置換")
+		assert.Contains(t, updated, "改訂版の件名", "前回の subject 変更は保持")
+
+		// ── schedule の部分更新: send_start_hour だけ → 他の pacing は不変 ──
+		res, err = session.CallTool(ctx, &mcp.CallToolParams{
+			Name: "update_campaign_draft",
+			Arguments: map[string]any{
+				"campaign_id": campID,
+				"schedule":    map[string]any{"send_start_hour": 10},
+			},
+		})
+		require.NoError(t, err)
+		require.False(t, res.IsError, "unexpected tool error: %s", textOf(t, res))
+		updated = textOf(t, res)
+		assert.Contains(t, updated, `"sendStartHour":10`)
+		assert.Contains(t, updated, `"dailyCapPerMailbox":100`, "未指定の schedule フィールドは現在値のまま")
+		assert.Contains(t, updated, `"sendEndHour":18`, "未指定の schedule フィールドは現在値のまま")
+
+		// ── followups の検証は create と同じガード ──
+		res, err = session.CallTool(ctx, &mcp.CallToolParams{
+			Name: "update_campaign_draft",
+			Arguments: map[string]any{
+				"campaign_id": campID,
+				"followups":   []any{map[string]any{"wait_days": 61, "body": "x"}},
+			},
+		})
+		require.NoError(t, err)
+		assert.True(t, res.IsError)
+		assert.Contains(t, textOf(t, res), "wait_days")
+
+		// ── mailbox permit の無い outsider は更新できない ──
+		xsession := connectClient(t, newTestHandler(t, pool, q, outsider.ID))
+		res, err = xsession.CallTool(ctx, &mcp.CallToolParams{
+			Name: "update_campaign_draft",
+			Arguments: map[string]any{
+				"campaign_id": campID,
+				"subject":     "乗っ取り",
+			},
+		})
+		require.NoError(t, err)
+		assert.True(t, res.IsError, "権限なしは permission_denied になるべき")
+
+		// ── cancelled は編集不可 (failed_precondition) ──
+		res, err = session.CallTool(ctx, &mcp.CallToolParams{
+			Name:      "cancel_campaign",
+			Arguments: map[string]any{"campaign_id": campID},
+		})
+		require.NoError(t, err)
+		require.False(t, res.IsError, "unexpected tool error: %s", textOf(t, res))
+		res, err = session.CallTool(ctx, &mcp.CallToolParams{
+			Name: "update_campaign_draft",
+			Arguments: map[string]any{
+				"campaign_id": campID,
+				"subject":     "もう遅い",
+			},
+		})
+		require.NoError(t, err)
+		assert.True(t, res.IsError, "cancelled の編集は failed_precondition になるべき")
+		assert.Contains(t, textOf(t, res), "failed_precondition")
 	})
 }
