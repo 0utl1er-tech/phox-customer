@@ -31,6 +31,7 @@ import (
 	campaignpkg "github.com/0utl1er-tech/phox-customer/internal/campaign"
 	"github.com/0utl1er-tech/phox-customer/internal/crypto"
 	"github.com/0utl1er-tech/phox-customer/internal/gcal"
+	"github.com/0utl1er-tech/phox-customer/internal/gemini"
 	"github.com/0utl1er-tech/phox-customer/internal/ical"
 	"github.com/0utl1er-tech/phox-customer/internal/keycloakadmin"
 	"github.com/0utl1er-tech/phox-customer/internal/mail"
@@ -250,8 +251,17 @@ func main() {
 	authInterceptor := auth.NewAuthInterceptor(context.Background(), queries, cfg, defaultCompanyID)
 	interceptors := connect.WithInterceptors(authInterceptor)
 
+	// Phase 27j: Gemini クライアント (CSV 取り込みデータの AI 補完)。
+	// GEMINI_API_KEY 未設定なら nil → EnrichCustomerRows は FailedPrecondition。
+	geminiClient := gemini.NewClient(cfg.GeminiAPIKey, cfg.GeminiModel)
+	if geminiClient.Enabled() {
+		log.Info().Str("model", geminiClient.Model()).Msg("Gemini CSV enrichment enabled")
+	} else {
+		log.Warn().Msg("GEMINI_API_KEY not set — CSV AI enrichment disabled")
+	}
+
 	// Create services
-	customerService := customer.NewCustomerService(queries, indexer)
+	customerService := customer.NewCustomerService(queries, indexer, geminiClient)
 	bookService := book.NewBookService(queries, indexer)
 	permitService := permit.NewPermitService(queries)
 	contactService := contact.NewContactService(queries)

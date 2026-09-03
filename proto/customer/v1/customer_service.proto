@@ -12,4 +12,8 @@ service CustomerService {
   rpc GetCustomer(GetCustomerRequest) returns (GetCustomerResponse);
   rpc UpdateCustomer(UpdateCustomerRequest) returns (UpdateCustomerResponse);
   rpc DeleteCustomer(DeleteCustomerRequest) returns (DeleteCustomerResponse);
+  // Phase 27j: CSV 取り込みプレビューの AI 補完 (Gemini)。元データは変更しない。
+  rpc EnrichCustomerRows(EnrichCustomerRowsRequest) returns (EnrichCustomerRowsResponse);
+  // Phase 27j: AI 補完が利用可能か (GEMINI_API_KEY 設定有無) を返す。
+  rpc GetEnrichmentStatus(GetEnrichmentStatusRequest) returns (GetEnrichmentStatusResponse);
 }

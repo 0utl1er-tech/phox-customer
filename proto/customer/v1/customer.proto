@@ -81,3 +81,61 @@ message DeleteCustomerRequest {
 message DeleteCustomerResponse {
   string customer_id = 1;
 }
+
+// ---------------------------------------------------------------------------
+// Phase 27j: Gemini による CSV 取り込みデータ補完
+//
+// CSV インポートのプレビュー段階で、雑な営業リスト (列名バラバラ・法人格の
+// 表記ゆれ・電話番号/メールの書式不統一など) を LLM で正規化した結果を
+// 「提案」として返す。元データは一切変更せず、UI 側でユーザーが確認して
+// 適用した行だけが通常の ImportBook に渡る。
+// ---------------------------------------------------------------------------
+
+// CSV の 1 行分の生データ (cells は headers と同じ並び)。
+message CustomerRowValues {
+  repeated string cells = 1 [(buf.validate.field).repeated.max_items = 64];
+}
+
+message EnrichCustomerRowsRequest {
+  // CSV の列ヘッダ (任意の表記。日本語ヘッダも可)。
+  repeated string headers = 1 [
+    (buf.validate.field).repeated.min_items = 1,
+    (buf.validate.field).repeated.max_items = 64
+  ];
+  // 生の行データ。1 リクエスト最大 500 行 (超える場合はクライアントが分割)。
+  repeated CustomerRowValues rows = 2 [
+    (buf.validate.field).repeated.min_items = 1,
+    (buf.validate.field).repeated.max_items = 500
+  ];
+  // 補完対象フィールド。空なら全フィールド対象。
+  // canonical 名: phone / category / name / corporation / address / memo / mail
+  repeated string target_fields = 3 [(buf.validate.field).repeated.max_items = 16];
+}
+
+// 1 行分の補完結果。fields は canonical フィールド名 →正規化済み値。
+message EnrichedCustomerRow {
+  // リクエストの rows における添字 (0-based)。
+  int32 row_index = 1;
+  // canonical フィールド名 (phone/category/name/corporation/address/memo/mail)
+  // → 正規化・補完後の値。根拠が無いフィールドは空文字。
+  map<string, string> fields = 2;
+  // モデルの自己申告 confidence (0.0-1.0)。
+  double confidence = 3;
+  // 元データ (ヘッダの canonical マッピング後) から 1 つでも値が変わったか。
+  bool changed = 4;
+}
+
+message EnrichCustomerRowsResponse {
+  repeated EnrichedCustomerRow rows = 1;
+  // 実際に使用したモデル名 (例: gemini-2.0-flash)。
+  string model = 2;
+}
+
+message GetEnrichmentStatusRequest {}
+
+message GetEnrichmentStatusResponse {
+  // GEMINI_API_KEY が設定されていて AI 補完が利用できるか。
+  bool enabled = 1;
+  // 使用するモデル名 (enabled=false のときは空)。
+  string model = 2;
+}

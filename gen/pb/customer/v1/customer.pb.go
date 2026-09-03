@@ -716,6 +716,332 @@ func (x *DeleteCustomerResponse) GetCustomerId() string {
 	return ""
 }
 
+// CSV の 1 行分の生データ (cells は headers と同じ並び)。
+type CustomerRowValues struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Cells         []string               `protobuf:"bytes,1,rep,name=cells,proto3" json:"cells,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CustomerRowValues) Reset() {
+	*x = CustomerRowValues{}
+	mi := &file_customer_v1_customer_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CustomerRowValues) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CustomerRowValues) ProtoMessage() {}
+
+func (x *CustomerRowValues) ProtoReflect() protoreflect.Message {
+	mi := &file_customer_v1_customer_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CustomerRowValues.ProtoReflect.Descriptor instead.
+func (*CustomerRowValues) Descriptor() ([]byte, []int) {
+	return file_customer_v1_customer_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *CustomerRowValues) GetCells() []string {
+	if x != nil {
+		return x.Cells
+	}
+	return nil
+}
+
+type EnrichCustomerRowsRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// CSV の列ヘッダ (任意の表記。日本語ヘッダも可)。
+	Headers []string `protobuf:"bytes,1,rep,name=headers,proto3" json:"headers,omitempty"`
+	// 生の行データ。1 リクエスト最大 500 行 (超える場合はクライアントが分割)。
+	Rows []*CustomerRowValues `protobuf:"bytes,2,rep,name=rows,proto3" json:"rows,omitempty"`
+	// 補完対象フィールド。空なら全フィールド対象。
+	// canonical 名: phone / category / name / corporation / address / memo / mail
+	TargetFields  []string `protobuf:"bytes,3,rep,name=target_fields,json=targetFields,proto3" json:"target_fields,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EnrichCustomerRowsRequest) Reset() {
+	*x = EnrichCustomerRowsRequest{}
+	mi := &file_customer_v1_customer_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EnrichCustomerRowsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EnrichCustomerRowsRequest) ProtoMessage() {}
+
+func (x *EnrichCustomerRowsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_customer_v1_customer_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EnrichCustomerRowsRequest.ProtoReflect.Descriptor instead.
+func (*EnrichCustomerRowsRequest) Descriptor() ([]byte, []int) {
+	return file_customer_v1_customer_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *EnrichCustomerRowsRequest) GetHeaders() []string {
+	if x != nil {
+		return x.Headers
+	}
+	return nil
+}
+
+func (x *EnrichCustomerRowsRequest) GetRows() []*CustomerRowValues {
+	if x != nil {
+		return x.Rows
+	}
+	return nil
+}
+
+func (x *EnrichCustomerRowsRequest) GetTargetFields() []string {
+	if x != nil {
+		return x.TargetFields
+	}
+	return nil
+}
+
+// 1 行分の補完結果。fields は canonical フィールド名 →正規化済み値。
+type EnrichedCustomerRow struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// リクエストの rows における添字 (0-based)。
+	RowIndex int32 `protobuf:"varint,1,opt,name=row_index,json=rowIndex,proto3" json:"row_index,omitempty"`
+	// canonical フィールド名 (phone/category/name/corporation/address/memo/mail)
+	// → 正規化・補完後の値。根拠が無いフィールドは空文字。
+	Fields map[string]string `protobuf:"bytes,2,rep,name=fields,proto3" json:"fields,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// モデルの自己申告 confidence (0.0-1.0)。
+	Confidence float64 `protobuf:"fixed64,3,opt,name=confidence,proto3" json:"confidence,omitempty"`
+	// 元データ (ヘッダの canonical マッピング後) から 1 つでも値が変わったか。
+	Changed       bool `protobuf:"varint,4,opt,name=changed,proto3" json:"changed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EnrichedCustomerRow) Reset() {
+	*x = EnrichedCustomerRow{}
+	mi := &file_customer_v1_customer_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EnrichedCustomerRow) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EnrichedCustomerRow) ProtoMessage() {}
+
+func (x *EnrichedCustomerRow) ProtoReflect() protoreflect.Message {
+	mi := &file_customer_v1_customer_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EnrichedCustomerRow.ProtoReflect.Descriptor instead.
+func (*EnrichedCustomerRow) Descriptor() ([]byte, []int) {
+	return file_customer_v1_customer_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *EnrichedCustomerRow) GetRowIndex() int32 {
+	if x != nil {
+		return x.RowIndex
+	}
+	return 0
+}
+
+func (x *EnrichedCustomerRow) GetFields() map[string]string {
+	if x != nil {
+		return x.Fields
+	}
+	return nil
+}
+
+func (x *EnrichedCustomerRow) GetConfidence() float64 {
+	if x != nil {
+		return x.Confidence
+	}
+	return 0
+}
+
+func (x *EnrichedCustomerRow) GetChanged() bool {
+	if x != nil {
+		return x.Changed
+	}
+	return false
+}
+
+type EnrichCustomerRowsResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Rows  []*EnrichedCustomerRow `protobuf:"bytes,1,rep,name=rows,proto3" json:"rows,omitempty"`
+	// 実際に使用したモデル名 (例: gemini-2.0-flash)。
+	Model         string `protobuf:"bytes,2,opt,name=model,proto3" json:"model,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EnrichCustomerRowsResponse) Reset() {
+	*x = EnrichCustomerRowsResponse{}
+	mi := &file_customer_v1_customer_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EnrichCustomerRowsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EnrichCustomerRowsResponse) ProtoMessage() {}
+
+func (x *EnrichCustomerRowsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_customer_v1_customer_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EnrichCustomerRowsResponse.ProtoReflect.Descriptor instead.
+func (*EnrichCustomerRowsResponse) Descriptor() ([]byte, []int) {
+	return file_customer_v1_customer_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *EnrichCustomerRowsResponse) GetRows() []*EnrichedCustomerRow {
+	if x != nil {
+		return x.Rows
+	}
+	return nil
+}
+
+func (x *EnrichCustomerRowsResponse) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
+type GetEnrichmentStatusRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetEnrichmentStatusRequest) Reset() {
+	*x = GetEnrichmentStatusRequest{}
+	mi := &file_customer_v1_customer_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetEnrichmentStatusRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetEnrichmentStatusRequest) ProtoMessage() {}
+
+func (x *GetEnrichmentStatusRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_customer_v1_customer_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetEnrichmentStatusRequest.ProtoReflect.Descriptor instead.
+func (*GetEnrichmentStatusRequest) Descriptor() ([]byte, []int) {
+	return file_customer_v1_customer_proto_rawDescGZIP(), []int{15}
+}
+
+type GetEnrichmentStatusResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// GEMINI_API_KEY が設定されていて AI 補完が利用できるか。
+	Enabled bool `protobuf:"varint,1,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	// 使用するモデル名 (enabled=false のときは空)。
+	Model         string `protobuf:"bytes,2,opt,name=model,proto3" json:"model,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetEnrichmentStatusResponse) Reset() {
+	*x = GetEnrichmentStatusResponse{}
+	mi := &file_customer_v1_customer_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetEnrichmentStatusResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetEnrichmentStatusResponse) ProtoMessage() {}
+
+func (x *GetEnrichmentStatusResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_customer_v1_customer_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetEnrichmentStatusResponse.ProtoReflect.Descriptor instead.
+func (*GetEnrichmentStatusResponse) Descriptor() ([]byte, []int) {
+	return file_customer_v1_customer_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *GetEnrichmentStatusResponse) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+func (x *GetEnrichmentStatusResponse) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
 var File_customer_v1_customer_proto protoreflect.FileDescriptor
 
 var file_customer_v1_customer_proto_rawDesc = string([]byte{
@@ -826,7 +1152,50 @@ var file_customer_v1_customer_proto_rawDesc = string([]byte{
 	0x65, 0x6c, 0x65, 0x74, 0x65, 0x43, 0x75, 0x73, 0x74, 0x6f, 0x6d, 0x65, 0x72, 0x52, 0x65, 0x73,
 	0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x1f, 0x0a, 0x0b, 0x63, 0x75, 0x73, 0x74, 0x6f, 0x6d, 0x65,
 	0x72, 0x5f, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0a, 0x63, 0x75, 0x73, 0x74,
-	0x6f, 0x6d, 0x65, 0x72, 0x49, 0x64, 0x42, 0xb2, 0x01, 0x0a, 0x0f, 0x63, 0x6f, 0x6d, 0x2e, 0x63,
+	0x6f, 0x6d, 0x65, 0x72, 0x49, 0x64, 0x22, 0x33, 0x0a, 0x11, 0x43, 0x75, 0x73, 0x74, 0x6f, 0x6d,
+	0x65, 0x72, 0x52, 0x6f, 0x77, 0x56, 0x61, 0x6c, 0x75, 0x65, 0x73, 0x12, 0x1e, 0x0a, 0x05, 0x63,
+	0x65, 0x6c, 0x6c, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x09, 0x42, 0x08, 0xba, 0x48, 0x05, 0x92,
+	0x01, 0x02, 0x10, 0x40, 0x52, 0x05, 0x63, 0x65, 0x6c, 0x6c, 0x73, 0x22, 0xb1, 0x01, 0x0a, 0x19,
+	0x45, 0x6e, 0x72, 0x69, 0x63, 0x68, 0x43, 0x75, 0x73, 0x74, 0x6f, 0x6d, 0x65, 0x72, 0x52, 0x6f,
+	0x77, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x24, 0x0a, 0x07, 0x68, 0x65, 0x61,
+	0x64, 0x65, 0x72, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x09, 0x42, 0x0a, 0xba, 0x48, 0x07, 0x92,
+	0x01, 0x04, 0x08, 0x01, 0x10, 0x40, 0x52, 0x07, 0x68, 0x65, 0x61, 0x64, 0x65, 0x72, 0x73, 0x12,
+	0x3f, 0x0a, 0x04, 0x72, 0x6f, 0x77, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x1e, 0x2e,
+	0x63, 0x75, 0x73, 0x74, 0x6f, 0x6d, 0x65, 0x72, 0x2e, 0x76, 0x31, 0x2e, 0x43, 0x75, 0x73, 0x74,
+	0x6f, 0x6d, 0x65, 0x72, 0x52, 0x6f, 0x77, 0x56, 0x61, 0x6c, 0x75, 0x65, 0x73, 0x42, 0x0b, 0xba,
+	0x48, 0x08, 0x92, 0x01, 0x05, 0x08, 0x01, 0x10, 0xf4, 0x03, 0x52, 0x04, 0x72, 0x6f, 0x77, 0x73,
+	0x12, 0x2d, 0x0a, 0x0d, 0x74, 0x61, 0x72, 0x67, 0x65, 0x74, 0x5f, 0x66, 0x69, 0x65, 0x6c, 0x64,
+	0x73, 0x18, 0x03, 0x20, 0x03, 0x28, 0x09, 0x42, 0x08, 0xba, 0x48, 0x05, 0x92, 0x01, 0x02, 0x10,
+	0x10, 0x52, 0x0c, 0x74, 0x61, 0x72, 0x67, 0x65, 0x74, 0x46, 0x69, 0x65, 0x6c, 0x64, 0x73, 0x22,
+	0xed, 0x01, 0x0a, 0x13, 0x45, 0x6e, 0x72, 0x69, 0x63, 0x68, 0x65, 0x64, 0x43, 0x75, 0x73, 0x74,
+	0x6f, 0x6d, 0x65, 0x72, 0x52, 0x6f, 0x77, 0x12, 0x1b, 0x0a, 0x09, 0x72, 0x6f, 0x77, 0x5f, 0x69,
+	0x6e, 0x64, 0x65, 0x78, 0x18, 0x01, 0x20, 0x01, 0x28, 0x05, 0x52, 0x08, 0x72, 0x6f, 0x77, 0x49,
+	0x6e, 0x64, 0x65, 0x78, 0x12, 0x44, 0x0a, 0x06, 0x66, 0x69, 0x65, 0x6c, 0x64, 0x73, 0x18, 0x02,
+	0x20, 0x03, 0x28, 0x0b, 0x32, 0x2c, 0x2e, 0x63, 0x75, 0x73, 0x74, 0x6f, 0x6d, 0x65, 0x72, 0x2e,
+	0x76, 0x31, 0x2e, 0x45, 0x6e, 0x72, 0x69, 0x63, 0x68, 0x65, 0x64, 0x43, 0x75, 0x73, 0x74, 0x6f,
+	0x6d, 0x65, 0x72, 0x52, 0x6f, 0x77, 0x2e, 0x46, 0x69, 0x65, 0x6c, 0x64, 0x73, 0x45, 0x6e, 0x74,
+	0x72, 0x79, 0x52, 0x06, 0x66, 0x69, 0x65, 0x6c, 0x64, 0x73, 0x12, 0x1e, 0x0a, 0x0a, 0x63, 0x6f,
+	0x6e, 0x66, 0x69, 0x64, 0x65, 0x6e, 0x63, 0x65, 0x18, 0x03, 0x20, 0x01, 0x28, 0x01, 0x52, 0x0a,
+	0x63, 0x6f, 0x6e, 0x66, 0x69, 0x64, 0x65, 0x6e, 0x63, 0x65, 0x12, 0x18, 0x0a, 0x07, 0x63, 0x68,
+	0x61, 0x6e, 0x67, 0x65, 0x64, 0x18, 0x04, 0x20, 0x01, 0x28, 0x08, 0x52, 0x07, 0x63, 0x68, 0x61,
+	0x6e, 0x67, 0x65, 0x64, 0x1a, 0x39, 0x0a, 0x0b, 0x46, 0x69, 0x65, 0x6c, 0x64, 0x73, 0x45, 0x6e,
+	0x74, 0x72, 0x79, 0x12, 0x10, 0x0a, 0x03, 0x6b, 0x65, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09,
+	0x52, 0x03, 0x6b, 0x65, 0x79, 0x12, 0x14, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02,
+	0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x3a, 0x02, 0x38, 0x01, 0x22,
+	0x68, 0x0a, 0x1a, 0x45, 0x6e, 0x72, 0x69, 0x63, 0x68, 0x43, 0x75, 0x73, 0x74, 0x6f, 0x6d, 0x65,
+	0x72, 0x52, 0x6f, 0x77, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x34, 0x0a,
+	0x04, 0x72, 0x6f, 0x77, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x20, 0x2e, 0x63, 0x75,
+	0x73, 0x74, 0x6f, 0x6d, 0x65, 0x72, 0x2e, 0x76, 0x31, 0x2e, 0x45, 0x6e, 0x72, 0x69, 0x63, 0x68,
+	0x65, 0x64, 0x43, 0x75, 0x73, 0x74, 0x6f, 0x6d, 0x65, 0x72, 0x52, 0x6f, 0x77, 0x52, 0x04, 0x72,
+	0x6f, 0x77, 0x73, 0x12, 0x14, 0x0a, 0x05, 0x6d, 0x6f, 0x64, 0x65, 0x6c, 0x18, 0x02, 0x20, 0x01,
+	0x28, 0x09, 0x52, 0x05, 0x6d, 0x6f, 0x64, 0x65, 0x6c, 0x22, 0x1c, 0x0a, 0x1a, 0x47, 0x65, 0x74,
+	0x45, 0x6e, 0x72, 0x69, 0x63, 0x68, 0x6d, 0x65, 0x6e, 0x74, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73,
+	0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22, 0x4d, 0x0a, 0x1b, 0x47, 0x65, 0x74, 0x45, 0x6e,
+	0x72, 0x69, 0x63, 0x68, 0x6d, 0x65, 0x6e, 0x74, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x65,
+	0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x18, 0x0a, 0x07, 0x65, 0x6e, 0x61, 0x62, 0x6c, 0x65,
+	0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x08, 0x52, 0x07, 0x65, 0x6e, 0x61, 0x62, 0x6c, 0x65, 0x64,
+	0x12, 0x14, 0x0a, 0x05, 0x6d, 0x6f, 0x64, 0x65, 0x6c, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52,
+	0x05, 0x6d, 0x6f, 0x64, 0x65, 0x6c, 0x42, 0xb2, 0x01, 0x0a, 0x0f, 0x63, 0x6f, 0x6d, 0x2e, 0x63,
 	0x75, 0x73, 0x74, 0x6f, 0x6d, 0x65, 0x72, 0x2e, 0x76, 0x31, 0x42, 0x0d, 0x43, 0x75, 0x73, 0x74,
 	0x6f, 0x6d, 0x65, 0x72, 0x50, 0x72, 0x6f, 0x74, 0x6f, 0x50, 0x01, 0x5a, 0x43, 0x67, 0x69, 0x74,
 	0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x30, 0x75, 0x74, 0x6c, 0x31, 0x65, 0x72, 0x2d,
@@ -853,32 +1222,42 @@ func file_customer_v1_customer_proto_rawDescGZIP() []byte {
 	return file_customer_v1_customer_proto_rawDescData
 }
 
-var file_customer_v1_customer_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_customer_v1_customer_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
 var file_customer_v1_customer_proto_goTypes = []any{
-	(*CreateCustomerRequest)(nil),  // 0: customer.v1.CreateCustomerRequest
-	(*CreateCustomerResponse)(nil), // 1: customer.v1.CreateCustomerResponse
-	(*ListCustomerRequest)(nil),    // 2: customer.v1.ListCustomerRequest
-	(*ListCustomerResponse)(nil),   // 3: customer.v1.ListCustomerResponse
-	(*GetCustomerRequest)(nil),     // 4: customer.v1.GetCustomerRequest
-	(*GetCustomerResponse)(nil),    // 5: customer.v1.GetCustomerResponse
-	(*Customer)(nil),               // 6: customer.v1.Customer
-	(*UpdateCustomerRequest)(nil),  // 7: customer.v1.UpdateCustomerRequest
-	(*UpdateCustomerResponse)(nil), // 8: customer.v1.UpdateCustomerResponse
-	(*DeleteCustomerRequest)(nil),  // 9: customer.v1.DeleteCustomerRequest
-	(*DeleteCustomerResponse)(nil), // 10: customer.v1.DeleteCustomerResponse
-	(*v1.Contact)(nil),             // 11: contact.v1.Contact
+	(*CreateCustomerRequest)(nil),       // 0: customer.v1.CreateCustomerRequest
+	(*CreateCustomerResponse)(nil),      // 1: customer.v1.CreateCustomerResponse
+	(*ListCustomerRequest)(nil),         // 2: customer.v1.ListCustomerRequest
+	(*ListCustomerResponse)(nil),        // 3: customer.v1.ListCustomerResponse
+	(*GetCustomerRequest)(nil),          // 4: customer.v1.GetCustomerRequest
+	(*GetCustomerResponse)(nil),         // 5: customer.v1.GetCustomerResponse
+	(*Customer)(nil),                    // 6: customer.v1.Customer
+	(*UpdateCustomerRequest)(nil),       // 7: customer.v1.UpdateCustomerRequest
+	(*UpdateCustomerResponse)(nil),      // 8: customer.v1.UpdateCustomerResponse
+	(*DeleteCustomerRequest)(nil),       // 9: customer.v1.DeleteCustomerRequest
+	(*DeleteCustomerResponse)(nil),      // 10: customer.v1.DeleteCustomerResponse
+	(*CustomerRowValues)(nil),           // 11: customer.v1.CustomerRowValues
+	(*EnrichCustomerRowsRequest)(nil),   // 12: customer.v1.EnrichCustomerRowsRequest
+	(*EnrichedCustomerRow)(nil),         // 13: customer.v1.EnrichedCustomerRow
+	(*EnrichCustomerRowsResponse)(nil),  // 14: customer.v1.EnrichCustomerRowsResponse
+	(*GetEnrichmentStatusRequest)(nil),  // 15: customer.v1.GetEnrichmentStatusRequest
+	(*GetEnrichmentStatusResponse)(nil), // 16: customer.v1.GetEnrichmentStatusResponse
+	nil,                                 // 17: customer.v1.EnrichedCustomerRow.FieldsEntry
+	(*v1.Contact)(nil),                  // 18: contact.v1.Contact
 }
 var file_customer_v1_customer_proto_depIdxs = []int32{
 	6,  // 0: customer.v1.CreateCustomerResponse.customer:type_name -> customer.v1.Customer
 	6,  // 1: customer.v1.ListCustomerResponse.customers:type_name -> customer.v1.Customer
 	6,  // 2: customer.v1.GetCustomerResponse.customer:type_name -> customer.v1.Customer
-	11, // 3: customer.v1.Customer.contacts:type_name -> contact.v1.Contact
+	18, // 3: customer.v1.Customer.contacts:type_name -> contact.v1.Contact
 	6,  // 4: customer.v1.UpdateCustomerResponse.updated_customer:type_name -> customer.v1.Customer
-	5,  // [5:5] is the sub-list for method output_type
-	5,  // [5:5] is the sub-list for method input_type
-	5,  // [5:5] is the sub-list for extension type_name
-	5,  // [5:5] is the sub-list for extension extendee
-	0,  // [0:5] is the sub-list for field type_name
+	11, // 5: customer.v1.EnrichCustomerRowsRequest.rows:type_name -> customer.v1.CustomerRowValues
+	17, // 6: customer.v1.EnrichedCustomerRow.fields:type_name -> customer.v1.EnrichedCustomerRow.FieldsEntry
+	13, // 7: customer.v1.EnrichCustomerRowsResponse.rows:type_name -> customer.v1.EnrichedCustomerRow
+	8,  // [8:8] is the sub-list for method output_type
+	8,  // [8:8] is the sub-list for method input_type
+	8,  // [8:8] is the sub-list for extension type_name
+	8,  // [8:8] is the sub-list for extension extendee
+	0,  // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_customer_v1_customer_proto_init() }
@@ -893,7 +1272,7 @@ func file_customer_v1_customer_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_customer_v1_customer_proto_rawDesc), len(file_customer_v1_customer_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   11,
+			NumMessages:   18,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
