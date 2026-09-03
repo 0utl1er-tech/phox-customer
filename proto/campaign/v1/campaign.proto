@@ -42,6 +42,11 @@ service CampaignService {
   // 直近のバウンス率・配信停止率。DNS を実引きするので数秒かかることがある。
   rpc CheckMailboxHealth(CheckMailboxHealthRequest) returns (CheckMailboxHealthResponse);
 
+  // 呼び出しユーザーが MailboxPermit を持つ全メールボックスの送信実績サマリを
+  // 1 コールで返す (Phase 27g)。DB 集計のみで DNS は引かない (軽い) —
+  // DNS 点検は CheckMailboxHealth をオンデマンドで呼ぶこと。
+  rpc ListMailboxesHealth(ListMailboxesHealthRequest) returns (ListMailboxesHealthResponse);
+
   // サプレッションリスト (会社単位の配信停止/バウンス/手動除外)。
   rpc ListSuppressions(ListSuppressionsRequest) returns (ListSuppressionsResponse);
   rpc AddSuppression(AddSuppressionRequest) returns (AddSuppressionResponse);
@@ -189,6 +194,43 @@ message CheckMailboxHealthRequest {
 }
 message CheckMailboxHealthResponse {
   MailboxHealth health = 1;
+}
+
+// メールボックス毎の送信実績サマリ (Phase 27g)。DB 集計のみ (DNS 点検なし)。
+// 30 日系の率 (%) は sent_30d を分母に、その送信分に付いたイベントで計算する。
+message MailboxHealthStats {
+  string mailbox_id = 1;
+  string address = 2;
+
+  // 本日 (JST 0 時起算) の送信数。全キャンペーン横断 — daily cap と同じ起算。
+  int32 sent_today = 3;
+  optional google.protobuf.Timestamp last_sent_at = 4;
+
+  // 直近 30 日 (全キャンペーン横断)
+  int32 sent_30d = 5;
+  int32 bounced_30d = 6;
+  int32 unsubscribed_30d = 7;
+  int32 replied_30d = 8;
+  int32 opened_30d = 9;
+  double bounce_rate = 10;      // %
+  double unsubscribe_rate = 11; // %
+  double reply_rate = 12;       // %
+  double open_rate = 13;        // %
+
+  // このメールボックスをプールに含む running キャンペーン数。
+  int32 running_campaigns = 14;
+  // IMAP 取り込みの最終成功時刻 (未同期なら無し)。
+  optional google.protobuf.Timestamp imap_synced_at = 15;
+
+  // 実績のみの簡易判定: good | warn | bad。
+  // バウンス率 >5% で bad、>2% または配停率 >3% で warn (サンプル 20 通未満は good)。
+  // DNS 込みの総合判定は CheckMailboxHealth の grade を使うこと。
+  string grade = 16;
+}
+
+message ListMailboxesHealthRequest {}
+message ListMailboxesHealthResponse {
+  repeated MailboxHealthStats stats = 1;
 }
 
 message ListCampaignsRequest {

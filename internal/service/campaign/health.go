@@ -12,6 +12,7 @@ import (
 	campaignpkg "github.com/0utl1er-tech/phox-customer/internal/campaign"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 const (
@@ -111,6 +112,77 @@ func (s *CampaignService) CheckMailboxHealth(
 
 	h.Grade = grade(dns, h, st.Sent)
 	return connect.NewResponse(&campaignv1.CheckMailboxHealthResponse{Health: h}), nil
+}
+
+// ListMailboxesHealth は呼び出しユーザーが MailboxPermit を持つ全メールボックスの
+// 送信実績サマリを 1 コールで返す (Phase 27g)。
+//
+// mailbox 管理画面が一覧表示のたびに呼ぶため DB 集計のみで軽く済ませる。
+// DNS 点検 (SPF/DKIM/DMARC) は重いので、ここには含めず CheckMailboxHealth を
+// オンデマンド (詳細チェックボタン) で呼んでもらう。
+// RBAC: permit join で ListMailboxesByUserID の対象と揃う (viewer で可 — 閲覧のみ)。
+func (s *CampaignService) ListMailboxesHealth(
+	ctx context.Context,
+	req *connect.Request[campaignv1.ListMailboxesHealthRequest],
+) (*connect.Response[campaignv1.ListMailboxesHealthResponse], error) {
+	u, err := s.currentUser(ctx)
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now()
+	rows, err := s.queries.ListMailboxHealthStatsByUserID(ctx, db.ListMailboxHealthStatsByUserIDParams{
+		UserID:      u.ID,
+		TodayStart:  pgtype.Timestamptz{Time: campaignpkg.JSTMidnight(now), Valid: true},
+		WindowStart: pgtype.Timestamptz{Time: now.Add(-healthWindow), Valid: true},
+	})
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("mailbox health stats: %w", err))
+	}
+
+	stats := make([]*campaignv1.MailboxHealthStats, 0, len(rows))
+	for _, r := range rows {
+		st := &campaignv1.MailboxHealthStats{
+			MailboxId:        r.ID.String(),
+			Address:          r.Address,
+			SentToday:        int32(r.SentToday),
+			Sent_30D:         int32(r.Sent30d),
+			Bounced_30D:      int32(r.Bounced30d),
+			Unsubscribed_30D: int32(r.Unsubscribed30d),
+			Replied_30D:      int32(r.Replied30d),
+			Opened_30D:       int32(r.Opened30d),
+			RunningCampaigns: int32(r.RunningCampaigns),
+		}
+		if t, ok := r.LastSentAt.(time.Time); ok && !t.IsZero() {
+			st.LastSentAt = timestamppb.New(t)
+		}
+		if r.SyncedAt.Valid {
+			st.ImapSyncedAt = timestamppb.New(r.SyncedAt.Time)
+		}
+		if r.Sent30d > 0 {
+			st.BounceRate = float64(r.Bounced30d) * 100 / float64(r.Sent30d)
+			st.UnsubscribeRate = float64(r.Unsubscribed30d) * 100 / float64(r.Sent30d)
+			st.ReplyRate = float64(r.Replied30d) * 100 / float64(r.Sent30d)
+			st.OpenRate = float64(r.Opened30d) * 100 / float64(r.Sent30d)
+		}
+		st.Grade = statsGrade(r.Sent30d, st.BounceRate, st.UnsubscribeRate)
+		stats = append(stats, st)
+	}
+	return connect.NewResponse(&campaignv1.ListMailboxesHealthResponse{Stats: stats}), nil
+}
+
+// statsGrade は実績のみの簡易判定 (DNS を見ないので CheckMailboxHealth の
+// grade より甘い)。しきい値は grade と同一。サンプルが少ないうちは率で騒がない。
+func statsGrade(sent int64, bounceRate, unsubRate float64) string {
+	if sent < minSamplesForRate {
+		return "good"
+	}
+	if bounceRate > bounceBadRate {
+		return "bad"
+	}
+	if bounceRate > bounceWarnRate || unsubRate > unsubWarnRate {
+		return "warn"
+	}
+	return "good"
 }
 
 // grade は総合判定。DNS の必須項目 (SPF/DMARC) 欠落と高バウンス率を bad、

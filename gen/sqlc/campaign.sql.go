@@ -1215,6 +1215,97 @@ func (q *Queries) ListFreshDomainHealth(ctx context.Context, arg ListFreshDomain
 	return items, nil
 }
 
+const listMailboxHealthStatsByUserID = `-- name: ListMailboxHealthStatsByUserID :many
+SELECT m.id, m.address, m.synced_at,
+  COALESCE(s.sent_today, 0)::bigint     AS sent_today,
+  s.last_sent_at,
+  COALESCE(s.sent_30d, 0)::bigint         AS sent_30d,
+  COALESCE(s.bounced_30d, 0)::bigint      AS bounced_30d,
+  COALESCE(s.unsubscribed_30d, 0)::bigint AS unsubscribed_30d,
+  COALESCE(s.replied_30d, 0)::bigint      AS replied_30d,
+  COALESCE(s.opened_30d, 0)::bigint       AS opened_30d,
+  COALESCE(rc.running_campaigns, 0)::bigint AS running_campaigns
+FROM "Mailbox" m
+JOIN "MailboxPermit" p ON m.id = p.mailbox_id AND p.user_id = $1
+LEFT JOIN LATERAL (
+  SELECT
+    count(*) FILTER (WHERE r.sent_at >= $2) AS sent_today,
+    max(r.sent_at) AS last_sent_at,
+    count(*) FILTER (WHERE r.sent_at >= $3) AS sent_30d,
+    count(*) FILTER (WHERE r.sent_at >= $3 AND r.bounced_at IS NOT NULL)      AS bounced_30d,
+    count(*) FILTER (WHERE r.sent_at >= $3 AND r.unsubscribed_at IS NOT NULL) AS unsubscribed_30d,
+    count(*) FILTER (WHERE r.sent_at >= $3 AND r.replied_at IS NOT NULL)      AS replied_30d,
+    count(*) FILTER (WHERE r.sent_at >= $3 AND r.first_opened_at IS NOT NULL) AS opened_30d
+  FROM "CampaignRecipient" r
+  WHERE r.mailbox_id = m.id AND r.sent_at IS NOT NULL
+) s ON true
+LEFT JOIN LATERAL (
+  SELECT count(*) AS running_campaigns
+  FROM "CampaignMailbox" cm
+  JOIN "Campaign" c ON c.id = cm.campaign_id
+  WHERE cm.mailbox_id = m.id AND c.status = 'running'
+) rc ON true
+ORDER BY m.created_at DESC
+`
+
+type ListMailboxHealthStatsByUserIDParams struct {
+	UserID      string             `json:"user_id"`
+	TodayStart  pgtype.Timestamptz `json:"today_start"`
+	WindowStart pgtype.Timestamptz `json:"window_start"`
+}
+
+type ListMailboxHealthStatsByUserIDRow struct {
+	ID               uuid.UUID          `json:"id"`
+	Address          string             `json:"address"`
+	SyncedAt         pgtype.Timestamptz `json:"synced_at"`
+	SentToday        int64              `json:"sent_today"`
+	LastSentAt       interface{}        `json:"last_sent_at"`
+	Sent30d          int64              `json:"sent_30d"`
+	Bounced30d       int64              `json:"bounced_30d"`
+	Unsubscribed30d  int64              `json:"unsubscribed_30d"`
+	Replied30d       int64              `json:"replied_30d"`
+	Opened30d        int64              `json:"opened_30d"`
+	RunningCampaigns int64              `json:"running_campaigns"`
+}
+
+// Phase 27g: 呼び出しユーザーが MailboxPermit を持つ全メールボックスの
+// 送信実績サマリを 1 スキャンで返す (health ビュー用)。DNS は引かない。
+// RBAC は ListMailboxesByUserID と同じ permit join で揃える。
+// today_start = JST の当日 0 時 (daily cap と同じ起算)、window_start = 30 日前。
+// 30 日系のイベント数は「30 日以内に送った分に付いたイベント」で数える
+// (GetMailboxBounceStats と同じ流儀 — 率の分母と分子を揃えるため)。
+func (q *Queries) ListMailboxHealthStatsByUserID(ctx context.Context, arg ListMailboxHealthStatsByUserIDParams) ([]ListMailboxHealthStatsByUserIDRow, error) {
+	rows, err := q.db.Query(ctx, listMailboxHealthStatsByUserID, arg.UserID, arg.TodayStart, arg.WindowStart)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListMailboxHealthStatsByUserIDRow{}
+	for rows.Next() {
+		var i ListMailboxHealthStatsByUserIDRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Address,
+			&i.SyncedAt,
+			&i.SentToday,
+			&i.LastSentAt,
+			&i.Sent30d,
+			&i.Bounced30d,
+			&i.Unsubscribed30d,
+			&i.Replied30d,
+			&i.Opened30d,
+			&i.RunningCampaigns,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRunningCampaigns = `-- name: ListRunningCampaigns :many
 SELECT id, company_id, created_by, name, status, subject, body, track_opens, track_clicks, send_start_hour, send_end_hour, send_days, daily_cap_per_mailbox, min_interval_sec, warmup_enabled, sender_org, sender_address, sender_contact, started_at, completed_at, created_at, updated_at, bounce_pause_threshold, health_paused_reason FROM "Campaign"
 WHERE status = 'running'

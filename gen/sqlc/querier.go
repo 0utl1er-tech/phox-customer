@@ -209,6 +209,13 @@ type Querier interface {
 	// 指定ドメイン群のうち、まだ有効期限内のキャッシュだけ返す。
 	ListFreshDomainHealth(ctx context.Context, arg ListFreshDomainHealthParams) ([]DomainHealth, error)
 	ListMailTemplatesByBook(ctx context.Context, bookID uuid.UUID) ([]MailTemplate, error)
+	// Phase 27g: 呼び出しユーザーが MailboxPermit を持つ全メールボックスの
+	// 送信実績サマリを 1 スキャンで返す (health ビュー用)。DNS は引かない。
+	// RBAC は ListMailboxesByUserID と同じ permit join で揃える。
+	// today_start = JST の当日 0 時 (daily cap と同じ起算)、window_start = 30 日前。
+	// 30 日系のイベント数は「30 日以内に送った分に付いたイベント」で数える
+	// (GetMailboxBounceStats と同じ流儀 — 率の分母と分子を揃えるため)。
+	ListMailboxHealthStatsByUserID(ctx context.Context, arg ListMailboxHealthStatsByUserIDParams) ([]ListMailboxHealthStatsByUserIDRow, error)
 	// 本文は返さない (一覧用メタデータ)。has_attachments 判定用に attachment_names は返す。
 	ListMailboxMessages(ctx context.Context, arg ListMailboxMessagesParams) ([]ListMailboxMessagesRow, error)
 	ListMailboxPermitsWithUserInfo(ctx context.Context, mailboxID uuid.UUID) ([]ListMailboxPermitsWithUserInfoRow, error)

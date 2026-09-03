@@ -377,6 +377,44 @@ SELECT
 FROM "CampaignRecipient"
 WHERE mailbox_id = $1 AND sent_at >= $2;
 
+-- name: ListMailboxHealthStatsByUserID :many
+-- Phase 27g: 呼び出しユーザーが MailboxPermit を持つ全メールボックスの
+-- 送信実績サマリを 1 スキャンで返す (health ビュー用)。DNS は引かない。
+-- RBAC は ListMailboxesByUserID と同じ permit join で揃える。
+-- today_start = JST の当日 0 時 (daily cap と同じ起算)、window_start = 30 日前。
+-- 30 日系のイベント数は「30 日以内に送った分に付いたイベント」で数える
+-- (GetMailboxBounceStats と同じ流儀 — 率の分母と分子を揃えるため)。
+SELECT m.id, m.address, m.synced_at,
+  COALESCE(s.sent_today, 0)::bigint     AS sent_today,
+  s.last_sent_at,
+  COALESCE(s.sent_30d, 0)::bigint         AS sent_30d,
+  COALESCE(s.bounced_30d, 0)::bigint      AS bounced_30d,
+  COALESCE(s.unsubscribed_30d, 0)::bigint AS unsubscribed_30d,
+  COALESCE(s.replied_30d, 0)::bigint      AS replied_30d,
+  COALESCE(s.opened_30d, 0)::bigint       AS opened_30d,
+  COALESCE(rc.running_campaigns, 0)::bigint AS running_campaigns
+FROM "Mailbox" m
+JOIN "MailboxPermit" p ON m.id = p.mailbox_id AND p.user_id = sqlc.arg(user_id)
+LEFT JOIN LATERAL (
+  SELECT
+    count(*) FILTER (WHERE r.sent_at >= sqlc.arg(today_start)) AS sent_today,
+    max(r.sent_at) AS last_sent_at,
+    count(*) FILTER (WHERE r.sent_at >= sqlc.arg(window_start)) AS sent_30d,
+    count(*) FILTER (WHERE r.sent_at >= sqlc.arg(window_start) AND r.bounced_at IS NOT NULL)      AS bounced_30d,
+    count(*) FILTER (WHERE r.sent_at >= sqlc.arg(window_start) AND r.unsubscribed_at IS NOT NULL) AS unsubscribed_30d,
+    count(*) FILTER (WHERE r.sent_at >= sqlc.arg(window_start) AND r.replied_at IS NOT NULL)      AS replied_30d,
+    count(*) FILTER (WHERE r.sent_at >= sqlc.arg(window_start) AND r.first_opened_at IS NOT NULL) AS opened_30d
+  FROM "CampaignRecipient" r
+  WHERE r.mailbox_id = m.id AND r.sent_at IS NOT NULL
+) s ON true
+LEFT JOIN LATERAL (
+  SELECT count(*) AS running_campaigns
+  FROM "CampaignMailbox" cm
+  JOIN "Campaign" c ON c.id = cm.campaign_id
+  WHERE cm.mailbox_id = m.id AND c.status = 'running'
+) rc ON true
+ORDER BY m.created_at DESC;
+
 -- name: PauseCampaignForHealth :exec
 -- サーキットブレーカーによる自動一時停止 (理由付き)。running のみ対象。
 UPDATE "Campaign"
