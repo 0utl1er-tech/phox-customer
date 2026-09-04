@@ -35,6 +35,9 @@ func TestNormalizeEvents(t *testing.T) {
 		{" reply , open ", "reply,open", false},          // trim
 		{"reply,reply", "reply", false},                  // 重複除去
 		{"reply,click,unsubscribe,bounce,open", "reply,click,unsubscribe,bounce,open", false},
+		// Phase 28f: 自動下書き通知 (オプトイン — 既定値には入っていない)。
+		{"autodraft", "autodraft", false},
+		{"autodraft,reply", "reply,autodraft", false},
 		{"reply,unknown", "", true},
 		{"REPLY", "", true}, // 大文字は不許可 (既知値のみ)
 	}

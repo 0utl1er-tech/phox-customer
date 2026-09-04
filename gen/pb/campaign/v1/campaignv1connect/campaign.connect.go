@@ -78,6 +78,18 @@ const (
 	// CampaignServiceListMailboxesHealthProcedure is the fully-qualified name of the CampaignService's
 	// ListMailboxesHealth RPC.
 	CampaignServiceListMailboxesHealthProcedure = "/campaign.v1.CampaignService/ListMailboxesHealth"
+	// CampaignServiceListCampaignAutoDraftsProcedure is the fully-qualified name of the
+	// CampaignService's ListCampaignAutoDrafts RPC.
+	CampaignServiceListCampaignAutoDraftsProcedure = "/campaign.v1.CampaignService/ListCampaignAutoDrafts"
+	// CampaignServiceCreateCampaignAutoDraftProcedure is the fully-qualified name of the
+	// CampaignService's CreateCampaignAutoDraft RPC.
+	CampaignServiceCreateCampaignAutoDraftProcedure = "/campaign.v1.CampaignService/CreateCampaignAutoDraft"
+	// CampaignServiceUpdateCampaignAutoDraftProcedure is the fully-qualified name of the
+	// CampaignService's UpdateCampaignAutoDraft RPC.
+	CampaignServiceUpdateCampaignAutoDraftProcedure = "/campaign.v1.CampaignService/UpdateCampaignAutoDraft"
+	// CampaignServiceDeleteCampaignAutoDraftProcedure is the fully-qualified name of the
+	// CampaignService's DeleteCampaignAutoDraft RPC.
+	CampaignServiceDeleteCampaignAutoDraftProcedure = "/campaign.v1.CampaignService/DeleteCampaignAutoDraft"
 	// CampaignServiceListSuppressionsProcedure is the fully-qualified name of the CampaignService's
 	// ListSuppressions RPC.
 	CampaignServiceListSuppressionsProcedure = "/campaign.v1.CampaignService/ListSuppressions"
@@ -121,6 +133,13 @@ type CampaignServiceClient interface {
 	// 1 コールで返す (Phase 27g)。DB 集計のみで DNS は引かない (軽い) —
 	// DNS 点検は CheckMailboxHealth をオンデマンドで呼ぶこと。
 	ListMailboxesHealth(context.Context, *connect.Request[v1.ListMailboxesHealthRequest]) (*connect.Response[v1.ListMailboxesHealthResponse], error)
+	// キャンペーン自動下書きテンプレート (Phase 28f)。Book 名パターン毎に
+	// 「投函された Book から自動生成する下書き」を定義する。閲覧は同じ会社の
+	// ユーザーなら可、作成/更新/削除は owner のみ。
+	ListCampaignAutoDrafts(context.Context, *connect.Request[v1.ListCampaignAutoDraftsRequest]) (*connect.Response[v1.ListCampaignAutoDraftsResponse], error)
+	CreateCampaignAutoDraft(context.Context, *connect.Request[v1.CreateCampaignAutoDraftRequest]) (*connect.Response[v1.CreateCampaignAutoDraftResponse], error)
+	UpdateCampaignAutoDraft(context.Context, *connect.Request[v1.UpdateCampaignAutoDraftRequest]) (*connect.Response[v1.UpdateCampaignAutoDraftResponse], error)
+	DeleteCampaignAutoDraft(context.Context, *connect.Request[v1.DeleteCampaignAutoDraftRequest]) (*connect.Response[v1.DeleteCampaignAutoDraftResponse], error)
 	// サプレッションリスト (会社単位の配信停止/バウンス/手動除外)。
 	ListSuppressions(context.Context, *connect.Request[v1.ListSuppressionsRequest]) (*connect.Response[v1.ListSuppressionsResponse], error)
 	AddSuppression(context.Context, *connect.Request[v1.AddSuppressionRequest]) (*connect.Response[v1.AddSuppressionResponse], error)
@@ -229,6 +248,30 @@ func NewCampaignServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(campaignServiceMethods.ByName("ListMailboxesHealth")),
 			connect.WithClientOptions(opts...),
 		),
+		listCampaignAutoDrafts: connect.NewClient[v1.ListCampaignAutoDraftsRequest, v1.ListCampaignAutoDraftsResponse](
+			httpClient,
+			baseURL+CampaignServiceListCampaignAutoDraftsProcedure,
+			connect.WithSchema(campaignServiceMethods.ByName("ListCampaignAutoDrafts")),
+			connect.WithClientOptions(opts...),
+		),
+		createCampaignAutoDraft: connect.NewClient[v1.CreateCampaignAutoDraftRequest, v1.CreateCampaignAutoDraftResponse](
+			httpClient,
+			baseURL+CampaignServiceCreateCampaignAutoDraftProcedure,
+			connect.WithSchema(campaignServiceMethods.ByName("CreateCampaignAutoDraft")),
+			connect.WithClientOptions(opts...),
+		),
+		updateCampaignAutoDraft: connect.NewClient[v1.UpdateCampaignAutoDraftRequest, v1.UpdateCampaignAutoDraftResponse](
+			httpClient,
+			baseURL+CampaignServiceUpdateCampaignAutoDraftProcedure,
+			connect.WithSchema(campaignServiceMethods.ByName("UpdateCampaignAutoDraft")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteCampaignAutoDraft: connect.NewClient[v1.DeleteCampaignAutoDraftRequest, v1.DeleteCampaignAutoDraftResponse](
+			httpClient,
+			baseURL+CampaignServiceDeleteCampaignAutoDraftProcedure,
+			connect.WithSchema(campaignServiceMethods.ByName("DeleteCampaignAutoDraft")),
+			connect.WithClientOptions(opts...),
+		),
 		listSuppressions: connect.NewClient[v1.ListSuppressionsRequest, v1.ListSuppressionsResponse](
 			httpClient,
 			baseURL+CampaignServiceListSuppressionsProcedure,
@@ -267,6 +310,10 @@ type campaignServiceClient struct {
 	sendTestEmail           *connect.Client[v1.SendTestEmailRequest, v1.SendTestEmailResponse]
 	checkMailboxHealth      *connect.Client[v1.CheckMailboxHealthRequest, v1.CheckMailboxHealthResponse]
 	listMailboxesHealth     *connect.Client[v1.ListMailboxesHealthRequest, v1.ListMailboxesHealthResponse]
+	listCampaignAutoDrafts  *connect.Client[v1.ListCampaignAutoDraftsRequest, v1.ListCampaignAutoDraftsResponse]
+	createCampaignAutoDraft *connect.Client[v1.CreateCampaignAutoDraftRequest, v1.CreateCampaignAutoDraftResponse]
+	updateCampaignAutoDraft *connect.Client[v1.UpdateCampaignAutoDraftRequest, v1.UpdateCampaignAutoDraftResponse]
+	deleteCampaignAutoDraft *connect.Client[v1.DeleteCampaignAutoDraftRequest, v1.DeleteCampaignAutoDraftResponse]
 	listSuppressions        *connect.Client[v1.ListSuppressionsRequest, v1.ListSuppressionsResponse]
 	addSuppression          *connect.Client[v1.AddSuppressionRequest, v1.AddSuppressionResponse]
 	removeSuppression       *connect.Client[v1.RemoveSuppressionRequest, v1.RemoveSuppressionResponse]
@@ -347,6 +394,26 @@ func (c *campaignServiceClient) ListMailboxesHealth(ctx context.Context, req *co
 	return c.listMailboxesHealth.CallUnary(ctx, req)
 }
 
+// ListCampaignAutoDrafts calls campaign.v1.CampaignService.ListCampaignAutoDrafts.
+func (c *campaignServiceClient) ListCampaignAutoDrafts(ctx context.Context, req *connect.Request[v1.ListCampaignAutoDraftsRequest]) (*connect.Response[v1.ListCampaignAutoDraftsResponse], error) {
+	return c.listCampaignAutoDrafts.CallUnary(ctx, req)
+}
+
+// CreateCampaignAutoDraft calls campaign.v1.CampaignService.CreateCampaignAutoDraft.
+func (c *campaignServiceClient) CreateCampaignAutoDraft(ctx context.Context, req *connect.Request[v1.CreateCampaignAutoDraftRequest]) (*connect.Response[v1.CreateCampaignAutoDraftResponse], error) {
+	return c.createCampaignAutoDraft.CallUnary(ctx, req)
+}
+
+// UpdateCampaignAutoDraft calls campaign.v1.CampaignService.UpdateCampaignAutoDraft.
+func (c *campaignServiceClient) UpdateCampaignAutoDraft(ctx context.Context, req *connect.Request[v1.UpdateCampaignAutoDraftRequest]) (*connect.Response[v1.UpdateCampaignAutoDraftResponse], error) {
+	return c.updateCampaignAutoDraft.CallUnary(ctx, req)
+}
+
+// DeleteCampaignAutoDraft calls campaign.v1.CampaignService.DeleteCampaignAutoDraft.
+func (c *campaignServiceClient) DeleteCampaignAutoDraft(ctx context.Context, req *connect.Request[v1.DeleteCampaignAutoDraftRequest]) (*connect.Response[v1.DeleteCampaignAutoDraftResponse], error) {
+	return c.deleteCampaignAutoDraft.CallUnary(ctx, req)
+}
+
 // ListSuppressions calls campaign.v1.CampaignService.ListSuppressions.
 func (c *campaignServiceClient) ListSuppressions(ctx context.Context, req *connect.Request[v1.ListSuppressionsRequest]) (*connect.Response[v1.ListSuppressionsResponse], error) {
 	return c.listSuppressions.CallUnary(ctx, req)
@@ -394,6 +461,13 @@ type CampaignServiceHandler interface {
 	// 1 コールで返す (Phase 27g)。DB 集計のみで DNS は引かない (軽い) —
 	// DNS 点検は CheckMailboxHealth をオンデマンドで呼ぶこと。
 	ListMailboxesHealth(context.Context, *connect.Request[v1.ListMailboxesHealthRequest]) (*connect.Response[v1.ListMailboxesHealthResponse], error)
+	// キャンペーン自動下書きテンプレート (Phase 28f)。Book 名パターン毎に
+	// 「投函された Book から自動生成する下書き」を定義する。閲覧は同じ会社の
+	// ユーザーなら可、作成/更新/削除は owner のみ。
+	ListCampaignAutoDrafts(context.Context, *connect.Request[v1.ListCampaignAutoDraftsRequest]) (*connect.Response[v1.ListCampaignAutoDraftsResponse], error)
+	CreateCampaignAutoDraft(context.Context, *connect.Request[v1.CreateCampaignAutoDraftRequest]) (*connect.Response[v1.CreateCampaignAutoDraftResponse], error)
+	UpdateCampaignAutoDraft(context.Context, *connect.Request[v1.UpdateCampaignAutoDraftRequest]) (*connect.Response[v1.UpdateCampaignAutoDraftResponse], error)
+	DeleteCampaignAutoDraft(context.Context, *connect.Request[v1.DeleteCampaignAutoDraftRequest]) (*connect.Response[v1.DeleteCampaignAutoDraftResponse], error)
 	// サプレッションリスト (会社単位の配信停止/バウンス/手動除外)。
 	ListSuppressions(context.Context, *connect.Request[v1.ListSuppressionsRequest]) (*connect.Response[v1.ListSuppressionsResponse], error)
 	AddSuppression(context.Context, *connect.Request[v1.AddSuppressionRequest]) (*connect.Response[v1.AddSuppressionResponse], error)
@@ -498,6 +572,30 @@ func NewCampaignServiceHandler(svc CampaignServiceHandler, opts ...connect.Handl
 		connect.WithSchema(campaignServiceMethods.ByName("ListMailboxesHealth")),
 		connect.WithHandlerOptions(opts...),
 	)
+	campaignServiceListCampaignAutoDraftsHandler := connect.NewUnaryHandler(
+		CampaignServiceListCampaignAutoDraftsProcedure,
+		svc.ListCampaignAutoDrafts,
+		connect.WithSchema(campaignServiceMethods.ByName("ListCampaignAutoDrafts")),
+		connect.WithHandlerOptions(opts...),
+	)
+	campaignServiceCreateCampaignAutoDraftHandler := connect.NewUnaryHandler(
+		CampaignServiceCreateCampaignAutoDraftProcedure,
+		svc.CreateCampaignAutoDraft,
+		connect.WithSchema(campaignServiceMethods.ByName("CreateCampaignAutoDraft")),
+		connect.WithHandlerOptions(opts...),
+	)
+	campaignServiceUpdateCampaignAutoDraftHandler := connect.NewUnaryHandler(
+		CampaignServiceUpdateCampaignAutoDraftProcedure,
+		svc.UpdateCampaignAutoDraft,
+		connect.WithSchema(campaignServiceMethods.ByName("UpdateCampaignAutoDraft")),
+		connect.WithHandlerOptions(opts...),
+	)
+	campaignServiceDeleteCampaignAutoDraftHandler := connect.NewUnaryHandler(
+		CampaignServiceDeleteCampaignAutoDraftProcedure,
+		svc.DeleteCampaignAutoDraft,
+		connect.WithSchema(campaignServiceMethods.ByName("DeleteCampaignAutoDraft")),
+		connect.WithHandlerOptions(opts...),
+	)
 	campaignServiceListSuppressionsHandler := connect.NewUnaryHandler(
 		CampaignServiceListSuppressionsProcedure,
 		svc.ListSuppressions,
@@ -548,6 +646,14 @@ func NewCampaignServiceHandler(svc CampaignServiceHandler, opts ...connect.Handl
 			campaignServiceCheckMailboxHealthHandler.ServeHTTP(w, r)
 		case CampaignServiceListMailboxesHealthProcedure:
 			campaignServiceListMailboxesHealthHandler.ServeHTTP(w, r)
+		case CampaignServiceListCampaignAutoDraftsProcedure:
+			campaignServiceListCampaignAutoDraftsHandler.ServeHTTP(w, r)
+		case CampaignServiceCreateCampaignAutoDraftProcedure:
+			campaignServiceCreateCampaignAutoDraftHandler.ServeHTTP(w, r)
+		case CampaignServiceUpdateCampaignAutoDraftProcedure:
+			campaignServiceUpdateCampaignAutoDraftHandler.ServeHTTP(w, r)
+		case CampaignServiceDeleteCampaignAutoDraftProcedure:
+			campaignServiceDeleteCampaignAutoDraftHandler.ServeHTTP(w, r)
 		case CampaignServiceListSuppressionsProcedure:
 			campaignServiceListSuppressionsHandler.ServeHTTP(w, r)
 		case CampaignServiceAddSuppressionProcedure:
@@ -621,6 +727,22 @@ func (UnimplementedCampaignServiceHandler) CheckMailboxHealth(context.Context, *
 
 func (UnimplementedCampaignServiceHandler) ListMailboxesHealth(context.Context, *connect.Request[v1.ListMailboxesHealthRequest]) (*connect.Response[v1.ListMailboxesHealthResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("campaign.v1.CampaignService.ListMailboxesHealth is not implemented"))
+}
+
+func (UnimplementedCampaignServiceHandler) ListCampaignAutoDrafts(context.Context, *connect.Request[v1.ListCampaignAutoDraftsRequest]) (*connect.Response[v1.ListCampaignAutoDraftsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("campaign.v1.CampaignService.ListCampaignAutoDrafts is not implemented"))
+}
+
+func (UnimplementedCampaignServiceHandler) CreateCampaignAutoDraft(context.Context, *connect.Request[v1.CreateCampaignAutoDraftRequest]) (*connect.Response[v1.CreateCampaignAutoDraftResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("campaign.v1.CampaignService.CreateCampaignAutoDraft is not implemented"))
+}
+
+func (UnimplementedCampaignServiceHandler) UpdateCampaignAutoDraft(context.Context, *connect.Request[v1.UpdateCampaignAutoDraftRequest]) (*connect.Response[v1.UpdateCampaignAutoDraftResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("campaign.v1.CampaignService.UpdateCampaignAutoDraft is not implemented"))
+}
+
+func (UnimplementedCampaignServiceHandler) DeleteCampaignAutoDraft(context.Context, *connect.Request[v1.DeleteCampaignAutoDraftRequest]) (*connect.Response[v1.DeleteCampaignAutoDraftResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("campaign.v1.CampaignService.DeleteCampaignAutoDraft is not implemented"))
 }
 
 func (UnimplementedCampaignServiceHandler) ListSuppressions(context.Context, *connect.Request[v1.ListSuppressionsRequest]) (*connect.Response[v1.ListSuppressionsResponse], error) {

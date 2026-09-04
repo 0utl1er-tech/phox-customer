@@ -499,6 +499,8 @@ func main() {
 	var campaignService *campaignservice.CampaignService
 	var campaignTokenizer *campaignpkg.Tokenizer
 	var campaignWorker *campaignpkg.Worker
+	// Phase 28f: 投函された Book からキャンペーン下書きを自動生成する worker。
+	var campaignAutoDraftWorker *campaignpkg.AutoDraftWorker
 	if mailboxService != nil {
 		if cfg.CampaignTrackingKey != "" {
 			keyBytes, kerr := base64.StdEncoding.DecodeString(cfg.CampaignTrackingKey)
@@ -513,8 +515,14 @@ func main() {
 			queries, connPool, mailboxSender, mailboxCipher, campaignTokenizer, publicBaseURL)
 		campaignWorker = campaignpkg.NewWorker(
 			queries, mailboxSender, mailboxCipher, rdb, campaignTokenizer, publicBaseURL)
+		// Phase 28f: 自動下書き worker。送信鍵 (CAMPAIGN_TRACKING_KEY) が
+		// 無くても下書きは作れるので、CampaignService と同じ条件で有効化する。
+		// 有効な CampaignAutoDraft テンプレが 1 本も無ければ tick は no-op。
+		campaignAutoDraftWorker = campaignpkg.NewAutoDraftWorker(
+			queries, connPool, rdb, campaignNotifier)
 		log.Info().
 			Bool("worker_enabled", campaignWorker != nil).
+			Bool("autodraft_worker_enabled", campaignAutoDraftWorker != nil).
 			Msg("CampaignService enabled")
 	}
 
@@ -719,6 +727,14 @@ func main() {
 	if campaignWorker != nil {
 		waitGroup.Go(func() error {
 			return campaignWorker.Run(ctx)
+		})
+	}
+
+	// Phase 28f: キャンペーン自動下書き worker (15分 tick)。
+	// Book 投函 → draft 生成 + Discord 通知まで。送信開始は常に人間。
+	if campaignAutoDraftWorker != nil {
+		waitGroup.Go(func() error {
+			return campaignAutoDraftWorker.Run(ctx)
 		})
 	}
 

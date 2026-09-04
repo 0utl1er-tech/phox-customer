@@ -47,6 +47,14 @@ service CampaignService {
   // DNS 点検は CheckMailboxHealth をオンデマンドで呼ぶこと。
   rpc ListMailboxesHealth(ListMailboxesHealthRequest) returns (ListMailboxesHealthResponse);
 
+  // キャンペーン自動下書きテンプレート (Phase 28f)。Book 名パターン毎に
+  // 「投函された Book から自動生成する下書き」を定義する。閲覧は同じ会社の
+  // ユーザーなら可、作成/更新/削除は owner のみ。
+  rpc ListCampaignAutoDrafts(ListCampaignAutoDraftsRequest) returns (ListCampaignAutoDraftsResponse);
+  rpc CreateCampaignAutoDraft(CreateCampaignAutoDraftRequest) returns (CreateCampaignAutoDraftResponse);
+  rpc UpdateCampaignAutoDraft(UpdateCampaignAutoDraftRequest) returns (UpdateCampaignAutoDraftResponse);
+  rpc DeleteCampaignAutoDraft(DeleteCampaignAutoDraftRequest) returns (DeleteCampaignAutoDraftResponse);
+
   // サプレッションリスト (会社単位の配信停止/バウンス/手動除外)。
   rpc ListSuppressions(ListSuppressionsRequest) returns (ListSuppressionsResponse);
   rpc AddSuppression(AddSuppressionRequest) returns (AddSuppressionResponse);
@@ -415,5 +423,97 @@ message RemoveSuppressionRequest {
   string id = 1 [(buf.validate.field).string.uuid = true];
 }
 message RemoveSuppressionResponse {
+  string id = 1;
+}
+
+// ─── Phase 28f: キャンペーン自動下書き ────────────────────────────────
+//
+// 28d の lakehouse パイプラインが投函した Book (`GM_{業種}_{都道府県}_
+// {YYYY-MM}_HPあり` / `_HPなし`) に対し、内蔵 worker が 15 分毎に
+// 「まだ自動下書きを作っていない Book」を検出して draft を生成する。
+// 生成された Campaign は status=draft のままで、開始は常に人間が押す。
+//
+// HP を既に持つ店 (乗り換え提案) と持たない店 (HP 制作の新規提案) では
+// 営業内容が違うため、テンプレは Book 名パターン毎に複数登録できる。
+message CampaignAutoDraft {
+  string id = 1;
+  // 管理用ラベル (例「HPあり: 乗り換え提案」)。
+  string name = 2;
+  // false (既定) なら worker は何もしない。
+  bool enabled = 3;
+  // SQL LIKE パターン (例 `GM\_%\_HPあり`)。`\_` でリテラルのアンダースコア。
+  string book_name_pattern = 4;
+  string subject = 5;
+  string body = 6;
+  repeated CampaignFollowup followups = 7;
+  repeated string mailbox_ids = 8;
+  CampaignSchedule schedule = 9;
+  CampaignSender sender = 10;
+  bool track_opens = 11;
+  bool track_clicks = 12;
+  // 下書きの名義 (この User の Book/Mailbox 権限で作成される)。
+  string creator_user_id = 13;
+  // 最後に下書きを自動生成した時刻 (無ければ未生成)。
+  optional google.protobuf.Timestamp last_created_at = 14;
+  google.protobuf.Timestamp created_at = 15;
+  google.protobuf.Timestamp updated_at = 16;
+}
+
+message ListCampaignAutoDraftsRequest {}
+message ListCampaignAutoDraftsResponse {
+  repeated CampaignAutoDraft auto_drafts = 1;
+  // 呼び出しユーザーがテンプレを編集できるか (User.role = owner)。
+  bool can_edit = 2;
+}
+
+message CreateCampaignAutoDraftRequest {
+  string name = 1 [(buf.validate.field).string.min_len = 1];
+  string book_name_pattern = 2 [(buf.validate.field).string.min_len = 1];
+  bool enabled = 3;
+  string subject = 4;
+  string body = 5 [(buf.validate.field).string.min_len = 1];
+  repeated CampaignFollowup followups = 6 [(buf.validate.field).repeated.max_items = 5];
+  repeated string mailbox_ids = 7 [(buf.validate.field).repeated = {
+    min_items: 1,
+    max_items: 20,
+    items: {string: {uuid: true}}
+  }];
+  CampaignSchedule schedule = 8;
+  CampaignSender sender = 9;
+  bool track_opens = 10;
+  bool track_clicks = 11;
+}
+message CreateCampaignAutoDraftResponse {
+  CampaignAutoDraft auto_draft = 1;
+}
+
+message UpdateCampaignAutoDraftRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+  // 未指定 (optional 未設定 / 空 repeated) のフィールドは変更しない。
+  optional string name = 2;
+  optional string book_name_pattern = 3;
+  optional bool enabled = 4;
+  optional string subject = 5;
+  optional string body = 6;
+  // 変更する場合は全ステップを送る (全置換)。clear_followups で空にできる。
+  repeated CampaignFollowup followups = 7 [(buf.validate.field).repeated.max_items = 5];
+  bool clear_followups = 8;
+  repeated string mailbox_ids = 9 [(buf.validate.field).repeated = {
+    max_items: 20,
+    items: {string: {uuid: true}}
+  }];
+  CampaignSchedule schedule = 10;
+  CampaignSender sender = 11;
+  optional bool track_opens = 12;
+  optional bool track_clicks = 13;
+}
+message UpdateCampaignAutoDraftResponse {
+  CampaignAutoDraft auto_draft = 1;
+}
+
+message DeleteCampaignAutoDraftRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+message DeleteCampaignAutoDraftResponse {
   string id = 1;
 }

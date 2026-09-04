@@ -7,9 +7,11 @@ INSERT INTO "Campaign" (
     send_start_hour, send_end_hour, send_days,
     daily_cap_per_mailbox, min_interval_sec, warmup_enabled,
     bounce_pause_threshold,
-    sender_org, sender_address, sender_contact
+    sender_org, sender_address, sender_contact,
+    source_book_id
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
+    $19
 )
 RETURNING *;
 
