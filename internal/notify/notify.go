@@ -193,7 +193,11 @@ func (n *DiscordNotifier) sendAutoDraft(ctx context.Context, info AutoDraftInfo)
 	if company.NotifyWebhookUrl == "" || !EventEnabled(company.NotifyEvents, EventAutoDraft) {
 		return nil // 通知無効 — 正常系
 	}
-	return n.post(ctx, company.NotifyWebhookUrl, discordPayload{Embeds: []discordEmbed{{
+	return n.post(ctx, company.NotifyWebhookUrl, n.buildAutoDraftPayload(info))
+}
+
+func (n *DiscordNotifier) buildAutoDraftPayload(info AutoDraftInfo) discordPayload {
+	return discordPayload{Embeds: []discordEmbed{{
 		Title: "📝 キャンペーン下書きを作成しました",
 		URL:   n.campaignURL(info.CampaignID),
 		Color: 0x5865F2,
@@ -204,7 +208,7 @@ func (n *DiscordNotifier) sendAutoDraft(ctx context.Context, info AutoDraftInfo)
 			{Name: "送信対象", Value: fmt.Sprintf("%d 件 (除外 %d 件)", info.RecipientCount, info.SkippedCount), Inline: true},
 			{Name: "次のアクション", Value: "内容を確認して開始してください (自動では送信しません)"},
 		},
-	}}})
+	}}}
 }
 
 // send は会社設定を引いて有効なら embed を POST する (無効なら no-op)。
