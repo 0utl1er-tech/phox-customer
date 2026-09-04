@@ -195,6 +195,9 @@ type Querier interface {
 	ListAllActiveMailboxes(ctx context.Context) ([]Mailbox, error)
 	ListAllContacts(ctx context.Context, arg ListAllContactsParams) ([]ListAllContactsRow, error)
 	ListAllCustomers(ctx context.Context) ([]ListAllCustomersRow, error)
+	// Phase 28a: CreateCampaign の book_ids 展開用。指定 Book 群の全顧客を返す
+	// (列は GetCustomersByIDs と同じ形 — スナップショット組み立てで union する)。
+	ListAllCustomersByBook(ctx context.Context, bookIds []uuid.UUID) ([]ListAllCustomersByBookRow, error)
 	ListCampaignEventsByRecipient(ctx context.Context, recipientID uuid.UUID) ([]CampaignEvent, error)
 	ListCampaignLinks(ctx context.Context, campaignID uuid.UUID) ([]CampaignLink, error)
 	// worker が送信資格情報ごと引く (password_enc 込み)。

@@ -350,6 +350,54 @@ func (q *Queries) ListAllCustomers(ctx context.Context) ([]ListAllCustomersRow, 
 	return items, nil
 }
 
+const listAllCustomersByBook = `-- name: ListAllCustomersByBook :many
+SELECT id, book_id, name, corporation, mail, phone, address, category
+FROM "Customer"
+WHERE book_id = ANY($1::uuid[])
+`
+
+type ListAllCustomersByBookRow struct {
+	ID          uuid.UUID `json:"id"`
+	BookID      uuid.UUID `json:"book_id"`
+	Name        string    `json:"name"`
+	Corporation string    `json:"corporation"`
+	Mail        string    `json:"mail"`
+	Phone       string    `json:"phone"`
+	Address     string    `json:"address"`
+	Category    string    `json:"category"`
+}
+
+// Phase 28a: CreateCampaign の book_ids 展開用。指定 Book 群の全顧客を返す
+// (列は GetCustomersByIDs と同じ形 — スナップショット組み立てで union する)。
+func (q *Queries) ListAllCustomersByBook(ctx context.Context, bookIds []uuid.UUID) ([]ListAllCustomersByBookRow, error) {
+	rows, err := q.db.Query(ctx, listAllCustomersByBook, bookIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAllCustomersByBookRow{}
+	for rows.Next() {
+		var i ListAllCustomersByBookRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.BookID,
+			&i.Name,
+			&i.Corporation,
+			&i.Mail,
+			&i.Phone,
+			&i.Address,
+			&i.Category,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCustomers = `-- name: ListCustomers :many
 SELECT
     id,

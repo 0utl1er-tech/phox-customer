@@ -650,6 +650,84 @@ func TestToolsAgainstDB(t *testing.T) {
 		assert.Contains(t, textOf(t, res), `"status":"cancelled"`)
 	})
 
+	t.Run("create_campaign_draft with book_ids (Phase 28a)", func(t *testing.T) {
+		require.NoError(t, q.UpsertDomainHealth(ctx, db.UpsertDomainHealthParams{
+			Lower: "example.com", HasMx: true, MxHost: "mx.example.com",
+		}))
+
+		// 送信プール mailbox (owner が editor 以上)。
+		mbID := uuid.New()
+		_, err := q.CreateMailbox(ctx, db.CreateMailboxParams{
+			ID: mbID, CompanyID: cid, Address: "bk-" + mbID.String()[:8] + "@0utl1er.tech",
+			SmtpUsername: "bk@0utl1er.tech", PasswordEnc: []byte("x"), Active: true,
+		})
+		require.NoError(t, err)
+		_, err = q.CreateMailboxPermit(ctx, db.CreateMailboxPermitParams{
+			ID: uuid.New(), MailboxID: mbID, UserID: owner.ID, Role: db.RoleOwner,
+		})
+		require.NoError(t, err)
+
+		// owner の Book に顧客 2 件。c1 は customer_ids でも指定して dedup を見る。
+		bk2 := testutil.TestBook(t, q, owner.ID)
+		c1 := testutil.TestCustomer(t, q, bk2.ID)
+		_ = testutil.TestCustomer(t, q, bk2.ID)
+		// outsider だけが permit を持つ Book (owner は editor 権限なし)。
+		bk3 := testutil.TestBook(t, q, outsider.ID)
+
+		session := connectClient(t, newTestHandler(t, pool, q, owner.ID))
+
+		// ── union + dedup: book_ids で全展開 + customer_ids に同一顧客
+		// → 受信者は Book の 2 件のみ (重複スキップも出ない) ──
+		res, err := session.CallTool(ctx, &mcp.CallToolParams{
+			Name: "create_campaign_draft",
+			Arguments: map[string]any{
+				"name":         "book-ids-union",
+				"customer_ids": []string{c1.ID.String()},
+				"book_ids":     []string{bk2.ID.String()},
+				"mailbox_ids":  []string{mbID.String()},
+				"subject":      "件名",
+				"body":         "本文です。",
+			},
+		})
+		require.NoError(t, err)
+		require.False(t, res.IsError, "unexpected tool error: %s", textOf(t, res))
+		draftJSON := textOf(t, res)
+		assert.Contains(t, draftJSON, `"status":"draft"`)
+		assert.Contains(t, draftJSON, `"queuedCount":2`, "Book 2 件 + customer_ids 重複 1 件 → dedup で 2 受信者")
+		assert.NotContains(t, draftJSON, `"skippedDuplicate":1`, "customer_id dedup が先に効くのでアドレス重複スキップは出ない")
+		assert.Contains(t, draftJSON, `"total":2`)
+
+		// ── editor 権限の無い Book → permission denied (空 Book でも先に出る) ──
+		res, err = session.CallTool(ctx, &mcp.CallToolParams{
+			Name: "create_campaign_draft",
+			Arguments: map[string]any{
+				"name":        "book-ids-no-permission",
+				"book_ids":    []string{bk3.ID.String()},
+				"mailbox_ids": []string{mbID.String()},
+				"subject":     "x",
+				"body":        "x",
+			},
+		})
+		require.NoError(t, err)
+		assert.True(t, res.IsError, "editor 権限なしの book_ids は permission_denied になるべき")
+		assert.Contains(t, textOf(t, res), "permission_denied")
+
+		// ── customer_ids / book_ids 両方空 → invalid_argument ──
+		res, err = session.CallTool(ctx, &mcp.CallToolParams{
+			Name: "create_campaign_draft",
+			Arguments: map[string]any{
+				"name":        "book-ids-empty",
+				"mailbox_ids": []string{mbID.String()},
+				"subject":     "x",
+				"body":        "x",
+			},
+		})
+		require.NoError(t, err)
+		assert.True(t, res.IsError)
+		assert.Contains(t, textOf(t, res), "invalid_argument")
+		assert.Contains(t, textOf(t, res), "book_ids")
+	})
+
 	t.Run("import_customers_csv creates a new book and reports per-line errors", func(t *testing.T) {
 		session := connectClient(t, newTestHandler(t, pool, q, owner.ID))
 		bookName := "CSV取込検証-" + uuid.NewString()[:8]
