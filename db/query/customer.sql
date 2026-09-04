@@ -122,3 +122,10 @@ SELECT customer_id FROM (
 ) hits
 ORDER BY priority
 LIMIT 1;
+
+-- name: ListAllCustomersByBook :many
+-- Phase 28a: CreateCampaign の book_ids 展開用。指定 Book 群の全顧客を返す
+-- (列は GetCustomersByIDs と同じ形 — スナップショット組み立てで union する)。
+SELECT id, book_id, name, corporation, mail, phone, address, category
+FROM "Customer"
+WHERE book_id = ANY(sqlc.arg(book_ids)::uuid[]);

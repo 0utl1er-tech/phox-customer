@@ -196,7 +196,8 @@ type campaignSenderIn struct {
 
 type createCampaignDraftIn struct {
 	Name        string               `json:"name" jsonschema:"campaign name (internal label shown in the UI)"`
-	CustomerIDs []string             `json:"customer_ids" jsonschema:"recipient customer UUIDs (immutable snapshot, 1-10000). Customers without an email address, suppressed (unsubscribed/bounced) or duplicated addresses are recorded as skipped — the breakdown is returned"`
+	CustomerIDs []string             `json:"customer_ids,omitempty" jsonschema:"recipient customer UUIDs (immutable snapshot, max 10000; at least one of customer_ids/book_ids is required). Customers without an email address, suppressed (unsubscribed/bounced) or duplicated addresses are recorded as skipped — the breakdown is returned"`
+	BookIDs     []string             `json:"book_ids,omitempty" jsonschema:"book UUIDs — every customer in these books is expanded into the recipient snapshot server-side; combinable with customer_ids (union, deduped). Requires editor role on each book. Use this instead of listing hundreds of customer_ids"`
 	MailboxIDs  []string             `json:"mailbox_ids" jsonschema:"sending mailbox pool UUIDs (from list_mailboxes); requires editor role on every mailbox. Sends rotate across the pool"`
 	Subject     string               `json:"subject" jsonschema:"first email subject. Placeholders: {{customer_name}} {{customer_corporation}} {{customer_mail}} {{customer_phone}} {{sender_name}} {{sender_mail}} {{today}}"`
 	Body        string               `json:"body" jsonschema:"first email plain-text body (same placeholders as subject, plus {{unsubscribe_url}}). The 特定電子メール法 footer (sender info + unsubscribe link) is always appended automatically"`
@@ -584,8 +585,10 @@ func addCampaignTools(s *mcp.Server, deps Deps) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name: "create_campaign_draft",
 		Description: "Create a cold-email campaign as a DRAFT — no email is sent by this tool, ever. " +
-			"The recipient list is snapshotted from customer_ids (skipping customers without an email, " +
-			"suppressed addresses, duplicates and no-MX domains; the breakdown is returned). " +
+			"The recipient list is snapshotted from customer_ids and/or book_ids (skipping customers " +
+			"without an email, suppressed addresses, duplicates and no-MX domains; the breakdown is " +
+			"returned). Prefer book_ids to target whole books — the server expands them, so you never " +
+			"need to enumerate hundreds of customer_ids. " +
 			"Requires editor role on every mailbox in mailbox_ids and on every book the recipients " +
 			"belong to. Present the draft (subject, body, recipients, schedule, sender disclosure) to " +
 			"the user for review; actually sending requires an explicit start_campaign call.",
@@ -601,6 +604,7 @@ func addCampaignTools(s *mcp.Server, deps Deps) {
 		req := &campaignv1.CreateCampaignRequest{
 			Name:        in.Name,
 			CustomerIds: in.CustomerIDs,
+			BookIds:     in.BookIDs,
 			MailboxIds:  in.MailboxIDs,
 			Subject:     in.Subject,
 			Body:        in.Body,

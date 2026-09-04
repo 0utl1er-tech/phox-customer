@@ -20,9 +20,14 @@ import (
 // worker 側でも検証されるので取りこぼしにはならない。
 const mxCheckBudget = 15 * time.Second
 
+// maxRecipients は customer_ids + book_ids 展開後の受信者スナップショット上限。
+// proto の customer_ids max_items と同じ値 (book 展開分もこの上限に収める)。
+const maxRecipients = 10000
+
 // CreateCampaign は受信者スナップショットごと draft キャンペーンを作る。
 //
-//   - 受信者は明示的な customer_ids のスナップショット (保存フィルタではない)。
+//   - 受信者は customer_ids と book_ids (Phase 28a: Book 内全顧客をサーバ側で
+//     展開) の union のスナップショット (保存フィルタではない)。
 //     実行中にリストが動的に変わらないこと・監査可能なことを優先する。
 //   - メール無し / 会社サプレッション済み / キャンペーン内アドレス重複は
 //     skipped 行として記録し、内訳をレスポンスで返す (UI が
@@ -80,6 +85,30 @@ func (s *CampaignService) CreateCampaign(
 			customerIDs = append(customerIDs, cid)
 		}
 	}
+
+	// Phase 28a: book_ids は「Book 内全顧客」の指定。権限チェックは顧客展開より
+	// 先に Book 単位で直接行う (空の Book でも permission denied が正しく出る)。
+	checkedBooks := map[uuid.UUID]bool{}
+	bookIDs := make([]uuid.UUID, 0, len(req.Msg.BookIds))
+	for _, raw := range req.Msg.BookIds {
+		bID, perr := uuid.Parse(raw)
+		if perr != nil {
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid book_id: %w", perr))
+		}
+		if checkedBooks[bID] {
+			continue
+		}
+		if err := s.authorizer.CheckPermission(ctx, bID, db.RoleEditor); err != nil {
+			return nil, err
+		}
+		checkedBooks[bID] = true
+		bookIDs = append(bookIDs, bID)
+	}
+	if len(customerIDs) == 0 && len(bookIDs) == 0 {
+		return nil, connect.NewError(connect.CodeInvalidArgument,
+			errors.New("customer_ids または book_ids のいずれかを指定してください"))
+	}
+
 	customers, err := s.queries.GetCustomersByIDs(ctx, customerIDs)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("fetch customers: %w", err))
@@ -88,7 +117,24 @@ func (s *CampaignService) CreateCampaign(
 		return nil, connect.NewError(connect.CodeNotFound,
 			fmt.Errorf("%d 件の顧客が見つかりません", len(customerIDs)-len(customers)))
 	}
-	checkedBooks := map[uuid.UUID]bool{}
+	// book_ids の展開 → customer_ids 分と union (customer_id で dedup)。
+	if len(bookIDs) > 0 {
+		bookCustomers, berr := s.queries.ListAllCustomersByBook(ctx, bookIDs)
+		if berr != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("expand book_ids: %w", berr))
+		}
+		for _, bc := range bookCustomers {
+			if seenCustomer[bc.ID] {
+				continue
+			}
+			seenCustomer[bc.ID] = true
+			customers = append(customers, db.GetCustomersByIDsRow(bc))
+		}
+	}
+	if len(customers) > maxRecipients {
+		return nil, connect.NewError(connect.CodeInvalidArgument,
+			fmt.Errorf("受信者が上限 %d 件を超えています (book_ids 展開後 %d 件)", maxRecipients, len(customers)))
+	}
 	for _, c := range customers {
 		if checkedBooks[c.BookID] {
 			continue

@@ -131,7 +131,9 @@ message Campaign {
 
 message CreateCampaignRequest {
   string name = 1 [(buf.validate.field).string.min_len = 1];
-  repeated string customer_ids = 2 [(buf.validate.field).repeated = {min_items: 1, max_items: 10000}];
+  // 受信者の明示指定。book_ids と併用可 (union + customer_id で dedup)。
+  // customer_ids / book_ids の両方が空なら invalid_argument。
+  repeated string customer_ids = 2 [(buf.validate.field).repeated = {max_items: 10000}];
   repeated string mailbox_ids = 3 [(buf.validate.field).repeated.min_items = 1];
   string subject = 4;
   string body = 5;
@@ -141,6 +143,15 @@ message CreateCampaignRequest {
   bool track_clicks = 9;
   // フォローアップ (2 通目以降)。最大 5 ステップ。
   repeated CampaignFollowup followups = 10 [(buf.validate.field).repeated.max_items = 5];
+  // Phase 28a: Book 単位の受信者指定。指定した各 Book の全顧客をサーバ側で
+  // 受信者スナップショットに展開する (MCP で customer_ids を数百件列挙しない
+  // ための経路)。customer_ids と併用可 = union + customer_id で dedup。
+  // 両方空は invalid_argument。展開後の合計が 10,000 件を超えると
+  // invalid_argument。Book ごとに editor 以上の Permit が必要。
+  repeated string book_ids = 11 [(buf.validate.field).repeated = {
+    max_items: 100,
+    items: {string: {uuid: true}}
+  }];
 }
 message CreateCampaignResponse {
   Campaign campaign = 1;
