@@ -98,6 +98,8 @@ type createCustomerIn struct {
 	// 同一取引先が複数アドレスを持つ場合 (例: 会社の担当者ごとのメール) に、
 	// それぞれを contact として登録し履歴を顧客に集約する。冪等 (同一 mail は再作成しない)。
 	Contacts []createCustomerContactIn `json:"contacts,omitempty" jsonschema:"additional contacts (email addresses) belonging to this customer, e.g. multiple people/addresses at the same company; each becomes a contact and its mailbox history is linked to the customer"`
+	// Phase 29b: 顧客ごとの任意差し込み変数。キャンペーン本文の {{fields.<key>}}。
+	CustomFields map[string]string `json:"custom_fields,omitempty" jsonschema:"per-customer merge variables usable in campaign bodies as {{fields.<key>}} (e.g. {\"meo_score\":\"30/100\"} → {{fields.meo_score}}). Keys are lowercased and non [a-z0-9_] characters become '_'; max 32 keys, 4096 bytes per value. Values are plain text and may contain newlines (rendered as <br> in the HTML part)"`
 }
 
 type sendCustomerEmailIn struct {
@@ -112,7 +114,7 @@ type sendCustomerEmailIn struct {
 
 type importCustomersCSVIn struct {
 	BookName   string `json:"book_name" jsonschema:"name for the NEW customer book that is created to hold the imported rows"`
-	CSVContent string `json:"csv_content" jsonschema:"raw CSV text, first line = header row. Recognised headers (case-insensitive): name, corporation, phone, mail (or email), category, address, memo, id (optional customer UUID); other columns are ignored — reshape messy CSVs into these canonical headers before calling"`
+	CSVContent string `json:"csv_content" jsonschema:"raw CSV text, first line = header row. Canonical headers (case-insensitive): name, corporation, phone, mail (or email), category, address, memo, id (optional customer UUID). ANY OTHER COLUMN is stored as a per-customer merge variable and can be used in campaign bodies as {{fields.<column>}} — e.g. a meo_score column becomes {{fields.meo_score}}. Column names are lowercased and non [a-z0-9_] characters become '_'; max 32 such columns, 4096 bytes per cell"`
 }
 
 type enrichCustomerRowsIn struct {
@@ -199,8 +201,8 @@ type createCampaignDraftIn struct {
 	CustomerIDs []string             `json:"customer_ids,omitempty" jsonschema:"recipient customer UUIDs (immutable snapshot, max 10000; at least one of customer_ids/book_ids is required). Customers without an email address, suppressed (unsubscribed/bounced) or duplicated addresses are recorded as skipped — the breakdown is returned"`
 	BookIDs     []string             `json:"book_ids,omitempty" jsonschema:"book UUIDs — every customer in these books is expanded into the recipient snapshot server-side; combinable with customer_ids (union, deduped). Requires editor role on each book. Use this instead of listing hundreds of customer_ids"`
 	MailboxIDs  []string             `json:"mailbox_ids" jsonschema:"sending mailbox pool UUIDs (from list_mailboxes); requires editor role on every mailbox. Sends rotate across the pool"`
-	Subject     string               `json:"subject" jsonschema:"first email subject. Placeholders: {{customer_name}} {{customer_corporation}} {{customer_mail}} {{customer_phone}} {{sender_name}} {{sender_mail}} {{today}}"`
-	Body        string               `json:"body" jsonschema:"first email plain-text body (same placeholders as subject, plus {{unsubscribe_url}}). The 特定電子メール法 footer (sender info + unsubscribe link) is always appended automatically"`
+	Subject     string               `json:"subject" jsonschema:"first email subject. Placeholders: {{customer_name}} {{customer_corporation}} {{customer_mail}} {{customer_phone}} {{sender_name}} {{sender_mail}} {{today}}, plus {{fields.<key>}} for any per-customer merge variable (Customer.custom_fields, e.g. columns imported by import_customers_csv). Unknown {{fields.*}} render as an empty string"`
+	Body        string               `json:"body" jsonschema:"first email plain-text body (same placeholders as subject, plus {{unsubscribe_url}}). Per-customer merge variables ({{fields.<key>}}) may contain newlines — they become line breaks in the HTML part. The 特定電子メール法 footer (sender info + unsubscribe link) is always appended automatically"`
 	Followups   []campaignFollowupIn `json:"followups,omitempty" jsonschema:"followup emails (2nd mail and later, max 5) sent to recipients who have not replied; each waits wait_days after the previous step and threads as a reply"`
 	Schedule    *campaignScheduleIn  `json:"schedule,omitempty" jsonschema:"pacing settings; omit for the defaults (JST 9-18, weekdays, 100/day/mailbox, 90s interval, warmup on)"`
 	Sender      *campaignSenderIn    `json:"sender,omitempty" jsonschema:"特定電子メール法 sender disclosure printed in every mail footer. Can be omitted on the draft but must be set before start_campaign succeeds"`
@@ -278,7 +280,9 @@ func addTools(s *mcp.Server, deps Deps) {
 			"list_mailbox_messages). Upsert-safe: if 'mail' is given and a customer with that email " +
 			"already exists in the book, the existing customer is returned (and any 'contacts' are " +
 			"still added to it). Optionally attach 'contacts' (extra email addresses of the same " +
-			"customer) to aggregate their mailbox history. Requires editor access to the book.",
+			"customer) to aggregate their mailbox history. Optionally set 'custom_fields' — arbitrary " +
+			"per-customer merge variables referenced in campaign bodies as {{fields.<key>}}. " +
+			"Requires editor access to the book.",
 		InputSchema: mcpInputSchema[createCustomerIn](),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in createCustomerIn) (*mcp.CallToolResult, any, error) {
 		// upsert 判定: mail 一致の既存顧客がいれば作らずにそれを返す。
@@ -314,6 +318,8 @@ func addTools(s *mcp.Server, deps Deps) {
 			Category:    in.Category,
 			Address:     in.Address,
 			Memo:        in.Memo,
+
+			CustomFields: in.CustomFields,
 		}))
 		if err != nil {
 			return protoResult(resp, err)
@@ -333,8 +339,13 @@ func addTools(s *mcp.Server, deps Deps) {
 			"existing book (use create_customer for that). The first CSV line must be a header row; " +
 			"recognised columns (case-insensitive) are: name, corporation, phone, mail (or email), " +
 			"category, address, memo, and optionally id (customer UUID, auto-generated when absent). " +
-			"Unknown columns are silently ignored, so reshape a messy CSV into these canonical headers " +
-			"first (enrich_customer_rows can propose the normalised values). Missing/empty cells are " +
+			"EVERY OTHER COLUMN is kept as a per-customer merge variable: a column named meo_score " +
+			"becomes {{fields.meo_score}} in campaign subjects and bodies, so one CSV can drive a " +
+			"mail whose content differs per recipient (e.g. a per-store MEO diagnosis). Column names " +
+			"are lowercased with non [a-z0-9_] characters replaced by '_'; at most 32 such columns and " +
+			"4096 bytes per cell are kept. Cell values are plain text and may contain newlines — they " +
+			"render as line breaks in the HTML part of the mail. Use enrich_customer_rows to normalise " +
+			"messy canonical columns. Missing/empty cells are " +
 			"fine (stored as empty strings — rows without an email import too). Max 50,000 rows. " +
 			"Returns book_id, imported/failed counts and per-line errors for rows that could not be " +
 			"inserted (e.g. malformed CSV line or invalid id). No email is involved at any point.",

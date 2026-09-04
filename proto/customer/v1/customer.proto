@@ -16,6 +16,13 @@ message CreateCustomerRequest {
   string address = 6 [(buf.validate.field).string.max_len = 128];
   string memo = 7 [(buf.validate.field).string.max_len = 1024];
   string mail = 8 [(buf.validate.field).string.max_len = 256];
+  // Phase 29b: 顧客ごとの任意差し込み変数。キャンペーン本文で
+  // {{fields.<key>}} として参照できる。キーは英小文字/数字/アンダースコア。
+  map<string, string> custom_fields = 9 [
+    (buf.validate.field).map.max_pairs = 32,
+    (buf.validate.field).map.keys.string.pattern = "^[a-z0-9_]{1,64}$",
+    (buf.validate.field).map.values.string.max_bytes = 4096
+  ];
 }
 
 message CreateCustomerResponse {
@@ -57,6 +64,19 @@ message Customer {
   reserved 10;
   reserved "calls";
   string mail = 11;
+  // Phase 29b: 顧客ごとの任意差し込み変数 (キャンペーン本文の {{fields.<key>}})。
+  map<string, string> custom_fields = 12;
+}
+
+// CustomFields は UpdateCustomerRequest で「未指定 (= 現状維持)」と
+// 「空にする」を区別するためのラッパ。proto3 の map 自体は presence を
+// 持てないので、message で包んで nil/非 nil に意味を持たせる。
+message CustomFields {
+  map<string, string> values = 1 [
+    (buf.validate.field).map.max_pairs = 32,
+    (buf.validate.field).map.keys.string.pattern = "^[a-z0-9_]{1,64}$",
+    (buf.validate.field).map.values.string.max_bytes = 4096
+  ];
 }
 
 message UpdateCustomerRequest {
@@ -68,6 +88,9 @@ message UpdateCustomerRequest {
   optional string address = 6 [(buf.validate.field).string.max_len = 128];
   optional string memo = 7 [(buf.validate.field).string.max_len = 1024];
   optional string mail = 8 [(buf.validate.field).string.max_len = 256];
+  // Phase 29b: 未指定 = 現状維持。指定時は map 全体を置き換える
+  // (values が空 = すべての差し込み変数を消す)。
+  CustomFields custom_fields = 9;
 }
 
 message UpdateCustomerResponse {

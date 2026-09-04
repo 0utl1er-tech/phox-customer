@@ -6,6 +6,7 @@ import (
 	contactv1 "github.com/0utl1er-tech/phox-customer/gen/pb/contact/v1"
 	customerv1 "github.com/0utl1er-tech/phox-customer/gen/pb/customer/v1"
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
+	"github.com/0utl1er-tech/phox-customer/internal/customfields"
 	"github.com/0utl1er-tech/phox-customer/internal/search"
 	"github.com/rs/zerolog/log"
 )
@@ -34,43 +35,46 @@ func contactsToProto(cs []db.Contact) []*contactv1.Contact {
 // 変換も併せて用意している。proto にフィールドを足すときは 3 つとも更新する。
 func modelToProto(c db.Customer) *customerv1.Customer {
 	return &customerv1.Customer{
-		Id:          c.ID.String(),
-		BookId:      c.BookID.String(),
-		Phone:       c.Phone,
-		Category:    c.Category,
-		Name:        c.Name,
-		Corporation: c.Corporation,
-		Address:     c.Address,
-		Memo:        c.Memo,
-		Mail:        c.Mail,
+		Id:           c.ID.String(),
+		BookId:       c.BookID.String(),
+		Phone:        c.Phone,
+		Category:     c.Category,
+		Name:         c.Name,
+		Corporation:  c.Corporation,
+		Address:      c.Address,
+		Memo:         c.Memo,
+		Mail:         c.Mail,
+		CustomFields: customfields.Unmarshal(c.CustomFields),
 	}
 }
 
 func getRowToProto(c db.GetCustomerRow) *customerv1.Customer {
 	return &customerv1.Customer{
-		Id:          c.ID.String(),
-		BookId:      c.BookID.String(),
-		Phone:       c.Phone,
-		Category:    c.Category,
-		Name:        c.Name,
-		Corporation: c.Corporation,
-		Address:     c.Address,
-		Memo:        c.Memo,
-		Mail:        c.Mail,
+		Id:           c.ID.String(),
+		BookId:       c.BookID.String(),
+		Phone:        c.Phone,
+		Category:     c.Category,
+		Name:         c.Name,
+		Corporation:  c.Corporation,
+		Address:      c.Address,
+		Memo:         c.Memo,
+		Mail:         c.Mail,
+		CustomFields: customfields.Unmarshal(c.CustomFields),
 	}
 }
 
 func listRowToProto(c db.ListCustomersRow) *customerv1.Customer {
 	return &customerv1.Customer{
-		Id:          c.ID.String(),
-		BookId:      c.BookID.String(),
-		Phone:       c.Phone,
-		Category:    c.Category,
-		Name:        c.Name,
-		Corporation: c.Corporation,
-		Address:     c.Address,
-		Memo:        c.Memo,
-		Mail:        c.Mail,
+		Id:           c.ID.String(),
+		BookId:       c.BookID.String(),
+		Phone:        c.Phone,
+		Category:     c.Category,
+		Name:         c.Name,
+		Corporation:  c.Corporation,
+		Address:      c.Address,
+		Memo:         c.Memo,
+		Mail:         c.Mail,
+		CustomFields: customfields.Unmarshal(c.CustomFields),
 	}
 }
 

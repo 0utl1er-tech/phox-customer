@@ -263,3 +263,126 @@ func TestBounceBreakerThreshold(t *testing.T) {
 		}
 	}
 }
+
+// ─── Phase 29b: 顧客ごとの任意差し込み変数 {{fields.<key>}} ───────────
+
+func TestRenderFieldsPlaceholder(t *testing.T) {
+	vars := map[string]string{
+		"customer_name":     "みどり整体院",
+		"fields.meo_score":  "30/100",
+		"fields.meo_issues": "・写真が3枚以下\n・投稿が90日以上停止",
+		"fields.empty":      "",
+	}
+
+	cases := []struct {
+		name string
+		tpl  string
+		want string
+	}{
+		{"存在するキー", "スコアは {{fields.meo_score}} 点です", "スコアは 30/100 点です"},
+		{"固定キーと併用", "{{customer_name}} 様: {{fields.meo_score}}", "みどり整体院 様: 30/100"},
+		{"空白許容", "{{ fields.meo_score }}", "30/100"},
+		{"改行を含む値", "課題:\n{{fields.meo_issues}}", "課題:\n・写真が3枚以下\n・投稿が90日以上停止"},
+		{"値が空", "[{{fields.empty}}]", "[]"},
+		// 未定義キーが本文に残ると受信者に生テンプレートが届く = 事故。
+		{"存在しないキー", "[{{fields.nope}}]", "[]"},
+		// 正規化済みキーは必ず小文字なので、大文字参照は永久に当たらない。
+		// そのまま残すより消す方が安全。
+		{"不正なキー名 (大文字)", "[{{fields.MEO}}]", "[]"},
+		{"不正なキー名 (記号)", "[{{fields.meo-score}}]", "[]"},
+		{"キー無し", "[{{fields.}}]", "[]"},
+		// fields 名前空間の外は従来どおり誤記の視認用に残す。
+		{"未知トークンは残る", "[{{typo_here}}]", "[{{typo_here}}]"},
+		{"fields 単体は残る", "[{{fields}}]", "[{{fields}}]"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := Render(tc.tpl, vars); got != tc.want {
+				t.Errorf("Render(%q) = %q, want %q", tc.tpl, got, tc.want)
+			}
+		})
+	}
+}
+
+// 差し込み値は顧客由来 = 外部入力。値の中の {{...}} が二次展開されると
+// テンプレート注入になるので、1 パス置換であることを固定する。
+func TestRenderDoesNotReexpandInjectedValues(t *testing.T) {
+	vars := map[string]string{
+		"customer_name": "本名",
+		"fields.evil":   "{{customer_name}}",
+		"fields.evil2":  "{{fields.evil}}",
+	}
+	if got := Render("{{fields.evil}}", vars); got != "{{customer_name}}" {
+		t.Errorf("差し込み値が再展開された: %q", got)
+	}
+	if got := Render("{{fields.evil2}}", vars); got != "{{fields.evil}}" {
+		t.Errorf("差し込み値が再展開された: %q", got)
+	}
+}
+
+func TestAddFieldVars(t *testing.T) {
+	vars := map[string]string{}
+	AddFieldVars(vars, map[string]string{
+		"meo_score": "30/100",
+		"BAD KEY":   "無視される", // 正規化を通っていない値が DB にあっても弾く
+		"":          "無視される",
+	})
+	if vars["fields.meo_score"] != "30/100" {
+		t.Errorf("meo_score not set: %#v", vars)
+	}
+	if len(vars) != 1 {
+		t.Errorf("不正キーが載った: %#v", vars)
+	}
+}
+
+func TestReferencedFieldKeys(t *testing.T) {
+	got := ReferencedFieldKeys("{{fields.b}} {{customer_name}} {{fields.a}} {{fields.b}} {{fields.NG}}")
+	want := []string{"b", "a"} // 出現順・重複排除・不正キー除外
+	if len(got) != len(want) {
+		t.Fatalf("ReferencedFieldKeys = %#v, want %#v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("ReferencedFieldKeys = %#v, want %#v", got, want)
+		}
+	}
+}
+
+// HTML パート: 差し込み値の < & " はエスケープされ、改行は <br> になる。
+// (レンダリングは Render → BuildHTMLBody の順なので、差し込み値も本文の
+// 一部として一律にエスケープされる = XSS にならない。)
+func TestBuildHTMLBodyEscapesAndBreaksInjectedValues(t *testing.T) {
+	vars := map[string]string{
+		"fields.meo_issues": "・<script>alert(1)</script>\n・A & B \"quoted\"",
+	}
+	body := Render("課題:\n{{fields.meo_issues}}", vars)
+	html := BuildHTMLBody(body, nil, "")
+
+	if strings.Contains(html, "<script>") {
+		t.Errorf("生の <script> が HTML に出た:\n%s", html)
+	}
+	for _, want := range []string{
+		"&lt;script&gt;alert(1)&lt;/script&gt;",
+		"&amp; B",
+		"課題:<br>\n・&lt;script&gt;", // 改行が <br> になっている
+	} {
+		if !strings.Contains(html, want) {
+			t.Errorf("HTML に %q が無い:\n%s", want, html)
+		}
+	}
+	// 箇条書きが 1 行に潰れていないこと (改行の数だけ <br>)。
+	if n := strings.Count(html, "<br>"); n != 2 {
+		t.Errorf("<br> の数 = %d, want 2:\n%s", n, html)
+	}
+}
+
+// 差し込み値に URL が入っても壊れず、リンクとして扱われる。
+func TestBuildHTMLBodyLinksInjectedURL(t *testing.T) {
+	body := Render("詳細: {{fields.report_url}}", map[string]string{
+		"fields.report_url": "https://example.com/r?a=1&b=2",
+	})
+	html := BuildHTMLBody(body, nil, "")
+	if !strings.Contains(html, `<a href="https://example.com/r?a=1&amp;b=2">`) {
+		t.Errorf("差し込み URL がリンクにならない / エスケープされていない:\n%s", html)
+	}
+}

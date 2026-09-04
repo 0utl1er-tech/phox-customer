@@ -11,6 +11,7 @@ import (
 
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
 	"github.com/0utl1er-tech/phox-customer/internal/crypto"
+	"github.com/0utl1er-tech/phox-customer/internal/customfields"
 	"github.com/0utl1er-tech/phox-customer/internal/mail"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -314,6 +315,8 @@ func (w *Worker) sendOne(ctx context.Context, c db.Campaign, now time.Time) {
 		"sender_mail":          mb.Address,
 		"today":                TodayJST(now),
 	}
+	// Phase 29b: 顧客ごとの任意差し込み変数 ({{fields.<key>}})。
+	AddFieldVars(vars, customfields.Unmarshal(customer.CustomFields))
 	subjectTpl, bodyTpl := c.Subject, c.Body
 	if followup != nil && stepToSend > 1 {
 		bodyTpl = followup.Body
