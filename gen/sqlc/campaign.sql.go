@@ -176,32 +176,35 @@ INSERT INTO "Campaign" (
     send_start_hour, send_end_hour, send_days,
     daily_cap_per_mailbox, min_interval_sec, warmup_enabled,
     bounce_pause_threshold,
-    sender_org, sender_address, sender_contact
+    sender_org, sender_address, sender_contact,
+    source_book_id
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
+    $19
 )
-RETURNING id, company_id, created_by, name, status, subject, body, track_opens, track_clicks, send_start_hour, send_end_hour, send_days, daily_cap_per_mailbox, min_interval_sec, warmup_enabled, sender_org, sender_address, sender_contact, started_at, completed_at, created_at, updated_at, bounce_pause_threshold, health_paused_reason
+RETURNING id, company_id, created_by, name, status, subject, body, track_opens, track_clicks, send_start_hour, send_end_hour, send_days, daily_cap_per_mailbox, min_interval_sec, warmup_enabled, sender_org, sender_address, sender_contact, started_at, completed_at, created_at, updated_at, bounce_pause_threshold, health_paused_reason, source_book_id
 `
 
 type CreateCampaignParams struct {
-	ID                   uuid.UUID `json:"id"`
-	CompanyID            uuid.UUID `json:"company_id"`
-	CreatedBy            string    `json:"created_by"`
-	Name                 string    `json:"name"`
-	Subject              string    `json:"subject"`
-	Body                 string    `json:"body"`
-	TrackOpens           bool      `json:"track_opens"`
-	TrackClicks          bool      `json:"track_clicks"`
-	SendStartHour        int32     `json:"send_start_hour"`
-	SendEndHour          int32     `json:"send_end_hour"`
-	SendDays             int32     `json:"send_days"`
-	DailyCapPerMailbox   int32     `json:"daily_cap_per_mailbox"`
-	MinIntervalSec       int32     `json:"min_interval_sec"`
-	WarmupEnabled        bool      `json:"warmup_enabled"`
-	BouncePauseThreshold int32     `json:"bounce_pause_threshold"`
-	SenderOrg            string    `json:"sender_org"`
-	SenderAddress        string    `json:"sender_address"`
-	SenderContact        string    `json:"sender_contact"`
+	ID                   uuid.UUID   `json:"id"`
+	CompanyID            uuid.UUID   `json:"company_id"`
+	CreatedBy            string      `json:"created_by"`
+	Name                 string      `json:"name"`
+	Subject              string      `json:"subject"`
+	Body                 string      `json:"body"`
+	TrackOpens           bool        `json:"track_opens"`
+	TrackClicks          bool        `json:"track_clicks"`
+	SendStartHour        int32       `json:"send_start_hour"`
+	SendEndHour          int32       `json:"send_end_hour"`
+	SendDays             int32       `json:"send_days"`
+	DailyCapPerMailbox   int32       `json:"daily_cap_per_mailbox"`
+	MinIntervalSec       int32       `json:"min_interval_sec"`
+	WarmupEnabled        bool        `json:"warmup_enabled"`
+	BouncePauseThreshold int32       `json:"bounce_pause_threshold"`
+	SenderOrg            string      `json:"sender_org"`
+	SenderAddress        string      `json:"sender_address"`
+	SenderContact        string      `json:"sender_contact"`
+	SourceBookID         pgtype.UUID `json:"source_book_id"`
 }
 
 // Phase 27: キャンペーン (コールドメール一斉送信)
@@ -225,6 +228,7 @@ func (q *Queries) CreateCampaign(ctx context.Context, arg CreateCampaignParams) 
 		arg.SenderOrg,
 		arg.SenderAddress,
 		arg.SenderContact,
+		arg.SourceBookID,
 	)
 	var i Campaign
 	err := row.Scan(
@@ -252,6 +256,7 @@ func (q *Queries) CreateCampaign(ctx context.Context, arg CreateCampaignParams) 
 		&i.UpdatedAt,
 		&i.BouncePauseThreshold,
 		&i.HealthPausedReason,
+		&i.SourceBookID,
 	)
 	return i, err
 }
@@ -498,7 +503,7 @@ func (q *Queries) FindSentRecipientByFromAddr(ctx context.Context, arg FindSentR
 }
 
 const getCampaign = `-- name: GetCampaign :one
-SELECT id, company_id, created_by, name, status, subject, body, track_opens, track_clicks, send_start_hour, send_end_hour, send_days, daily_cap_per_mailbox, min_interval_sec, warmup_enabled, sender_org, sender_address, sender_contact, started_at, completed_at, created_at, updated_at, bounce_pause_threshold, health_paused_reason FROM "Campaign" WHERE id = $1
+SELECT id, company_id, created_by, name, status, subject, body, track_opens, track_clicks, send_start_hour, send_end_hour, send_days, daily_cap_per_mailbox, min_interval_sec, warmup_enabled, sender_org, sender_address, sender_contact, started_at, completed_at, created_at, updated_at, bounce_pause_threshold, health_paused_reason, source_book_id FROM "Campaign" WHERE id = $1
 `
 
 func (q *Queries) GetCampaign(ctx context.Context, id uuid.UUID) (Campaign, error) {
@@ -529,6 +534,7 @@ func (q *Queries) GetCampaign(ctx context.Context, id uuid.UUID) (Campaign, erro
 		&i.UpdatedAt,
 		&i.BouncePauseThreshold,
 		&i.HealthPausedReason,
+		&i.SourceBookID,
 	)
 	return i, err
 }
@@ -1122,7 +1128,7 @@ func (q *Queries) ListCampaignSteps(ctx context.Context, campaignID uuid.UUID) (
 }
 
 const listCampaignsByCompany = `-- name: ListCampaignsByCompany :many
-SELECT id, company_id, created_by, name, status, subject, body, track_opens, track_clicks, send_start_hour, send_end_hour, send_days, daily_cap_per_mailbox, min_interval_sec, warmup_enabled, sender_org, sender_address, sender_contact, started_at, completed_at, created_at, updated_at, bounce_pause_threshold, health_paused_reason FROM "Campaign"
+SELECT id, company_id, created_by, name, status, subject, body, track_opens, track_clicks, send_start_hour, send_end_hour, send_days, daily_cap_per_mailbox, min_interval_sec, warmup_enabled, sender_org, sender_address, sender_contact, started_at, completed_at, created_at, updated_at, bounce_pause_threshold, health_paused_reason, source_book_id FROM "Campaign"
 WHERE company_id = $1
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3
@@ -1168,6 +1174,7 @@ func (q *Queries) ListCampaignsByCompany(ctx context.Context, arg ListCampaignsB
 			&i.UpdatedAt,
 			&i.BouncePauseThreshold,
 			&i.HealthPausedReason,
+			&i.SourceBookID,
 		); err != nil {
 			return nil, err
 		}
@@ -1307,7 +1314,7 @@ func (q *Queries) ListMailboxHealthStatsByUserID(ctx context.Context, arg ListMa
 }
 
 const listRunningCampaigns = `-- name: ListRunningCampaigns :many
-SELECT id, company_id, created_by, name, status, subject, body, track_opens, track_clicks, send_start_hour, send_end_hour, send_days, daily_cap_per_mailbox, min_interval_sec, warmup_enabled, sender_org, sender_address, sender_contact, started_at, completed_at, created_at, updated_at, bounce_pause_threshold, health_paused_reason FROM "Campaign"
+SELECT id, company_id, created_by, name, status, subject, body, track_opens, track_clicks, send_start_hour, send_end_hour, send_days, daily_cap_per_mailbox, min_interval_sec, warmup_enabled, sender_org, sender_address, sender_contact, started_at, completed_at, created_at, updated_at, bounce_pause_threshold, health_paused_reason, source_book_id FROM "Campaign"
 WHERE status = 'running'
 ORDER BY created_at ASC
 `
@@ -1347,6 +1354,7 @@ func (q *Queries) ListRunningCampaigns(ctx context.Context) ([]Campaign, error) 
 			&i.UpdatedAt,
 			&i.BouncePauseThreshold,
 			&i.HealthPausedReason,
+			&i.SourceBookID,
 		); err != nil {
 			return nil, err
 		}
@@ -1654,7 +1662,7 @@ SET status = $2,
     completed_at = CASE WHEN $2::varchar IN ('completed', 'cancelled') THEN now() ELSE completed_at END,
     updated_at = now()
 WHERE id = $1
-RETURNING id, company_id, created_by, name, status, subject, body, track_opens, track_clicks, send_start_hour, send_end_hour, send_days, daily_cap_per_mailbox, min_interval_sec, warmup_enabled, sender_org, sender_address, sender_contact, started_at, completed_at, created_at, updated_at, bounce_pause_threshold, health_paused_reason
+RETURNING id, company_id, created_by, name, status, subject, body, track_opens, track_clicks, send_start_hour, send_end_hour, send_days, daily_cap_per_mailbox, min_interval_sec, warmup_enabled, sender_org, sender_address, sender_contact, started_at, completed_at, created_at, updated_at, bounce_pause_threshold, health_paused_reason, source_book_id
 `
 
 type SetCampaignStatusParams struct {
@@ -1692,6 +1700,7 @@ func (q *Queries) SetCampaignStatus(ctx context.Context, arg SetCampaignStatusPa
 		&i.UpdatedAt,
 		&i.BouncePauseThreshold,
 		&i.HealthPausedReason,
+		&i.SourceBookID,
 	)
 	return i, err
 }
@@ -1730,7 +1739,7 @@ SET
   sender_contact        = COALESCE($15, sender_contact),
   updated_at            = now()
 WHERE id = $16
-RETURNING id, company_id, created_by, name, status, subject, body, track_opens, track_clicks, send_start_hour, send_end_hour, send_days, daily_cap_per_mailbox, min_interval_sec, warmup_enabled, sender_org, sender_address, sender_contact, started_at, completed_at, created_at, updated_at, bounce_pause_threshold, health_paused_reason
+RETURNING id, company_id, created_by, name, status, subject, body, track_opens, track_clicks, send_start_hour, send_end_hour, send_days, daily_cap_per_mailbox, min_interval_sec, warmup_enabled, sender_org, sender_address, sender_contact, started_at, completed_at, created_at, updated_at, bounce_pause_threshold, health_paused_reason, source_book_id
 `
 
 type UpdateCampaignDraftParams struct {
@@ -1798,6 +1807,7 @@ func (q *Queries) UpdateCampaignDraft(ctx context.Context, arg UpdateCampaignDra
 		&i.UpdatedAt,
 		&i.BouncePauseThreshold,
 		&i.HealthPausedReason,
+		&i.SourceBookID,
 	)
 	return i, err
 }

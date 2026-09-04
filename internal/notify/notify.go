@@ -27,7 +27,12 @@ import (
 )
 
 // KnownEvents は notify_events に指定できるイベント種別 (canonical 順)。
-var KnownEvents = []string{"reply", "click", "unsubscribe", "bounce", "open"}
+// autodraft (Phase 28f) は反響ではなく「下書きが自動生成された」の運用通知。
+// Company.notify_events の既定値 ('reply') は変えていないのでオプトイン。
+var KnownEvents = []string{"reply", "click", "unsubscribe", "bounce", "open", "autodraft"}
+
+// EventAutoDraft は自動下書き生成の通知種別 (Phase 28f)。
+const EventAutoDraft = "autodraft"
 
 // notifyTimeout は Webhook POST の上限。イベント処理はブロックしないが、
 // goroutine を無限に生かさないための保険。
@@ -45,10 +50,26 @@ type CampaignEventInfo struct {
 	URL          string // click のみ: クリックされたリンク先
 }
 
+// AutoDraftInfo は「キャンペーン下書きを自動生成した」通知 1 件分の材料
+// (Phase 28f)。反響イベントではなく運用通知なので専用の型にする。
+type AutoDraftInfo struct {
+	CampaignID     uuid.UUID
+	CampaignName   string
+	BookName       string // 由来 Book (例 GM_中古車販売店_埼玉県_2026-09_HPあり)
+	TemplateName   string // 使った自動下書きテンプレの管理用ラベル
+	RecipientCount int32  // 送信対象 (queued)
+	SkippedCount   int32  // 除外 (メール無し/サプレッション/重複/MX 無し)
+}
+
 // Notifier はキャンペーン反響通知の注入点。実装は DiscordNotifier のみ。
 type Notifier interface {
 	// NotifyCampaignEvent は非同期に通知を送る (即 return し、失敗は warn ログのみ)。
 	NotifyCampaignEvent(ctx context.Context, ev CampaignEventInfo)
+}
+
+// AutoDraftNotifier は自動下書き worker が使う通知の注入点 (Phase 28f)。
+type AutoDraftNotifier interface {
+	NotifyCampaignAutoDraft(ctx context.Context, info AutoDraftInfo)
 }
 
 // ValidateWebhookURL は notify_webhook_url の入力検証。空 = 通知無効で常に OK。
@@ -141,6 +162,55 @@ func (n *DiscordNotifier) NotifyCampaignEvent(ctx context.Context, ev CampaignEv
 	}()
 }
 
+// NotifyCampaignAutoDraft は「下書きを作成しました」通知を非同期に送る
+// (Phase 28f)。反響通知と同じくベストエフォート (失敗は warn ログのみ)。
+func (n *DiscordNotifier) NotifyCampaignAutoDraft(ctx context.Context, info AutoDraftInfo) {
+	if n == nil {
+		return
+	}
+	go func() {
+		sctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), notifyTimeout)
+		defer cancel()
+		if err := n.sendAutoDraft(sctx, info); err != nil {
+			log.Warn().Err(err).
+				Str("campaign_id", info.CampaignID.String()).
+				Msg("notify: campaign auto-draft webhook failed")
+		}
+	}()
+}
+
+// sendAutoDraft は会社設定 (webhook + notify_events に autodraft) が有効なら
+// embed を POST する。無効なら no-op (エラーではない)。
+func (n *DiscordNotifier) sendAutoDraft(ctx context.Context, info AutoDraftInfo) error {
+	c, err := n.queries.GetCampaign(ctx, info.CampaignID)
+	if err != nil {
+		return fmt.Errorf("get campaign: %w", err)
+	}
+	company, err := n.queries.GetCompany(ctx, c.CompanyID)
+	if err != nil {
+		return fmt.Errorf("get company: %w", err)
+	}
+	if company.NotifyWebhookUrl == "" || !EventEnabled(company.NotifyEvents, EventAutoDraft) {
+		return nil // 通知無効 — 正常系
+	}
+	return n.post(ctx, company.NotifyWebhookUrl, n.buildAutoDraftPayload(info))
+}
+
+func (n *DiscordNotifier) buildAutoDraftPayload(info AutoDraftInfo) discordPayload {
+	return discordPayload{Embeds: []discordEmbed{{
+		Title: "📝 キャンペーン下書きを作成しました",
+		URL:   n.campaignURL(info.CampaignID),
+		Color: 0x5865F2,
+		Fields: []discordEmbedField{
+			{Name: "キャンペーン", Value: orDash(info.CampaignName)},
+			{Name: "由来 Book", Value: orDash(info.BookName)},
+			{Name: "テンプレート", Value: orDash(info.TemplateName), Inline: true},
+			{Name: "送信対象", Value: fmt.Sprintf("%d 件 (除外 %d 件)", info.RecipientCount, info.SkippedCount), Inline: true},
+			{Name: "次のアクション", Value: "内容を確認して開始してください (自動では送信しません)"},
+		},
+	}}}
+}
+
 // send は会社設定を引いて有効なら embed を POST する (無効なら no-op)。
 // 会社は campaign → company_id で解決する (単一テナント運用でも将来の
 // マルチテナント化に耐える形)。
@@ -157,11 +227,16 @@ func (n *DiscordNotifier) send(ctx context.Context, ev CampaignEventInfo) error 
 		return nil // 通知無効 — 正常系
 	}
 
-	payload, err := json.Marshal(n.buildPayload(ev))
+	return n.post(ctx, company.NotifyWebhookUrl, n.buildPayload(ev))
+}
+
+// post は embed payload を Webhook へ POST する (反響/自動下書き共通)。
+func (n *DiscordNotifier) post(ctx context.Context, webhookURL string, body discordPayload) error {
+	payload, err := json.Marshal(body)
 	if err != nil {
 		return fmt.Errorf("marshal payload: %w", err)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, company.NotifyWebhookUrl, bytes.NewReader(payload))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, webhookURL, bytes.NewReader(payload))
 	if err != nil {
 		return fmt.Errorf("build request: %w", err)
 	}

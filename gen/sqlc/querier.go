@@ -45,6 +45,8 @@ type Querier interface {
 	CreateBook(ctx context.Context, arg CreateBookParams) (Book, error)
 	// Phase 27: キャンペーン (コールドメール一斉送信)
 	CreateCampaign(ctx context.Context, arg CreateCampaignParams) (Campaign, error)
+	// Phase 28f: キャンペーン自動下書きテンプレート (Book 名パターン毎)
+	CreateCampaignAutoDraft(ctx context.Context, arg CreateCampaignAutoDraftParams) (CampaignAutoDraft, error)
 	// ─── CampaignEvent ──────────────────────────────────────────────
 	CreateCampaignEvent(ctx context.Context, arg CreateCampaignEventParams) error
 	// ─── CampaignLink (27b) ─────────────────────────────────────────
@@ -72,6 +74,7 @@ type Querier interface {
 	DeleteActivity(ctx context.Context, id uuid.UUID) error
 	DeleteBook(ctx context.Context, id uuid.UUID) error
 	DeleteCampaign(ctx context.Context, id uuid.UUID) error
+	DeleteCampaignAutoDraft(ctx context.Context, id uuid.UUID) error
 	DeleteCampaignLinks(ctx context.Context, campaignID uuid.UUID) error
 	DeleteCampaignMailboxes(ctx context.Context, campaignID uuid.UUID) error
 	DeleteCampaignSteps(ctx context.Context, campaignID uuid.UUID) error
@@ -126,6 +129,7 @@ type Querier interface {
 	// 「Status 削除済み / 未設定」のコールを表す。
 	GetCallStatsByBook(ctx context.Context, arg GetCallStatsByBookParams) ([]GetCallStatsByBookRow, error)
 	GetCampaign(ctx context.Context, id uuid.UUID) (Campaign, error)
+	GetCampaignAutoDraft(ctx context.Context, id uuid.UUID) (CampaignAutoDraft, error)
 	// ─── Phase 27f: 健全性チェック ──────────────────────────────────
 	// サーキットブレーカー判定用。ハードバウンス率 = bounced / sent。
 	GetCampaignBounceStats(ctx context.Context, campaignID uuid.UUID) (GetCampaignBounceStatsRow, error)
@@ -198,6 +202,7 @@ type Querier interface {
 	// Phase 28a: CreateCampaign の book_ids 展開用。指定 Book 群の全顧客を返す
 	// (列は GetCustomersByIDs と同じ形 — スナップショット組み立てで union する)。
 	ListAllCustomersByBook(ctx context.Context, bookIds []uuid.UUID) ([]ListAllCustomersByBookRow, error)
+	ListCampaignAutoDraftsByCompany(ctx context.Context, companyID uuid.UUID) ([]CampaignAutoDraft, error)
 	ListCampaignEventsByRecipient(ctx context.Context, recipientID uuid.UUID) ([]CampaignEvent, error)
 	ListCampaignLinks(ctx context.Context, campaignID uuid.UUID) ([]CampaignLink, error)
 	// worker が送信資格情報ごと引く (password_enc 込み)。
@@ -209,6 +214,8 @@ type Querier interface {
 	ListCompanies(ctx context.Context) ([]Company, error)
 	ListContacts(ctx context.Context, customerID uuid.UUID) ([]Contact, error)
 	ListCustomers(ctx context.Context, arg ListCustomersParams) ([]ListCustomersRow, error)
+	// worker の tick 対象 (全会社横断)。
+	ListEnabledCampaignAutoDrafts(ctx context.Context) ([]CampaignAutoDraft, error)
 	// 指定ドメイン群のうち、まだ有効期限内のキャッシュだけ返す。
 	ListFreshDomainHealth(ctx context.Context, arg ListFreshDomainHealthParams) ([]DomainHealth, error)
 	ListMailTemplatesByBook(ctx context.Context, bookID uuid.UUID) ([]MailTemplate, error)
@@ -238,6 +245,10 @@ type Querier interface {
 	// スナップショット作成時の一括チェック。
 	ListSuppressedEmailsIn(ctx context.Context, arg ListSuppressedEmailsInParams) ([]string, error)
 	ListSuppressionsByCompany(ctx context.Context, arg ListSuppressionsByCompanyParams) ([]Suppression, error)
+	// パターンに LIKE 一致し、かつ自動下書きが未作成 (Campaign.source_book_id に
+	// 未登場) の Book。ESCAPE '\' なのでパターン側で `\_` とすればリテラル _。
+	// 古い Book から順に処理し、1 tick あたりの件数を制限する。
+	ListUnclaimedBooksByNamePattern(ctx context.Context, arg ListUnclaimedBooksByNamePatternParams) ([]Book, error)
 	ListUsers(ctx context.Context) ([]User, error)
 	ListUsersByCompany(ctx context.Context, companyID uuid.UUID) ([]User, error)
 	MarkRecipientBounced(ctx context.Context, id uuid.UUID) error
@@ -264,12 +275,16 @@ type Querier interface {
 	SetCampaignStatus(ctx context.Context, arg SetCampaignStatusParams) (Campaign, error)
 	SetMailboxSyncedAt(ctx context.Context, id uuid.UUID) error
 	SetRedialGcalSynced(ctx context.Context, arg SetRedialGcalSyncedParams) (Redial, error)
+	// 下書きを 1 本作った直後に呼ぶ (UI の「最終作成日」表示用)。
+	TouchCampaignAutoDraftCreated(ctx context.Context, id uuid.UUID) error
 	// phone.recording_completed イベントで recording archive 完了後に呼ぶ。
 	// $1 = zoom_call_id (= 既存 Activity row の dedup キー)
 	// $2 = recording の新パス (s3://phox-recordings/calls/.../recording.m4a)
 	UpdateActivityRecordingURL(ctx context.Context, arg UpdateActivityRecordingURLParams) error
 	UpdateActivityStatus(ctx context.Context, arg UpdateActivityStatusParams) (Activity, error)
 	UpdateBook(ctx context.Context, arg UpdateBookParams) (Book, error)
+	// narg = NULL は「変更しない」(部分更新)。
+	UpdateCampaignAutoDraft(ctx context.Context, arg UpdateCampaignAutoDraftParams) (CampaignAutoDraft, error)
 	UpdateCampaignBounceThreshold(ctx context.Context, arg UpdateCampaignBounceThresholdParams) error
 	// draft / paused のみ編集可 (状態チェックは service 層)。
 	UpdateCampaignDraft(ctx context.Context, arg UpdateCampaignDraftParams) (Campaign, error)

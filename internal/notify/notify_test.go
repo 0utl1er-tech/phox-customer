@@ -1,6 +1,11 @@
 package notify
 
-import "testing"
+import (
+	"strings"
+	"testing"
+
+	"github.com/google/uuid"
+)
 
 func TestValidateWebhookURL(t *testing.T) {
 	cases := []struct {
@@ -35,6 +40,9 @@ func TestNormalizeEvents(t *testing.T) {
 		{" reply , open ", "reply,open", false},          // trim
 		{"reply,reply", "reply", false},                  // 重複除去
 		{"reply,click,unsubscribe,bounce,open", "reply,click,unsubscribe,bounce,open", false},
+		// Phase 28f: 自動下書き通知 (オプトイン — 既定値には入っていない)。
+		{"autodraft", "autodraft", false},
+		{"autodraft,reply", "reply,autodraft", false},
 		{"reply,unknown", "", true},
 		{"REPLY", "", true}, // 大文字は不許可 (既知値のみ)
 	}
@@ -72,6 +80,42 @@ func TestEventEnabled(t *testing.T) {
 	for _, c := range cases {
 		if got := EventEnabled(c.csv, c.kind); got != c.want {
 			t.Errorf("EventEnabled(%q, %q) = %v, want %v", c.csv, c.kind, got, c.want)
+		}
+	}
+}
+
+// Phase 28f: 自動下書き通知の embed 内容。Discord に出す文面が
+// 「開始は人間」を明示していること、件数が出ていることを固定する。
+func TestBuildAutoDraftPayload(t *testing.T) {
+	n := NewDiscordNotifier(nil, "https://phox.example.com/")
+	id := uuid.MustParse("11111111-2222-3333-4444-555555555555")
+	got := n.buildAutoDraftPayload(AutoDraftInfo{
+		CampaignID:     id,
+		CampaignName:   "GM_整体院_埼玉県_2026-09_HPなし",
+		BookName:       "GM_整体院_埼玉県_2026-09_HPなし",
+		TemplateName:   "HPなし: HP制作の新規提案",
+		RecipientCount: 2,
+		SkippedCount:   1,
+	})
+	if len(got.Embeds) != 1 {
+		t.Fatalf("embeds = %d, want 1", len(got.Embeds))
+	}
+	e := got.Embeds[0]
+	if want := "https://phox.example.com/campaigns/" + id.String(); e.URL != want {
+		t.Errorf("URL = %q, want %q", e.URL, want)
+	}
+	joined := ""
+	for _, f := range e.Fields {
+		joined += f.Name + "=" + f.Value + "\n"
+	}
+	for _, want := range []string{
+		"GM_整体院_埼玉県_2026-09_HPなし",
+		"HPなし: HP制作の新規提案",
+		"2 件 (除外 1 件)",
+		"自動では送信しません",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("fields %q に %q が含まれない", joined, want)
 		}
 	}
 }

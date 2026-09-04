@@ -2,36 +2,19 @@ package campaign
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"strings"
-
-	"time"
 
 	"connectrpc.com/connect"
 	campaignv1 "github.com/0utl1er-tech/phox-customer/gen/pb/campaign/v1"
-	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
 	campaignpkg "github.com/0utl1er-tech/phox-customer/internal/campaign"
 	"github.com/google/uuid"
 )
 
-// mxCheckBudget は作成時 MX 検証の全体予算。これを超えた分は「判定不能」
-// として送信対象に残す (作成 API を待たせない)。未検証ドメインは送信直前に
-// worker 側でも検証されるので取りこぼしにはならない。
-const mxCheckBudget = 15 * time.Second
-
-// maxRecipients は customer_ids + book_ids 展開後の受信者スナップショット上限。
-// proto の customer_ids max_items と同じ値 (book 展開分もこの上限に収める)。
-const maxRecipients = 10000
-
 // CreateCampaign は受信者スナップショットごと draft キャンペーンを作る。
 //
-//   - 受信者は customer_ids と book_ids (Phase 28a: Book 内全顧客をサーバ側で
-//     展開) の union のスナップショット (保存フィルタではない)。
-//     実行中にリストが動的に変わらないこと・監査可能なことを優先する。
-//   - メール無し / 会社サプレッション済み / キャンペーン内アドレス重複は
-//     skipped 行として記録し、内訳をレスポンスで返す (UI が
-//     「1,240 選択 → 1,180 queued (60 skipped)」を出せるように)。
+// 実体は internal/campaign.DraftCreator (Phase 28f で自動下書き worker と
+// 共有するため移設)。この RPC は「認証ユーザーを名義に据えて proto を
+// DraftInput に詰め替える」薄い層に徹する。
 //
 // RBAC: 全 mailbox_ids への editor 以上 + 受信者が属する全 Book への editor 以上。
 func (s *CampaignService) CreateCampaign(
@@ -43,281 +26,108 @@ func (s *CampaignService) CreateCampaign(
 		return nil, err
 	}
 
-	// ── Mailbox プールの検証 (editor 権限 + 同一会社 + active) ──
-	mailboxIDs := make([]uuid.UUID, 0, len(req.Msg.MailboxIds))
-	seenMb := map[uuid.UUID]bool{}
-	for _, raw := range req.Msg.MailboxIds {
-		mbID, perr := uuid.Parse(raw)
-		if perr != nil {
-			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid mailbox_id: %w", perr))
-		}
-		if seenMb[mbID] {
-			continue
-		}
-		seenMb[mbID] = true
-		if err := s.authorizer.CheckMailboxPermission(ctx, mbID, db.RoleEditor); err != nil {
-			return nil, err
-		}
-		mb, gerr := s.queries.GetMailbox(ctx, mbID)
-		if gerr != nil || mb.CompanyID != u.CompanyID {
-			return nil, connect.NewError(connect.CodeNotFound, errors.New("mailbox not found"))
-		}
-		if !mb.Active {
-			return nil, connect.NewError(connect.CodeFailedPrecondition,
-				fmt.Errorf("メールボックス %s は無効化されています", mb.Address))
-		}
-		mailboxIDs = append(mailboxIDs, mbID)
-	}
-	if len(mailboxIDs) == 0 {
-		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("mailbox_ids is required"))
-	}
-
-	// ── 受信者候補の取得 + Book 権限チェック ──
-	customerIDs := make([]uuid.UUID, 0, len(req.Msg.CustomerIds))
-	seenCustomer := map[uuid.UUID]bool{}
-	for _, raw := range req.Msg.CustomerIds {
-		cid, perr := uuid.Parse(raw)
-		if perr != nil {
-			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid customer_id: %w", perr))
-		}
-		if !seenCustomer[cid] {
-			seenCustomer[cid] = true
-			customerIDs = append(customerIDs, cid)
-		}
-	}
-
-	// Phase 28a: book_ids は「Book 内全顧客」の指定。権限チェックは顧客展開より
-	// 先に Book 単位で直接行う (空の Book でも permission denied が正しく出る)。
-	checkedBooks := map[uuid.UUID]bool{}
-	bookIDs := make([]uuid.UUID, 0, len(req.Msg.BookIds))
-	for _, raw := range req.Msg.BookIds {
-		bID, perr := uuid.Parse(raw)
-		if perr != nil {
-			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid book_id: %w", perr))
-		}
-		if checkedBooks[bID] {
-			continue
-		}
-		if err := s.authorizer.CheckPermission(ctx, bID, db.RoleEditor); err != nil {
-			return nil, err
-		}
-		checkedBooks[bID] = true
-		bookIDs = append(bookIDs, bID)
-	}
-	if len(customerIDs) == 0 && len(bookIDs) == 0 {
-		return nil, connect.NewError(connect.CodeInvalidArgument,
-			errors.New("customer_ids または book_ids のいずれかを指定してください"))
-	}
-
-	customers, err := s.queries.GetCustomersByIDs(ctx, customerIDs)
+	mailboxIDs, err := parseUUIDs(req.Msg.MailboxIds, "mailbox_id")
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("fetch customers: %w", err))
+		return nil, err
 	}
-	if len(customers) != len(customerIDs) {
-		return nil, connect.NewError(connect.CodeNotFound,
-			fmt.Errorf("%d 件の顧客が見つかりません", len(customerIDs)-len(customers)))
-	}
-	// book_ids の展開 → customer_ids 分と union (customer_id で dedup)。
-	if len(bookIDs) > 0 {
-		bookCustomers, berr := s.queries.ListAllCustomersByBook(ctx, bookIDs)
-		if berr != nil {
-			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("expand book_ids: %w", berr))
-		}
-		for _, bc := range bookCustomers {
-			if seenCustomer[bc.ID] {
-				continue
-			}
-			seenCustomer[bc.ID] = true
-			customers = append(customers, db.GetCustomersByIDsRow(bc))
-		}
-	}
-	if len(customers) > maxRecipients {
-		return nil, connect.NewError(connect.CodeInvalidArgument,
-			fmt.Errorf("受信者が上限 %d 件を超えています (book_ids 展開後 %d 件)", maxRecipients, len(customers)))
-	}
-	for _, c := range customers {
-		if checkedBooks[c.BookID] {
-			continue
-		}
-		if err := s.authorizer.CheckPermission(ctx, c.BookID, db.RoleEditor); err != nil {
-			return nil, err
-		}
-		checkedBooks[c.BookID] = true
-	}
-
-	// ── サプレッション一括チェック ──
-	emails := make([]string, 0, len(customers))
-	for _, c := range customers {
-		if e := normalizeEmail(c.Mail); e != "" {
-			emails = append(emails, e)
-		}
-	}
-	suppressedList, err := s.queries.ListSuppressedEmailsIn(ctx, db.ListSuppressedEmailsInParams{
-		CompanyID: u.CompanyID,
-		Emails:    emails,
-	})
+	customerIDs, err := parseUUIDs(req.Msg.CustomerIds, "customer_id")
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("check suppressions: %w", err))
+		return nil, err
 	}
-	suppressed := map[string]bool{}
-	for _, e := range suppressedList {
-		suppressed[e] = true
-	}
-
-	// ── Phase 27f: 宛先ドメインの MX 検証 ──
-	// MX が無いドメインは送ればほぼ確実にハードバウンスになる。送る前に落として
-	// バウンス率 (= 送信ドメインの評価) を汚さない。DNS 障害時は判定不能として
-	// 送信対象に残す (安全側)。全体にタイムアウトを掛け、作成 API を待たせない。
-	mxCtx, mxCancel := context.WithTimeout(ctx, mxCheckBudget)
-	defer mxCancel()
-	uniqueDomains := map[string]bool{}
-	for _, e := range emails {
-		if d := campaignpkg.DomainOf(e); d != "" {
-			uniqueDomains[d] = true
-		}
-	}
-	domainList := make([]string, 0, len(uniqueDomains))
-	for d := range uniqueDomains {
-		domainList = append(domainList, d)
-	}
-	mxResults := campaignpkg.NewMXChecker(s.queries).CheckMany(mxCtx, domainList)
-
-	// ── 受信者行の組み立て (queued / skipped 分類) ──
-	campaignID := uuid.New()
-	rows := make([]db.CreateCampaignRecipientsParams, 0, len(customers))
-	seenEmail := map[string]bool{}
-	var queued, noEmail, wasSuppressed, duplicate, noMX, roleAddr int32
-	for _, c := range customers {
-		email := normalizeEmail(c.Mail)
-		row := db.CreateCampaignRecipientsParams{
-			ID:         uuid.New(),
-			CampaignID: campaignID,
-			CustomerID: c.ID,
-			Email:      email,
-			Status:     "queued",
-		}
-		mx, mxKnown := mxResults[campaignpkg.DomainOf(email)]
-		switch {
-		case email == "":
-			row.Status, row.Error = "skipped", "メールアドレス未登録"
-			noEmail++
-		case suppressed[email]:
-			row.Status, row.Error = "skipped", "配信停止済み (サプレッションリスト)"
-			wasSuppressed++
-		case seenEmail[email]:
-			row.Status, row.Error = "skipped", "キャンペーン内でアドレス重複"
-			duplicate++
-		case mxKnown && !mx.HasMX && !mx.Unknown:
-			row.Status, row.Error = "skipped", "配信不能ドメイン (MX レコードなし)"
-			noMX++
-		default:
-			seenEmail[email] = true
-			queued++
-			// 除外はしないが、苦情率が上がりやすいので件数だけ返す。
-			if campaignpkg.IsRoleAddress(email) {
-				roleAddr++
-			}
-		}
-		rows = append(rows, row)
-	}
-	if queued == 0 {
-		return nil, connect.NewError(connect.CodeInvalidArgument,
-			errors.New("送信可能な受信者が 0 件です (メールアドレス未登録・配信停止済み・配信不能ドメインを除外した結果)"))
-	}
-
-	// ── スケジュール/送信者情報 (未指定はデフォルト) ──
-	sched := req.Msg.Schedule
-	if sched == nil {
-		sched = &campaignv1.CampaignSchedule{
-			SendStartHour: 9, SendEndHour: 18, SendDays: 31,
-			DailyCapPerMailbox: 100, MinIntervalSec: 90, WarmupEnabled: true,
-			BouncePauseThreshold: 5,
-		}
-	}
-	if sched.SendEndHour <= sched.SendStartHour {
-		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("send_end_hour must be after send_start_hour"))
-	}
-	sender := req.Msg.Sender
-	if sender == nil {
-		sender = &campaignv1.CampaignSender{}
-	}
-
-	// ── トランザクションで Campaign + プール + 受信者を書く ──
-	tx, err := s.dbPool.Begin(ctx)
+	bookIDs, err := parseUUIDs(req.Msg.BookIds, "book_id")
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("begin tx: %w", err))
+		return nil, err
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	q := s.queries.WithTx(tx)
 
-	created, err := q.CreateCampaign(ctx, db.CreateCampaignParams{
-		ID:                   campaignID,
-		CompanyID:            u.CompanyID,
-		CreatedBy:            u.ID,
-		Name:                 req.Msg.Name,
-		Subject:              req.Msg.Subject,
-		Body:                 req.Msg.Body,
-		TrackOpens:           req.Msg.TrackOpens,
-		TrackClicks:          req.Msg.TrackClicks,
-		SendStartHour:        sched.SendStartHour,
-		SendEndHour:          sched.SendEndHour,
-		SendDays:             sched.SendDays,
-		DailyCapPerMailbox:   sched.DailyCapPerMailbox,
-		MinIntervalSec:       sched.MinIntervalSec,
-		WarmupEnabled:        sched.WarmupEnabled,
-		BouncePauseThreshold: sched.BouncePauseThreshold,
-		SenderOrg:            sender.SenderOrg,
-		SenderAddress:        sender.SenderAddress,
-		SenderContact:        sender.SenderContact,
-	})
+	in := campaignpkg.DraftInput{
+		CompanyID:     u.CompanyID,
+		CreatorUserID: u.ID,
+		Name:          req.Msg.Name,
+		Subject:       req.Msg.Subject,
+		Body:          req.Msg.Body,
+		TrackOpens:    req.Msg.TrackOpens,
+		TrackClicks:   req.Msg.TrackClicks,
+		MailboxIDs:    mailboxIDs,
+		CustomerIDs:   customerIDs,
+		BookIDs:       bookIDs,
+		Schedule:      scheduleFromProto(req.Msg.Schedule),
+		Sender:        senderFromProto(req.Msg.Sender),
+		Followups:     followupsFromProto(req.Msg.Followups),
+	}
+
+	res, err := campaignpkg.NewDraftCreator(s.queries, s.dbPool).Create(ctx, in)
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("create campaign: %w", err))
-	}
-	for _, mbID := range mailboxIDs {
-		if err := q.AddCampaignMailbox(ctx, db.AddCampaignMailboxParams{
-			CampaignID: campaignID, MailboxID: mbID,
-		}); err != nil {
-			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("add campaign mailbox: %w", err))
-		}
-	}
-	// Phase 27e: フォローアップ (2 通目以降)。step_no は配列順で自動採番。
-	for i, fu := range req.Msg.Followups {
-		if err := q.CreateCampaignStep(ctx, db.CreateCampaignStepParams{
-			CampaignID: campaignID,
-			StepNo:     int32(i + 2),
-			WaitDays:   fu.WaitDays,
-			Subject:    fu.Subject,
-			Body:       fu.Body,
-		}); err != nil {
-			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("create followup step: %w", err))
-		}
-	}
-	if _, err := q.CreateCampaignRecipients(ctx, rows); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("create recipients: %w", err))
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("commit: %w", err))
+		return nil, err
 	}
 
-	proto, err := s.campaignToProto(ctx, created)
+	proto, err := s.campaignToProto(ctx, res.Campaign)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	return connect.NewResponse(&campaignv1.CreateCampaignResponse{
 		Campaign:          proto,
-		QueuedCount:       queued,
-		SkippedNoEmail:    noEmail,
-		SkippedSuppressed: wasSuppressed,
-		SkippedDuplicate:  duplicate,
-		SkippedNoMx:       noMX,
-		RoleAddressCount:  roleAddr,
+		QueuedCount:       res.Queued,
+		SkippedNoEmail:    res.SkippedNoEmail,
+		SkippedSuppressed: res.SkippedSuppressed,
+		SkippedDuplicate:  res.SkippedDuplicate,
+		SkippedNoMx:       res.SkippedNoMX,
+		RoleAddressCount:  res.RoleAddressCount,
 	}), nil
 }
 
-func normalizeEmail(s string) string {
-	e := strings.ToLower(strings.TrimSpace(s))
-	if !strings.Contains(e, "@") {
-		return ""
+// parseUUIDs は文字列 ID 配列を uuid に直す (不正値は invalid_argument)。
+func parseUUIDs(raws []string, field string) ([]uuid.UUID, error) {
+	out := make([]uuid.UUID, 0, len(raws))
+	for _, raw := range raws {
+		id, err := uuid.Parse(raw)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid %s: %w", field, err))
+		}
+		out = append(out, id)
 	}
-	return e
+	return out, nil
+}
+
+// scheduleFromProto は nil を「既定値を使う」の意味で nil のまま返す。
+func scheduleFromProto(s *campaignv1.CampaignSchedule) *campaignpkg.DraftSchedule {
+	if s == nil {
+		return nil
+	}
+	return &campaignpkg.DraftSchedule{
+		SendStartHour:        s.SendStartHour,
+		SendEndHour:          s.SendEndHour,
+		SendDays:             s.SendDays,
+		DailyCapPerMailbox:   s.DailyCapPerMailbox,
+		MinIntervalSec:       s.MinIntervalSec,
+		WarmupEnabled:        s.WarmupEnabled,
+		BouncePauseThreshold: s.BouncePauseThreshold,
+	}
+}
+
+func senderFromProto(s *campaignv1.CampaignSender) campaignpkg.DraftSender {
+	if s == nil {
+		return campaignpkg.DraftSender{}
+	}
+	return campaignpkg.DraftSender{
+		Org:     s.SenderOrg,
+		Address: s.SenderAddress,
+		Contact: s.SenderContact,
+	}
+}
+
+func followupsFromProto(fus []*campaignv1.CampaignFollowup) []campaignpkg.DraftFollowup {
+	out := make([]campaignpkg.DraftFollowup, 0, len(fus))
+	for _, fu := range fus {
+		out = append(out, campaignpkg.DraftFollowup{
+			WaitDays: fu.WaitDays,
+			Subject:  fu.Subject,
+			Body:     fu.Body,
+		})
+	}
+	return out
+}
+
+// normalizeEmail は suppression.go でも使う (internal/campaign と同じ実装)。
+func normalizeEmail(s string) string {
+	return campaignpkg.NormalizeEmail(s)
 }

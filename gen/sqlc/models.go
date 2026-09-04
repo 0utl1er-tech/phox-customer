@@ -111,6 +111,35 @@ type Campaign struct {
 	UpdatedAt            time.Time          `json:"updated_at"`
 	BouncePauseThreshold int32              `json:"bounce_pause_threshold"`
 	HealthPausedReason   string             `json:"health_paused_reason"`
+	SourceBookID         pgtype.UUID        `json:"source_book_id"`
+}
+
+type CampaignAutoDraft struct {
+	ID                   uuid.UUID          `json:"id"`
+	CompanyID            uuid.UUID          `json:"company_id"`
+	Name                 string             `json:"name"`
+	Enabled              bool               `json:"enabled"`
+	BookNamePattern      string             `json:"book_name_pattern"`
+	Subject              string             `json:"subject"`
+	Body                 string             `json:"body"`
+	Followups            []byte             `json:"followups"`
+	MailboxIds           []uuid.UUID        `json:"mailbox_ids"`
+	TrackOpens           bool               `json:"track_opens"`
+	TrackClicks          bool               `json:"track_clicks"`
+	SendStartHour        int32              `json:"send_start_hour"`
+	SendEndHour          int32              `json:"send_end_hour"`
+	SendDays             int32              `json:"send_days"`
+	DailyCapPerMailbox   int32              `json:"daily_cap_per_mailbox"`
+	MinIntervalSec       int32              `json:"min_interval_sec"`
+	WarmupEnabled        bool               `json:"warmup_enabled"`
+	BouncePauseThreshold int32              `json:"bounce_pause_threshold"`
+	SenderOrg            string             `json:"sender_org"`
+	SenderAddress        string             `json:"sender_address"`
+	SenderContact        string             `json:"sender_contact"`
+	CreatorUserID        string             `json:"creator_user_id"`
+	LastCreatedAt        pgtype.Timestamptz `json:"last_created_at"`
+	CreatedAt            time.Time          `json:"created_at"`
+	UpdatedAt            time.Time          `json:"updated_at"`
 }
 
 type CampaignEvent struct {
