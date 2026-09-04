@@ -46,9 +46,13 @@ const (
 	autoDraftLockTTL = 5 * time.Minute
 	// autoDraftLockKey は送信 worker とは別のリーダーロック。
 	autoDraftLockKey = "phox:campaign:autodraft:lock"
-	// autoDraftMaxBooksPerTick は 1 tick あたりの処理上限 (テンプレ毎)。
+	// autoDraftMaxBooksPerTick は 1 tick で作る下書きの上限 (テンプレ毎)。
 	// 一気に大量の下書きを作って人間を溺れさせないための安全弁。
 	autoDraftMaxBooksPerTick = 10
+	// autoDraftCandidateLimit は 1 tick で見る候補 Book の上限。作成上限より
+	// 広く取るのは、権限不足や受信者 0 件で恒久的にスキップされる Book が
+	// 先頭に居座っても、その後ろの Book が処理されるようにするため。
+	autoDraftCandidateLimit = 50
 )
 
 // NewAutoDraftWorker は worker を組み立てる。rdb が nil ならロックレス
@@ -123,7 +127,7 @@ func (w *AutoDraftWorker) tick(ctx context.Context) {
 func (w *AutoDraftWorker) runTemplate(ctx context.Context, tpl db.CampaignAutoDraft) int {
 	books, err := w.queries.ListUnclaimedBooksByNamePattern(ctx, db.ListUnclaimedBooksByNamePatternParams{
 		Pattern:  tpl.BookNamePattern,
-		MaxBooks: autoDraftMaxBooksPerTick,
+		MaxBooks: autoDraftCandidateLimit,
 	})
 	if err != nil {
 		log.Error().Err(err).
@@ -134,6 +138,13 @@ func (w *AutoDraftWorker) runTemplate(ctx context.Context, tpl db.CampaignAutoDr
 	}
 	created := 0
 	for _, book := range books {
+		if created >= autoDraftMaxBooksPerTick {
+			log.Info().
+				Str("template", tpl.Name).
+				Int("created", created).
+				Msg("campaign auto-draft: per-tick limit reached — 残りは次の tick で")
+			break
+		}
 		if w.createDraft(ctx, tpl, book) {
 			created++
 		}
