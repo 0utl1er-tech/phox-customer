@@ -867,6 +867,25 @@ func (q *Queries) GetMailboxBounceStats(ctx context.Context, arg GetMailboxBounc
 	return i, err
 }
 
+const getSampleRecipientCustomFields = `-- name: GetSampleRecipientCustomFields :one
+SELECT c.custom_fields
+FROM "CampaignRecipient" r
+JOIN "Customer" c ON c.id = r.customer_id
+WHERE r.campaign_id = $1 AND c.custom_fields <> '{}'::jsonb
+ORDER BY r.created_at, r.id
+LIMIT 1
+`
+
+// Phase 29b: テスト送信のプレビュー用。このキャンペーンの受信者のうち
+// 差し込み変数を持つ顧客を 1 件だけ引く。テスト送信を「実データそのままの
+// 見え方」にするためのもので、送信対象の選定には一切関与しない。
+func (q *Queries) GetSampleRecipientCustomFields(ctx context.Context, campaignID uuid.UUID) ([]byte, error) {
+	row := q.db.QueryRow(ctx, getSampleRecipientCustomFields, campaignID)
+	var custom_fields []byte
+	err := row.Scan(&custom_fields)
+	return custom_fields, err
+}
+
 const getSuppression = `-- name: GetSuppression :one
 SELECT id, company_id, email, reason, campaign_id, note, created_at FROM "Suppression" WHERE id = $1
 `

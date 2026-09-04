@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/0utl1er-tech/phox-customer/internal/customfields"
 )
 
 // jst は送信窓とプレースホルダ {{today}} の解釈に使うタイムゾーン。
@@ -25,19 +27,78 @@ var placeholderKeys = []string{
 	"unsubscribe_url",
 }
 
-var placeholderRegexps = func() map[string]*regexp.Regexp {
-	m := make(map[string]*regexp.Regexp, len(placeholderKeys))
+var placeholderKeySet = func() map[string]bool {
+	m := make(map[string]bool, len(placeholderKeys))
 	for _, k := range placeholderKeys {
-		m[k] = regexp.MustCompile(`\{\{\s*` + k + `\s*\}\}`)
+		m[k] = true
 	}
 	return m
 }()
 
+// FieldsPrefix は Phase 29b の「顧客ごとの任意差し込み変数」の名前空間。
+// vars には "fields.<key>" というキーで入る (Customer.custom_fields 由来)。
+const FieldsPrefix = "fields."
+
+// tokenRegexp は本文中の {{ ... }} を 1 パスで拾う。固定キーと fields.* を
+// 同時に処理するのが要点 — キーごとに順番に置換すると、先に入った値の中の
+// {{...}} が次の置換で再展開されてしまう (差し込み値は顧客由来 = 外部入力
+// なので、テンプレート注入になり得る)。1 パスなら置換結果は再走査されない。
+// 中身は「} と空白以外」まで広く拾う。狭い字種にすると {{fields.meo-score}}
+// のような書き間違いがトークンとして認識されず、そのまま受信者に届いてしまう。
+var tokenRegexp = regexp.MustCompile(`\{\{\s*([^}\s]{1,128})\s*\}\}`)
+
 // Render はテンプレートを vars で置換する (mail-template.ts と同セマンティクス)。
+//
+//   - 固定キー (placeholderKeys): 値が無ければ空文字。
+//   - {{fields.<key>}}: vars["fields.<key>"] に置換。キーが無い場合も、
+//     キー名が字種違反 ({{fields.MEO}} など) の場合も空文字。
+//     本文に {{fields.x}} が残るのは事故 (受信者に生のテンプレートが届く)
+//     なので、fields 名前空間だけは「必ず消す」。
+//   - それ以外のトークンはそのまま残す (誤記の視認用 — 既存の挙動)。
 func Render(tpl string, vars map[string]string) string {
-	out := tpl
-	for _, k := range placeholderKeys {
-		out = placeholderRegexps[k].ReplaceAllString(out, vars[k])
+	return tokenRegexp.ReplaceAllStringFunc(tpl, func(tok string) string {
+		m := tokenRegexp.FindStringSubmatch(tok)
+		if m == nil {
+			return tok
+		}
+		key := m[1]
+		if placeholderKeySet[key] {
+			return vars[key]
+		}
+		if strings.HasPrefix(key, FieldsPrefix) {
+			// 字種違反キーは vars に存在し得ない (custom_fields のキーは
+			// 正規化済み) ので、どちらの場合も空文字に落ちる。
+			return vars[key]
+		}
+		return tok
+	})
+}
+
+// AddFieldVars は Customer.custom_fields を vars の "fields.<key>" 名前空間に
+// 載せる。キーは念のためここでも字種チェックする (DB に手で入れた行など、
+// 正規化を通っていない値が混ざり得るため)。
+func AddFieldVars(vars map[string]string, fields map[string]string) {
+	for k, v := range fields {
+		if !customfields.ValidKey(k) {
+			continue
+		}
+		vars[FieldsPrefix+k] = v
+	}
+}
+
+// ReferencedFieldKeys はテンプレートが参照している fields キーを出現順・
+// 重複排除で返す (字種違反のものは除く)。テスト送信のサンプル値生成や
+// UI の「この本文で使っている変数」表示に使う。
+func ReferencedFieldKeys(tpl string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, m := range tokenRegexp.FindAllStringSubmatch(tpl, -1) {
+		key, ok := strings.CutPrefix(m[1], FieldsPrefix)
+		if !ok || !customfields.ValidKey(key) || seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, key)
 	}
 	return out
 }

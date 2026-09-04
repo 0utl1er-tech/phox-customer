@@ -2,10 +2,12 @@ package customer
 
 import (
 	"context"
+	"fmt"
 
 	"connectrpc.com/connect"
 	customerv1 "github.com/0utl1er-tech/phox-customer/gen/pb/customer/v1"
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
+	"github.com/0utl1er-tech/phox-customer/internal/customfields"
 	"github.com/0utl1er-tech/phox-customer/internal/util"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -29,16 +31,23 @@ func (s *CustomerService) CreateCustomer(
 		return nil, err
 	}
 
+	// Phase 29b: 任意差し込み変数。キー正規化と上限適用はここで一度だけ通す。
+	cf, err := customfields.MarshalSanitized(req.Msg.CustomFields)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("custom_fields: %w", err))
+	}
+
 	customer, err := s.queries.CreateCustomer(ctx, db.CreateCustomerParams{
-		ID:          uuid.New(),
-		BookID:      bookID,
-		Phone:       req.Msg.Phone,
-		Category:    req.Msg.Category,
-		Name:        req.Msg.Name,
-		Corporation: req.Msg.Corporation,
-		Address:     req.Msg.Address,
-		Memo:        req.Msg.Memo,
-		Mail:        req.Msg.Mail,
+		ID:           uuid.New(),
+		BookID:       bookID,
+		Phone:        req.Msg.Phone,
+		Category:     req.Msg.Category,
+		Name:         req.Msg.Name,
+		Corporation:  req.Msg.Corporation,
+		Address:      req.Msg.Address,
+		Memo:         req.Msg.Memo,
+		Mail:         req.Msg.Mail,
+		CustomFields: cf,
 	})
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)

@@ -26,24 +26,28 @@ func (q *Queries) CountCustomersByBook(ctx context.Context, bookID uuid.UUID) (i
 
 const createCustomer = `-- name: CreateCustomer :one
 INSERT INTO "Customer" (
-    id, book_id, phone, category, name, corporation, address, memo, mail
+    id, book_id, phone, category, name, corporation, address, memo, mail, custom_fields
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9
-) RETURNING id, book_id, phone, category, name, corporation, address, memo, updated_at, created_at, mail
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10::jsonb, '{}'::jsonb)
+) RETURNING id, book_id, phone, category, name, corporation, address, memo, updated_at, created_at, mail, custom_fields
 `
 
 type CreateCustomerParams struct {
-	ID          uuid.UUID `json:"id"`
-	BookID      uuid.UUID `json:"book_id"`
-	Phone       string    `json:"phone"`
-	Category    string    `json:"category"`
-	Name        string    `json:"name"`
-	Corporation string    `json:"corporation"`
-	Address     string    `json:"address"`
-	Memo        string    `json:"memo"`
-	Mail        string    `json:"mail"`
+	ID           uuid.UUID `json:"id"`
+	BookID       uuid.UUID `json:"book_id"`
+	Phone        string    `json:"phone"`
+	Category     string    `json:"category"`
+	Name         string    `json:"name"`
+	Corporation  string    `json:"corporation"`
+	Address      string    `json:"address"`
+	Memo         string    `json:"memo"`
+	Mail         string    `json:"mail"`
+	CustomFields []byte    `json:"custom_fields"`
 }
 
+// custom_fields は COALESCE で '{}' に倒す。Go 側の []byte はゼロ値 nil が
+// SQL NULL として渡るため、この列を意識していない呼び出し元 (既存コード・
+// 将来の新規コード) が NOT NULL 制約で落ちるのを防ぐ。
 func (q *Queries) CreateCustomer(ctx context.Context, arg CreateCustomerParams) (Customer, error) {
 	row := q.db.QueryRow(ctx, createCustomer,
 		arg.ID,
@@ -55,6 +59,7 @@ func (q *Queries) CreateCustomer(ctx context.Context, arg CreateCustomerParams) 
 		arg.Address,
 		arg.Memo,
 		arg.Mail,
+		arg.CustomFields,
 	)
 	var i Customer
 	err := row.Scan(
@@ -69,6 +74,7 @@ func (q *Queries) CreateCustomer(ctx context.Context, arg CreateCustomerParams) 
 		&i.UpdatedAt,
 		&i.CreatedAt,
 		&i.Mail,
+		&i.CustomFields,
 	)
 	return i, err
 }
@@ -122,6 +128,7 @@ SELECT
     address,
     memo,
     mail,
+    custom_fields,
     updated_at,
     created_at
 FROM "Customer"
@@ -129,17 +136,18 @@ WHERE id = $1
 `
 
 type GetCustomerRow struct {
-	ID          uuid.UUID `json:"id"`
-	BookID      uuid.UUID `json:"book_id"`
-	Phone       string    `json:"phone"`
-	Category    string    `json:"category"`
-	Name        string    `json:"name"`
-	Corporation string    `json:"corporation"`
-	Address     string    `json:"address"`
-	Memo        string    `json:"memo"`
-	Mail        string    `json:"mail"`
-	UpdatedAt   time.Time `json:"updated_at"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID           uuid.UUID `json:"id"`
+	BookID       uuid.UUID `json:"book_id"`
+	Phone        string    `json:"phone"`
+	Category     string    `json:"category"`
+	Name         string    `json:"name"`
+	Corporation  string    `json:"corporation"`
+	Address      string    `json:"address"`
+	Memo         string    `json:"memo"`
+	Mail         string    `json:"mail"`
+	CustomFields []byte    `json:"custom_fields"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 func (q *Queries) GetCustomer(ctx context.Context, id uuid.UUID) (GetCustomerRow, error) {
@@ -155,6 +163,7 @@ func (q *Queries) GetCustomer(ctx context.Context, id uuid.UUID) (GetCustomerRow
 		&i.Address,
 		&i.Memo,
 		&i.Mail,
+		&i.CustomFields,
 		&i.UpdatedAt,
 		&i.CreatedAt,
 	)
@@ -172,6 +181,7 @@ SELECT
     address,
     memo,
     mail,
+    custom_fields,
     updated_at,
     created_at
 FROM "Customer"
@@ -179,17 +189,18 @@ WHERE book_id = $1
 `
 
 type GetCustomerByBookIdRow struct {
-	ID          uuid.UUID `json:"id"`
-	BookID      uuid.UUID `json:"book_id"`
-	Phone       string    `json:"phone"`
-	Category    string    `json:"category"`
-	Name        string    `json:"name"`
-	Corporation string    `json:"corporation"`
-	Address     string    `json:"address"`
-	Memo        string    `json:"memo"`
-	Mail        string    `json:"mail"`
-	UpdatedAt   time.Time `json:"updated_at"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID           uuid.UUID `json:"id"`
+	BookID       uuid.UUID `json:"book_id"`
+	Phone        string    `json:"phone"`
+	Category     string    `json:"category"`
+	Name         string    `json:"name"`
+	Corporation  string    `json:"corporation"`
+	Address      string    `json:"address"`
+	Memo         string    `json:"memo"`
+	Mail         string    `json:"mail"`
+	CustomFields []byte    `json:"custom_fields"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 func (q *Queries) GetCustomerByBookId(ctx context.Context, bookID uuid.UUID) (GetCustomerByBookIdRow, error) {
@@ -205,6 +216,7 @@ func (q *Queries) GetCustomerByBookId(ctx context.Context, bookID uuid.UUID) (Ge
 		&i.Address,
 		&i.Memo,
 		&i.Mail,
+		&i.CustomFields,
 		&i.UpdatedAt,
 		&i.CreatedAt,
 	)
@@ -298,6 +310,7 @@ SELECT
     address,
     memo,
     mail,
+    custom_fields,
     updated_at,
     created_at
 FROM "Customer"
@@ -305,17 +318,18 @@ ORDER BY created_at ASC
 `
 
 type ListAllCustomersRow struct {
-	ID          uuid.UUID `json:"id"`
-	BookID      uuid.UUID `json:"book_id"`
-	Phone       string    `json:"phone"`
-	Category    string    `json:"category"`
-	Name        string    `json:"name"`
-	Corporation string    `json:"corporation"`
-	Address     string    `json:"address"`
-	Memo        string    `json:"memo"`
-	Mail        string    `json:"mail"`
-	UpdatedAt   time.Time `json:"updated_at"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID           uuid.UUID `json:"id"`
+	BookID       uuid.UUID `json:"book_id"`
+	Phone        string    `json:"phone"`
+	Category     string    `json:"category"`
+	Name         string    `json:"name"`
+	Corporation  string    `json:"corporation"`
+	Address      string    `json:"address"`
+	Memo         string    `json:"memo"`
+	Mail         string    `json:"mail"`
+	CustomFields []byte    `json:"custom_fields"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 func (q *Queries) ListAllCustomers(ctx context.Context) ([]ListAllCustomersRow, error) {
@@ -337,6 +351,7 @@ func (q *Queries) ListAllCustomers(ctx context.Context) ([]ListAllCustomersRow, 
 			&i.Address,
 			&i.Memo,
 			&i.Mail,
+			&i.CustomFields,
 			&i.UpdatedAt,
 			&i.CreatedAt,
 		); err != nil {
@@ -409,6 +424,7 @@ SELECT
     address,
     memo,
     mail,
+    custom_fields,
     updated_at,
     created_at
 FROM "Customer"
@@ -425,17 +441,18 @@ type ListCustomersParams struct {
 }
 
 type ListCustomersRow struct {
-	ID          uuid.UUID `json:"id"`
-	BookID      uuid.UUID `json:"book_id"`
-	Phone       string    `json:"phone"`
-	Category    string    `json:"category"`
-	Name        string    `json:"name"`
-	Corporation string    `json:"corporation"`
-	Address     string    `json:"address"`
-	Memo        string    `json:"memo"`
-	Mail        string    `json:"mail"`
-	UpdatedAt   time.Time `json:"updated_at"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID           uuid.UUID `json:"id"`
+	BookID       uuid.UUID `json:"book_id"`
+	Phone        string    `json:"phone"`
+	Category     string    `json:"category"`
+	Name         string    `json:"name"`
+	Corporation  string    `json:"corporation"`
+	Address      string    `json:"address"`
+	Memo         string    `json:"memo"`
+	Mail         string    `json:"mail"`
+	CustomFields []byte    `json:"custom_fields"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 func (q *Queries) ListCustomers(ctx context.Context, arg ListCustomersParams) ([]ListCustomersRow, error) {
@@ -457,6 +474,7 @@ func (q *Queries) ListCustomers(ctx context.Context, arg ListCustomersParams) ([
 			&i.Address,
 			&i.Memo,
 			&i.Mail,
+			&i.CustomFields,
 			&i.UpdatedAt,
 			&i.CreatedAt,
 		); err != nil {
@@ -480,20 +498,22 @@ SET
     address = COALESCE($5, address),
     memo = COALESCE($6, memo),
     mail = COALESCE($7, mail),
+    custom_fields = COALESCE($8, custom_fields),
     updated_at = now()
-WHERE id = $8
-RETURNING id, book_id, phone, category, name, corporation, address, memo, updated_at, created_at, mail
+WHERE id = $9
+RETURNING id, book_id, phone, category, name, corporation, address, memo, updated_at, created_at, mail, custom_fields
 `
 
 type UpdateCustomerParams struct {
-	Phone       pgtype.Text `json:"phone"`
-	Category    pgtype.Text `json:"category"`
-	Name        pgtype.Text `json:"name"`
-	Corporation pgtype.Text `json:"corporation"`
-	Address     pgtype.Text `json:"address"`
-	Memo        pgtype.Text `json:"memo"`
-	Mail        pgtype.Text `json:"mail"`
-	ID          uuid.UUID   `json:"id"`
+	Phone        pgtype.Text `json:"phone"`
+	Category     pgtype.Text `json:"category"`
+	Name         pgtype.Text `json:"name"`
+	Corporation  pgtype.Text `json:"corporation"`
+	Address      pgtype.Text `json:"address"`
+	Memo         pgtype.Text `json:"memo"`
+	Mail         pgtype.Text `json:"mail"`
+	CustomFields []byte      `json:"custom_fields"`
+	ID           uuid.UUID   `json:"id"`
 }
 
 func (q *Queries) UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) (Customer, error) {
@@ -505,6 +525,7 @@ func (q *Queries) UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) 
 		arg.Address,
 		arg.Memo,
 		arg.Mail,
+		arg.CustomFields,
 		arg.ID,
 	)
 	var i Customer
@@ -520,6 +541,7 @@ func (q *Queries) UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) 
 		&i.UpdatedAt,
 		&i.CreatedAt,
 		&i.Mail,
+		&i.CustomFields,
 	)
 	return i, err
 }

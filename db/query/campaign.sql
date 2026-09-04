@@ -445,3 +445,14 @@ SET has_mx = EXCLUDED.has_mx, mx_host = EXCLUDED.mx_host, checked_at = now();
 -- 指定ドメイン群のうち、まだ有効期限内のキャッシュだけ返す。
 SELECT * FROM "DomainHealth"
 WHERE domain = ANY(sqlc.arg(domains)::varchar[]) AND checked_at > sqlc.arg(fresh_after);
+
+-- name: GetSampleRecipientCustomFields :one
+-- Phase 29b: テスト送信のプレビュー用。このキャンペーンの受信者のうち
+-- 差し込み変数を持つ顧客を 1 件だけ引く。テスト送信を「実データそのままの
+-- 見え方」にするためのもので、送信対象の選定には一切関与しない。
+SELECT c.custom_fields
+FROM "CampaignRecipient" r
+JOIN "Customer" c ON c.id = r.customer_id
+WHERE r.campaign_id = $1 AND c.custom_fields <> '{}'::jsonb
+ORDER BY r.created_at, r.id
+LIMIT 1;

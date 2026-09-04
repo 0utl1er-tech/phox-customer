@@ -1,8 +1,11 @@
 -- name: CreateCustomer :one
+-- custom_fields は COALESCE で '{}' に倒す。Go 側の []byte はゼロ値 nil が
+-- SQL NULL として渡るため、この列を意識していない呼び出し元 (既存コード・
+-- 将来の新規コード) が NOT NULL 制約で落ちるのを防ぐ。
 INSERT INTO "Customer" (
-    id, book_id, phone, category, name, corporation, address, memo, mail
+    id, book_id, phone, category, name, corporation, address, memo, mail, custom_fields
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE(sqlc.arg(custom_fields)::jsonb, '{}'::jsonb)
 ) RETURNING *;
 
 -- name: GetCustomer :one
@@ -16,6 +19,7 @@ SELECT
     address,
     memo,
     mail,
+    custom_fields,
     updated_at,
     created_at
 FROM "Customer"
@@ -32,6 +36,7 @@ SELECT
     address,
     memo,
     mail,
+    custom_fields,
     updated_at,
     created_at
 FROM "Customer"
@@ -48,6 +53,7 @@ SELECT
     address,
     memo,
     mail,
+    custom_fields,
     updated_at,
     created_at
 FROM "Customer"
@@ -70,6 +76,7 @@ SELECT
     address,
     memo,
     mail,
+    custom_fields,
     updated_at,
     created_at
 FROM "Customer"
@@ -85,6 +92,7 @@ SET
     address = COALESCE(sqlc.narg(address), address),
     memo = COALESCE(sqlc.narg(memo), memo),
     mail = COALESCE(sqlc.narg(mail), mail),
+    custom_fields = COALESCE(sqlc.narg(custom_fields), custom_fields),
     updated_at = now()
 WHERE id = sqlc.arg(id)
 RETURNING *;

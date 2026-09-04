@@ -11,6 +11,7 @@ import (
 	"connectrpc.com/connect"
 	bookv1 "github.com/0utl1er-tech/phox-customer/gen/pb/book/v1"
 	db "github.com/0utl1er-tech/phox-customer/gen/sqlc"
+	"github.com/0utl1er-tech/phox-customer/internal/customfields"
 	"github.com/0utl1er-tech/phox-customer/internal/search"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
@@ -103,6 +104,12 @@ func (s *BookService) ImportBook(ctx context.Context, req *connect.Request[bookv
 		mailCol = idx
 	}
 
+	// Phase 29b: canonical 以外の列は「顧客ごとの任意差し込み変数」として
+	// custom_fields に入れる (以前は黙って捨てていた)。列名を正規化した
+	// キーで保存し、キャンペーン本文から {{fields.<キー>}} で参照できる。
+	// 例: meo_score / meo_issues 列を持つ CSV → 1 通ごとに違う診断結果。
+	customCols := buildCustomFieldColumns(header)
+
 	// Keep the original CSV line number with each parsed row so that
 	// insert-stage errors report the actual line even when earlier rows
 	// were skipped during parsing.
@@ -147,16 +154,36 @@ func (s *BookService) ImportBook(ctx context.Context, req *connect.Request[bookv
 			customerID = uuid.New()
 		}
 
+		// 値が空のキーは保存しない — 空の差し込み変数を持たせても本文では
+		// 空文字になるだけで、JSONB を無駄に太らせる。
+		fields := make(map[string]string, len(customCols))
+		for _, c := range customCols {
+			if v := getStringValue(record, c.index); v != "" {
+				fields[c.key] = v
+			}
+		}
+		customFields, cfErr := customfields.MarshalSanitized(fields)
+		if cfErr != nil {
+			// 到達しない想定 (map[string]string の marshal) だが、
+			// 1 行の失敗で取り込み全体を落とさない。
+			importErrors = append(importErrors, &bookv1.ImportError{
+				LineNumber:   int32(lineNum),
+				ErrorMessage: fmt.Sprintf("failed to encode custom fields: %v", cfErr),
+			})
+			continue
+		}
+
 		customer := db.CreateCustomerParams{
-			ID:          customerID,
-			BookID:      bookID,
-			Phone:       getStringValue(record, phoneCol),
-			Category:    getStringValue(record, categoryCol),
-			Name:        getStringValue(record, nameCol),
-			Corporation: getStringValue(record, corporationCol),
-			Address:     getStringValue(record, addressCol),
-			Memo:        getStringValue(record, memoCol),
-			Mail:        getStringValue(record, mailCol),
+			ID:           customerID,
+			BookID:       bookID,
+			Phone:        getStringValue(record, phoneCol),
+			Category:     getStringValue(record, categoryCol),
+			Name:         getStringValue(record, nameCol),
+			Corporation:  getStringValue(record, corporationCol),
+			Address:      getStringValue(record, addressCol),
+			Memo:         getStringValue(record, memoCol),
+			Mail:         getStringValue(record, mailCol),
+			CustomFields: customFields,
 		}
 		customersToInsert = append(customersToInsert, customerRow{params: customer, lineNum: int32(lineNum)})
 	}
@@ -202,6 +229,52 @@ func (s *BookService) ImportBook(ctx context.Context, req *connect.Request[bookv
 		FailedCount:   int32(len(importErrors)),
 		Errors:        importErrors,
 	}), nil
+}
+
+// canonicalCSVColumns は Customer の固定列に吸われるヘッダ名。ここに挙げた
+// 名前は custom_fields には入れない (mail と email は片方しか使われなくても
+// 「メールアドレス列」であることに変わりはないので両方とも予約する)。
+var canonicalCSVColumns = map[string]bool{
+	"id": true, "phone": true, "category": true, "name": true,
+	"corporation": true, "address": true, "memo": true,
+	"mail": true, "email": true,
+}
+
+// customFieldColumn は CSV の未知列 1 つ ぶんの「正規化済みキー → 列位置」。
+type customFieldColumn struct {
+	key   string
+	index int
+}
+
+// buildCustomFieldColumns は CSV ヘッダから custom_fields 用の列を選ぶ。
+//
+//   - canonical 列は除外
+//   - 列名は customfields.NormalizeKey で正規化 (小文字化・[a-z0-9_] 以外は '_')。
+//     日本語だけの列名など、正規化してキーにならないものは従来通り無視する
+//   - 同じキーに潰れる列が複数あれば最初の 1 つだけ採用
+//   - 最大 customfields.MaxFields 列 (超過分は無視) — 素性の知れない営業
+//     リストで JSONB が肥大するのを防ぐ
+func buildCustomFieldColumns(header []string) []customFieldColumn {
+	var cols []customFieldColumn
+	seen := make(map[string]bool, len(header))
+	for i, raw := range header {
+		lower := strings.ToLower(strings.TrimSpace(raw))
+		if canonicalCSVColumns[lower] {
+			continue
+		}
+		key, ok := customfields.NormalizeKey(raw)
+		if !ok || seen[key] || canonicalCSVColumns[key] {
+			continue
+		}
+		if len(cols) >= customfields.MaxFields {
+			log.Warn().Int("max", customfields.MaxFields).Str("column", raw).
+				Msg("book: too many custom field columns in CSV — extra columns ignored")
+			break
+		}
+		seen[key] = true
+		cols = append(cols, customFieldColumn{key: key, index: i})
+	}
+	return cols
 }
 
 func getStringValue(record []string, colIndex int) string {

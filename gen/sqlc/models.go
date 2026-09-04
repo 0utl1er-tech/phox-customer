@@ -216,17 +216,18 @@ type Contact struct {
 }
 
 type Customer struct {
-	ID          uuid.UUID `json:"id"`
-	BookID      uuid.UUID `json:"book_id"`
-	Phone       string    `json:"phone"`
-	Category    string    `json:"category"`
-	Name        string    `json:"name"`
-	Corporation string    `json:"corporation"`
-	Address     string    `json:"address"`
-	Memo        string    `json:"memo"`
-	UpdatedAt   time.Time `json:"updated_at"`
-	CreatedAt   time.Time `json:"created_at"`
-	Mail        string    `json:"mail"`
+	ID           uuid.UUID `json:"id"`
+	BookID       uuid.UUID `json:"book_id"`
+	Phone        string    `json:"phone"`
+	Category     string    `json:"category"`
+	Name         string    `json:"name"`
+	Corporation  string    `json:"corporation"`
+	Address      string    `json:"address"`
+	Memo         string    `json:"memo"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	CreatedAt    time.Time `json:"created_at"`
+	Mail         string    `json:"mail"`
+	CustomFields []byte    `json:"custom_fields"`
 }
 
 type DomainHealth struct {

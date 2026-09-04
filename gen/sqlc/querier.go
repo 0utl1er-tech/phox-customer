@@ -57,6 +57,9 @@ type Querier interface {
 	CreateCampaignStep(ctx context.Context, arg CreateCampaignStepParams) error
 	CreateCompany(ctx context.Context, arg CreateCompanyParams) (Company, error)
 	CreateContact(ctx context.Context, arg CreateContactParams) (Contact, error)
+	// custom_fields は COALESCE で '{}' に倒す。Go 側の []byte はゼロ値 nil が
+	// SQL NULL として渡るため、この列を意識していない呼び出し元 (既存コード・
+	// 将来の新規コード) が NOT NULL 制約で落ちるのを防ぐ。
 	CreateCustomer(ctx context.Context, arg CreateCustomerParams) (Customer, error)
 	CreateMailTemplate(ctx context.Context, arg CreateMailTemplateParams) (MailTemplate, error)
 	CreateMailbox(ctx context.Context, arg CreateMailboxParams) (Mailbox, error)
@@ -180,6 +183,10 @@ type Querier interface {
 	GetPermitByBookIDAndUserID(ctx context.Context, arg GetPermitByBookIDAndUserIDParams) (Permit, error)
 	GetPermitsByUserID(ctx context.Context, userID string) ([]Permit, error)
 	GetRedial(ctx context.Context, id uuid.UUID) (Redial, error)
+	// Phase 29b: テスト送信のプレビュー用。このキャンペーンの受信者のうち
+	// 差し込み変数を持つ顧客を 1 件だけ引く。テスト送信を「実データそのままの
+	// 見え方」にするためのもので、送信対象の選定には一切関与しない。
+	GetSampleRecipientCustomFields(ctx context.Context, campaignID uuid.UUID) ([]byte, error)
 	GetStatus(ctx context.Context, id uuid.UUID) (Status, error)
 	GetSuppression(ctx context.Context, id uuid.UUID) (Suppression, error)
 	GetSuppressionByEmail(ctx context.Context, arg GetSuppressionByEmailParams) (Suppression, error)
