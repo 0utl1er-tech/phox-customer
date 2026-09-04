@@ -103,7 +103,15 @@ func (s *BookService) ImportBook(ctx context.Context, req *connect.Request[bookv
 		mailCol = idx
 	}
 
-	var customersToInsert []db.CreateCustomerParams
+	// Keep the original CSV line number with each parsed row so that
+	// insert-stage errors report the actual line even when earlier rows
+	// were skipped during parsing.
+	type customerRow struct {
+		params  db.CreateCustomerParams
+		lineNum int32
+	}
+
+	var customersToInsert []customerRow
 	var importErrors []*bookv1.ImportError
 	lineNum := 1 // Header is line 1, data starts from line 2
 
@@ -150,22 +158,25 @@ func (s *BookService) ImportBook(ctx context.Context, req *connect.Request[bookv
 			Memo:        getStringValue(record, memoCol),
 			Mail:        getStringValue(record, mailCol),
 		}
-		customersToInsert = append(customersToInsert, customer)
+		customersToInsert = append(customersToInsert, customerRow{params: customer, lineNum: int32(lineNum)})
 	}
 
 	// Insert customers one by one and collect successfully inserted ones for
 	// a single ES bulk index call at the end.
 	now := time.Now()
+	var importedCount int32
 	docsToIndex := make([]search.CustomerDoc, 0, len(customersToInsert))
-	for i, customer := range customersToInsert {
+	for _, row := range customersToInsert {
+		customer := row.params
 		_, err := s.queries.CreateCustomer(ctx, customer)
 		if err != nil {
 			importErrors = append(importErrors, &bookv1.ImportError{
-				LineNumber:   int32(i + 2),
-				ErrorMessage: fmt.Sprintf("failed to insert customer (index %d): %v", i, err),
+				LineNumber:   row.lineNum,
+				ErrorMessage: fmt.Sprintf("failed to insert customer: %v", err),
 			})
 			continue
 		}
+		importedCount++
 		docsToIndex = append(docsToIndex, search.NewCustomerDoc(
 			customer.ID,
 			customer.BookID,
@@ -184,9 +195,6 @@ func (s *BookService) ImportBook(ctx context.Context, req *connect.Request[bookv
 	if idxErr := s.indexer.BulkIndex(ctx, docsToIndex); idxErr != nil {
 		log.Warn().Err(idxErr).Int("count", len(docsToIndex)).Msg("failed to bulk index imported customers")
 	}
-
-	// Calculate imported count
-	importedCount := int32(len(customersToInsert) - len(importErrors))
 
 	return connect.NewResponse(&bookv1.ImportBookResponse{
 		BookId:        bookID.String(),
