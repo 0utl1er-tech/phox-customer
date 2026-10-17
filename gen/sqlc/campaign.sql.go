@@ -725,7 +725,8 @@ SELECT
   count(*) FILTER (WHERE replied_at IS NOT NULL)    AS replied,
   count(*) FILTER (WHERE bounced_at IS NOT NULL)    AS bounced,
   count(*) FILTER (WHERE unsubscribed_at IS NOT NULL)  AS unsubscribed,
-  max(sent_at) AS last_sent_at
+  max(sent_at) AS last_sent_at,
+  COALESCE(max(current_step) FILTER (WHERE sent_at IS NOT NULL), 0)::int AS max_sent_step
 FROM "CampaignRecipient"
 WHERE campaign_id = $1
 `
@@ -743,6 +744,7 @@ type GetCampaignStatsRow struct {
 	Bounced         int64       `json:"bounced"`
 	Unsubscribed    int64       `json:"unsubscribed"`
 	LastSentAt      interface{} `json:"last_sent_at"`
+	MaxSentStep     int32       `json:"max_sent_step"`
 }
 
 // 非正規化時刻列の FILTER 集計 1 スキャンで済ませる (CampaignEvent 不要)。
@@ -762,6 +764,7 @@ func (q *Queries) GetCampaignStats(ctx context.Context, campaignID uuid.UUID) (G
 		&i.Bounced,
 		&i.Unsubscribed,
 		&i.LastSentAt,
+		&i.MaxSentStep,
 	)
 	return i, err
 }

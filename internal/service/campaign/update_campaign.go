@@ -28,6 +28,21 @@ func (s *CampaignService) UpdateCampaign(
 		return nil, connect.NewError(connect.CodeFailedPrecondition,
 			fmt.Errorf("status %s のキャンペーンは編集できません", c.Status))
 	}
+	// 送信実績のあるキャンペーンでは、受信者が既に受け取った内容と矛盾する
+	// 編集 (1 通目の件名変更・受信済みステップの削除) を DB を書く前に弾く。
+	// 統計クエリは件名かフォローアップを触るときだけ発行する。
+	if req.Msg.Subject != nil || len(req.Msg.Followups) > 0 {
+		stats, err := s.queries.GetCampaignStats(ctx, c.ID)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("get campaign stats: %w", err))
+		}
+		if err := validateStepEdit(c.Subject, req.Msg.Subject, len(req.Msg.Followups), stepProgress{
+			SentCount:   stats.Sent,
+			MaxSentStep: stats.MaxSentStep,
+		}); err != nil {
+			return nil, err
+		}
+	}
 
 	params := db.UpdateCampaignDraftParams{ID: c.ID}
 	if req.Msg.Name != nil {

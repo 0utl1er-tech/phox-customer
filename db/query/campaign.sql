@@ -214,7 +214,8 @@ SELECT
   count(*) FILTER (WHERE replied_at IS NOT NULL)    AS replied,
   count(*) FILTER (WHERE bounced_at IS NOT NULL)    AS bounced,
   count(*) FILTER (WHERE unsubscribed_at IS NOT NULL)  AS unsubscribed,
-  max(sent_at) AS last_sent_at
+  max(sent_at) AS last_sent_at,
+  COALESCE(max(current_step) FILTER (WHERE sent_at IS NOT NULL), 0)::int AS max_sent_step
 FROM "CampaignRecipient"
 WHERE campaign_id = $1;
 

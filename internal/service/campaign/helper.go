@@ -78,6 +78,7 @@ func (s *CampaignService) campaignToProto(ctx context.Context, c db.Campaign) (*
 			Bounced:         int32(stats.Bounced),
 			Unsubscribed:    int32(stats.Unsubscribed),
 			WaitingFollowup: int32(stats.WaitingFollowup),
+			MaxSentStep:     stats.MaxSentStep,
 		},
 		CreatedBy: c.CreatedBy,
 		CreatedAt: timestamppb.New(c.CreatedAt),

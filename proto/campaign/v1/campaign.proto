@@ -107,6 +107,9 @@ message CampaignStats {
   optional google.protobuf.Timestamp last_sent_at = 11;
   // フォローアップ待ち (1 通以上送信済みで次ステップの時期待ち)。
   int32 waiting_followup = 12;
+  // 送信済み受信者の current_step の最大値。0 = まだ誰にも送っていない。
+  // 1 通目の件名ロック / ステップ削除ガードの判定に使う。
+  int32 max_sent_step = 13;
 }
 
 message Campaign {
