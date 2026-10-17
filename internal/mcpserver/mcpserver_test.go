@@ -878,7 +878,7 @@ func TestToolsAgainstDB(t *testing.T) {
 		require.False(t, res.IsError, "unexpected tool error: %s", textOf(t, res))
 		updated = textOf(t, res)
 		assert.Contains(t, updated, `"sendStartHour":10`)
-		assert.Contains(t, updated, `"dailyCapPerMailbox":100`, "未指定の schedule フィールドは現在値のまま")
+		assert.Contains(t, updated, `"dailyCapPerMailbox":300`, "未指定の schedule フィールドは現在値のまま")
 		assert.Contains(t, updated, `"sendEndHour":18`, "未指定の schedule フィールドは現在値のまま")
 
 		// ── followups の検証は create と同じガード ──

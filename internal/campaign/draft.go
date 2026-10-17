@@ -47,11 +47,11 @@ type DraftSchedule struct {
 	BouncePauseThreshold int32
 }
 
-// DefaultSchedule は未指定時の既定ペーシング (平日 9-18 時、100 通/日)。
+// DefaultSchedule は未指定時の既定ペーシング (平日 9-18 時、300 通/日)。
 func DefaultSchedule() DraftSchedule {
 	return DraftSchedule{
 		SendStartHour: 9, SendEndHour: 18, SendDays: 31,
-		DailyCapPerMailbox: 100, MinIntervalSec: 90, WarmupEnabled: true,
+		DailyCapPerMailbox: 300, MinIntervalSec: 90, WarmupEnabled: true,
 		BouncePauseThreshold: 5,
 	}
 }

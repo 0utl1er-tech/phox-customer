@@ -141,13 +141,13 @@ type campaignFollowupIn struct {
 }
 
 // campaignScheduleIn — 全フィールド省略可。省略したフィールドはサービス既定値
-// (9-18 時 JST / 平日 / 100 通/日/mailbox / 90 秒間隔 / warmup on / bounce 5%)
+// (9-18 時 JST / 平日 / 300 通/日/mailbox / 90 秒間隔 / warmup on / bounce 5%)
 // に落ちる。pointer なのは bool/0 と「未指定」を区別するため。
 type campaignScheduleIn struct {
 	SendStartHour        *int32 `json:"send_start_hour,omitempty" jsonschema:"JST hour to start sending (0-23); default 9"`
 	SendEndHour          *int32 `json:"send_end_hour,omitempty" jsonschema:"JST hour to stop sending (1-24, must be after send_start_hour); default 18"`
 	SendDays             *int32 `json:"send_days,omitempty" jsonschema:"weekday bitmask Mon=1 Tue=2 Wed=4 Thu=8 Fri=16 Sat=32 Sun=64; default 31 (weekdays)"`
-	DailyCapPerMailbox   *int32 `json:"daily_cap_per_mailbox,omitempty" jsonschema:"max mails per mailbox per day (1-1000); default 100"`
+	DailyCapPerMailbox   *int32 `json:"daily_cap_per_mailbox,omitempty" jsonschema:"max mails per mailbox per day (1-1000); default 300"`
 	MinIntervalSec       *int32 `json:"min_interval_sec,omitempty" jsonschema:"min seconds between two sends from the same mailbox (10-3600); default 90"`
 	WarmupEnabled        *bool  `json:"warmup_enabled,omitempty" jsonschema:"ramp up daily volume gradually for fresh mailboxes; default true"`
 	BouncePauseThreshold *int32 `json:"bounce_pause_threshold,omitempty" jsonschema:"auto-pause the campaign when hard-bounce rate (%) exceeds this; 0 disables; default 5"`
@@ -157,7 +157,7 @@ func (in *campaignScheduleIn) toProto() *campaignv1.CampaignSchedule {
 	// 既定値は create_campaign.go の schedule 未指定時デフォルトと同一。
 	return in.apply(&campaignv1.CampaignSchedule{
 		SendStartHour: 9, SendEndHour: 18, SendDays: 31,
-		DailyCapPerMailbox: 100, MinIntervalSec: 90, WarmupEnabled: true,
+		DailyCapPerMailbox: 300, MinIntervalSec: 90, WarmupEnabled: true,
 		BouncePauseThreshold: 5,
 	})
 }
@@ -204,7 +204,7 @@ type createCampaignDraftIn struct {
 	Subject     string               `json:"subject" jsonschema:"first email subject. Placeholders: {{customer_name}} {{customer_corporation}} {{customer_mail}} {{customer_phone}} {{sender_name}} {{sender_mail}} {{today}}, plus {{fields.<key>}} for any per-customer merge variable (Customer.custom_fields, e.g. columns imported by import_customers_csv). Unknown {{fields.*}} render as an empty string"`
 	Body        string               `json:"body" jsonschema:"first email plain-text body (same placeholders as subject, plus {{unsubscribe_url}}). Per-customer merge variables ({{fields.<key>}}) may contain newlines — they become line breaks in the HTML part. The 特定電子メール法 footer (sender info + unsubscribe link) is always appended automatically"`
 	Followups   []campaignFollowupIn `json:"followups,omitempty" jsonschema:"followup emails (2nd mail and later, max 5) sent to recipients who have not replied; each waits wait_days after the previous step and threads as a reply"`
-	Schedule    *campaignScheduleIn  `json:"schedule,omitempty" jsonschema:"pacing settings; omit for the defaults (JST 9-18, weekdays, 100/day/mailbox, 90s interval, warmup on)"`
+	Schedule    *campaignScheduleIn  `json:"schedule,omitempty" jsonschema:"pacing settings; omit for the defaults (JST 9-18, weekdays, 300/day/mailbox, 90s interval, warmup on)"`
 	Sender      *campaignSenderIn    `json:"sender,omitempty" jsonschema:"特定電子メール法 sender disclosure printed in every mail footer. Can be omitted on the draft but must be set before start_campaign succeeds"`
 	TrackOpens  bool                 `json:"track_opens,omitempty" jsonschema:"embed an open-tracking pixel"`
 	TrackClicks bool                 `json:"track_clicks,omitempty" jsonschema:"rewrite links for click tracking"`

@@ -519,7 +519,7 @@ func (w *Worker) pickMailbox(ctx context.Context, c db.Campaign, now time.Time) 
 func (w *Worker) effectiveCap(c db.Campaign, now time.Time) int32 {
 	cap := c.DailyCapPerMailbox
 	if cap <= 0 {
-		cap = 100
+		cap = 300
 	}
 	if !c.WarmupEnabled || !c.StartedAt.Valid {
 		return cap
