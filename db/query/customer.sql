@@ -97,6 +97,23 @@ SET
 WHERE id = sqlc.arg(id)
 RETURNING *;
 
+-- name: SetCustomerCustomFieldIfAbsent :one
+-- custom_fields の 1 キーだけを「無いとき (または空文字のとき) だけ」足す。
+-- 他のキーは jsonb の || で残す (UpdateCustomer の custom_fields は全置換なので
+-- 使わない)。既に値があれば何も変えず、その値を返す — 戻り値は常に
+-- 「保存されている値」なので、呼び出し側はそれを差し込めばよい。
+-- 送信 worker が自動で書く値 (offer_deadline) 用。人の編集ではないので
+-- updated_at は動かさない (顧客一覧が updated_at 順で並ぶため)。
+-- 該当行が無ければ pgx.ErrNoRows。
+UPDATE "Customer"
+SET custom_fields = CASE
+        WHEN COALESCE(custom_fields ->> sqlc.arg(key)::text, '') = ''
+            THEN custom_fields || jsonb_build_object(sqlc.arg(key)::text, sqlc.arg(value)::text)
+        ELSE custom_fields
+    END
+WHERE id = sqlc.arg(id)
+RETURNING COALESCE(custom_fields ->> sqlc.arg(key)::text, '')::text AS stored_value;
+
 -- name: DeleteCustomer :exec
 DELETE FROM "Customer" WHERE id = $1;
 

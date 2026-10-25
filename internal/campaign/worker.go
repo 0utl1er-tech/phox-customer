@@ -44,6 +44,9 @@ type Worker struct {
 	lock       *leaderLock
 	mxChecker  *MXChecker // Phase 27f: 宛先ドメインの配信可否 (キャッシュ付き)
 
+	// offer_deadline (特典の期限) = 1 通目の送信日 + この日数 (土日祝は次の平日)。
+	offerDeadlineDays int
+
 	// leader は単一 pod なので in-memory で十分 (ロック喪失時はリセットされるが
 	// daily cap は DB 起算なので安全側に働く)。
 	nextAllowed   map[uuid.UUID]time.Time // mailbox 毎の次回送信可能時刻 (jitter 済み)
@@ -70,15 +73,16 @@ func NewWorker(
 	}
 	host, _ := os.Hostname()
 	return &Worker{
-		queries:       queries,
-		sender:        sender,
-		cipher:        cipher,
-		tokenizer:     tokenizer,
-		publicBase:    strings.TrimSuffix(publicBase, "/"),
-		lock:          newLeaderLock(rdb, lockKey, host+"-"+uuid.NewString(), lockTTL),
-		mxChecker:     NewMXChecker(queries),
-		nextAllowed:   map[uuid.UUID]time.Time{},
-		cooldownUntil: map[uuid.UUID]time.Time{},
+		queries:           queries,
+		sender:            sender,
+		cipher:            cipher,
+		tokenizer:         tokenizer,
+		publicBase:        strings.TrimSuffix(publicBase, "/"),
+		lock:              newLeaderLock(rdb, lockKey, host+"-"+uuid.NewString(), lockTTL),
+		mxChecker:         NewMXChecker(queries),
+		offerDeadlineDays: offerDeadlineDaysFromEnv(),
+		nextAllowed:       map[uuid.UUID]time.Time{},
+		cooldownUntil:     map[uuid.UUID]time.Time{},
 	}
 }
 
@@ -317,6 +321,8 @@ func (w *Worker) sendOne(ctx context.Context, c db.Campaign, now time.Time) {
 	}
 	// Phase 29b: 顧客ごとの任意差し込み変数 ({{fields.<key>}})。
 	AddFieldVars(vars, customfields.Unmarshal(customer.CustomFields))
+	// 自動の差し込み値: 特典の期限は 1 通目の送信時に 1 回だけ決めて保存する。
+	ensureOfferDeadline(ctx, w.queries, c, steps, stepToSend, customer.ID, vars, now, w.offerDeadlineDays)
 	subjectTpl, bodyTpl := c.Subject, c.Body
 	if followup != nil && stepToSend > 1 {
 		bodyTpl = followup.Body

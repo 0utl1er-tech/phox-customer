@@ -280,6 +280,14 @@ type Querier interface {
 	// 注意: $2 を複数箇所で使うと 42P08 (型推論の衝突) になるため CASE 側は
 	// 明示キャスト必須 (実際に staging で 500 になった実績あり)。
 	SetCampaignStatus(ctx context.Context, arg SetCampaignStatusParams) (Campaign, error)
+	// custom_fields の 1 キーだけを「無いとき (または空文字のとき) だけ」足す。
+	// 他のキーは jsonb の || で残す (UpdateCustomer の custom_fields は全置換なので
+	// 使わない)。既に値があれば何も変えず、その値を返す — 戻り値は常に
+	// 「保存されている値」なので、呼び出し側はそれを差し込めばよい。
+	// 送信 worker が自動で書く値 (offer_deadline) 用。人の編集ではないので
+	// updated_at は動かさない (顧客一覧が updated_at 順で並ぶため)。
+	// 該当行が無ければ pgx.ErrNoRows。
+	SetCustomerCustomFieldIfAbsent(ctx context.Context, arg SetCustomerCustomFieldIfAbsentParams) (string, error)
 	SetMailboxSyncedAt(ctx context.Context, id uuid.UUID) error
 	SetRedialGcalSynced(ctx context.Context, arg SetRedialGcalSyncedParams) (Redial, error)
 	// 下書きを 1 本作った直後に呼ぶ (UI の「最終作成日」表示用)。

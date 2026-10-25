@@ -488,6 +488,37 @@ func (q *Queries) ListCustomers(ctx context.Context, arg ListCustomersParams) ([
 	return items, nil
 }
 
+const setCustomerCustomFieldIfAbsent = `-- name: SetCustomerCustomFieldIfAbsent :one
+UPDATE "Customer"
+SET custom_fields = CASE
+        WHEN COALESCE(custom_fields ->> $1::text, '') = ''
+            THEN custom_fields || jsonb_build_object($1::text, $2::text)
+        ELSE custom_fields
+    END
+WHERE id = $3
+RETURNING COALESCE(custom_fields ->> $1::text, '')::text AS stored_value
+`
+
+type SetCustomerCustomFieldIfAbsentParams struct {
+	Key   string    `json:"key"`
+	Value string    `json:"value"`
+	ID    uuid.UUID `json:"id"`
+}
+
+// custom_fields の 1 キーだけを「無いとき (または空文字のとき) だけ」足す。
+// 他のキーは jsonb の || で残す (UpdateCustomer の custom_fields は全置換なので
+// 使わない)。既に値があれば何も変えず、その値を返す — 戻り値は常に
+// 「保存されている値」なので、呼び出し側はそれを差し込めばよい。
+// 送信 worker が自動で書く値 (offer_deadline) 用。人の編集ではないので
+// updated_at は動かさない (顧客一覧が updated_at 順で並ぶため)。
+// 該当行が無ければ pgx.ErrNoRows。
+func (q *Queries) SetCustomerCustomFieldIfAbsent(ctx context.Context, arg SetCustomerCustomFieldIfAbsentParams) (string, error) {
+	row := q.db.QueryRow(ctx, setCustomerCustomFieldIfAbsent, arg.Key, arg.Value, arg.ID)
+	var stored_value string
+	err := row.Scan(&stored_value)
+	return stored_value, err
+}
+
 const updateCustomer = `-- name: UpdateCustomer :one
 UPDATE "Customer"
 SET
