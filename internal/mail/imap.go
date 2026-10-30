@@ -10,6 +10,7 @@ import (
 
 	"github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-imap/v2/imapclient"
+	"github.com/rs/zerolog/log"
 )
 
 // IMAPTLSMode はサーバー接続の TLS 方式。
@@ -67,8 +68,10 @@ type ParsedMessage struct {
 // Login + Select 済み mailbox で FetchSince を呼ぶ前提。
 type IMAPClient struct {
 	c        *imapclient.Client
+	cfg      IMAPConnectConfig // 再接続用
 	username string
 	cursor   *UIDCursor // nil なら毎回 INTERNALDATE で絞る (状態なし)
+	selected string     // 現在 SELECT 中の mailbox (再接続時に SELECT し直す)
 }
 
 // UIDCursor は (アカウント, フォルダ) ごとに「前回 SELECT 時の UIDNEXT」を
@@ -165,7 +168,26 @@ func DialIMAP(cfg IMAPConnectConfig) (*IMAPClient, error) {
 		return nil, fmt.Errorf("imap: login: %w", err)
 	}
 
-	return &IMAPClient{c: c, username: cfg.Username}, nil
+	return &IMAPClient{c: c, cfg: cfg, username: cfg.Username}, nil
+}
+
+// reconnect は接続を張り直して LOGIN し、直前に SELECT していた mailbox を
+// read-only で SELECT し直す。パース失敗で go-imap が接続を閉じたあとの復帰用。
+func (ic *IMAPClient) reconnect() error {
+	if ic.c != nil {
+		_ = ic.c.Close()
+	}
+	nc, err := DialIMAP(ic.cfg)
+	if err != nil {
+		return err
+	}
+	ic.c = nc.c
+	if ic.selected != "" {
+		if _, err := ic.c.Select(ic.selected, &imap.SelectOptions{ReadOnly: true}).Wait(); err != nil {
+			return fmt.Errorf("imap: reselect %q: %w", ic.selected, err)
+		}
+	}
+	return nil
 }
 
 // Close は LOGOUT してコネクションを閉じる。
@@ -203,6 +225,7 @@ func (ic *IMAPClient) fetchSince(mailbox string, since time.Time, withBody bool)
 	if err != nil {
 		return nil, fmt.Errorf("imap: select %q: %w", mailbox, err)
 	}
+	ic.selected = mailbox
 
 	uids, err := ic.selectUIDs(mailbox, sel, since)
 	if err != nil {
@@ -238,7 +261,7 @@ func (ic *IMAPClient) fetchSince(mailbox string, since time.Time, withBody bool)
 		if end > len(uids) {
 			end = len(uids)
 		}
-		chunk, err := ic.fetchChunk(uids[start:end], fetchOpts, bodySection, withBody)
+		chunk, err := ic.fetchResilient(uids[start:end], fetchOpts, bodySection, withBody)
 		if err != nil {
 			return nil, err
 		}
@@ -249,7 +272,38 @@ func (ic *IMAPClient) fetchSince(mailbox string, since time.Time, withBody bool)
 }
 
 // fetchChunkSize は 1 回の FETCH に載せる UID 数の上限。
-const fetchChunkSize = 100
+// James は複数通をまとめて FETCH すると応答が途中で崩れることがある
+// (1 通ずつなら通る) ので小さめにし、崩れたら fetchResilient が半分に割って
+// 取り直す。
+const fetchChunkSize = 5
+
+// fetchResilient は fetchChunk が失敗したら再接続して UID 列を半分に割り、
+// 1 通まで割っても取れないものは警告を出して飛ばす (取込み全体を止めない)。
+func (ic *IMAPClient) fetchResilient(uids []imap.UID, fetchOpts *imap.FetchOptions, bodySection *imap.FetchItemBodySection, withBody bool) ([]ParsedMessage, error) {
+	msgs, err := ic.fetchChunk(uids, fetchOpts, bodySection, withBody)
+	if err == nil {
+		return msgs, nil
+	}
+	// go-imap はパース失敗で接続を閉じるので張り直す。再接続自体が駄目なら諦める。
+	if rerr := ic.reconnect(); rerr != nil {
+		return nil, fmt.Errorf("%w (reconnect failed: %v)", err, rerr)
+	}
+	if len(uids) == 1 {
+		log.Warn().Err(err).Str("user", ic.username).Str("mailbox", ic.selected).Uint32("uid", uint32(uids[0])).
+			Msg("imap: message skipped — fetch keeps failing")
+		return nil, nil
+	}
+	mid := len(uids) / 2
+	left, err := ic.fetchResilient(uids[:mid], fetchOpts, bodySection, withBody)
+	if err != nil {
+		return nil, err
+	}
+	right, err := ic.fetchResilient(uids[mid:], fetchOpts, bodySection, withBody)
+	if err != nil {
+		return nil, err
+	}
+	return append(left, right...), nil
+}
 
 // fetchChunk は UID 列を 1 回の FETCH で取り、ParsedMessage にする。
 // FETCH が途中で NO/BAD や切断で終わった場合はエラーにする (黙って部分結果を
