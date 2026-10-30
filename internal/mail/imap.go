@@ -219,10 +219,6 @@ func (ic *IMAPClient) fetchSince(mailbox string, since time.Time, withBody bool)
 		return nil, nil
 	}
 
-	uidSet := imap.UIDSet{}
-	for _, u := range uids {
-		uidSet.AddNum(u)
-	}
 	fetchOpts := &imap.FetchOptions{
 		Envelope: true,
 		UID:      true,
@@ -232,8 +228,38 @@ func (ic *IMAPClient) fetchSince(mailbox string, since time.Time, withBody bool)
 		bodySection = &imap.FetchItemBodySection{} // BODY[] = ヘッダ含む全文
 		fetchOpts.BodySection = []*imap.FetchItemBodySection{bodySection}
 	}
+
+	// 一度の FETCH に載せる UID を区切る。数千通を 1 コマンドで取ると
+	// James が slow reader として backpressure をかけ、途中で終わることがある
+	// (2026-10-30 のバックフィルで 10/4 以降が丸ごと欠けた)。
+	msgs := make([]ParsedMessage, 0, len(uids))
+	for start := 0; start < len(uids); start += fetchChunkSize {
+		end := start + fetchChunkSize
+		if end > len(uids) {
+			end = len(uids)
+		}
+		chunk, err := ic.fetchChunk(uids[start:end], fetchOpts, bodySection, withBody)
+		if err != nil {
+			return nil, err
+		}
+		msgs = append(msgs, chunk...)
+	}
+	advance()
+	return msgs, nil
+}
+
+// fetchChunkSize は 1 回の FETCH に載せる UID 数の上限。
+const fetchChunkSize = 100
+
+// fetchChunk は UID 列を 1 回の FETCH で取り、ParsedMessage にする。
+// FETCH が途中で NO/BAD や切断で終わった場合はエラーにする (黙って部分結果を
+// 返さない — カーソルを進めてよいのは全件取れたときだけ)。
+func (ic *IMAPClient) fetchChunk(uids []imap.UID, fetchOpts *imap.FetchOptions, bodySection *imap.FetchItemBodySection, withBody bool) ([]ParsedMessage, error) {
+	uidSet := imap.UIDSet{}
+	for _, u := range uids {
+		uidSet.AddNum(u)
+	}
 	fetchCmd := ic.c.Fetch(uidSet, fetchOpts)
-	defer fetchCmd.Close()
 
 	msgs := make([]ParsedMessage, 0, len(uids))
 	for {
@@ -243,6 +269,7 @@ func (ic *IMAPClient) fetchSince(mailbox string, since time.Time, withBody bool)
 		}
 		buf, err := m.Collect()
 		if err != nil {
+			_ = fetchCmd.Close()
 			return nil, fmt.Errorf("imap: collect: %w", err)
 		}
 		if buf.Envelope == nil {
@@ -284,7 +311,9 @@ func (ic *IMAPClient) fetchSince(mailbox string, since time.Time, withBody bool)
 		}
 		msgs = append(msgs, pm)
 	}
-	advance()
+	if err := fetchCmd.Close(); err != nil {
+		return nil, fmt.Errorf("imap: fetch: %w", err)
+	}
 	return msgs, nil
 }
 
