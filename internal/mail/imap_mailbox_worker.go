@@ -30,6 +30,7 @@ type MailboxIMAPWorker struct {
 	queries      *db.Queries
 	cipher       *crypto.Cipher
 	notifier     notify.Notifier // Phase 27h: キャンペーン反響通知 (nil = 無効)
+	cursor       *UIDCursor      // (メールボックス, フォルダ) ごとの取込み位置
 }
 
 // IMAPConnBase は全メールボックス共通の接続パラメータ (資格情報を除く)。
@@ -64,6 +65,7 @@ func NewMailboxIMAPWorker(conn IMAPConnBase, sentMailbox, inboxMailbox, pollInte
 		queries:      queries,
 		cipher:       cipher,
 		notifier:     notifier,
+		cursor:       NewUIDCursor(),
 	}
 }
 
@@ -147,6 +149,7 @@ func (w *MailboxIMAPWorker) pollOne(ctx context.Context, mb db.Mailbox, since ti
 		return false
 	}
 	defer func() { _ = client.Close() }()
+	client.WithCursor(w.cursor)
 
 	mailboxID := pgtype.UUID{Bytes: mb.ID, Valid: true}
 	allOK := true

@@ -50,6 +50,7 @@ type IMAPWorker struct {
 	cfg      IMAPWorkerConfig
 	queries  *db.Queries
 	notifier notify.Notifier // Phase 27h: キャンペーン反響通知 (nil = 無効)
+	cursor   *UIDCursor      // フォルダごとの取込み位置 (SEARCH SINCE を使わない)
 }
 
 // NewIMAPWorker は cfg と Phox の sqlc queries を受けて worker を返す。
@@ -64,7 +65,7 @@ func NewIMAPWorker(cfg IMAPWorkerConfig, queries *db.Queries, notifier notify.No
 	if cfg.IngestUserID == "" {
 		cfg.IngestUserID = "system"
 	}
-	return &IMAPWorker{cfg: cfg, queries: queries, notifier: notifier}
+	return &IMAPWorker{cfg: cfg, queries: queries, notifier: notifier, cursor: NewUIDCursor()}
 }
 
 // Enabled は IMAP_HOST が設定されているかを返す。
@@ -126,6 +127,7 @@ func (w *IMAPWorker) tick(ctx context.Context) error {
 		return fmt.Errorf("dial: %w", err)
 	}
 	defer func() { _ = client.Close() }()
+	client.WithCursor(w.cursor)
 
 	since := w.resolveSince(ctx)
 

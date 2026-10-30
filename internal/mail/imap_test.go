@@ -264,3 +264,86 @@ func (e *strconvErr) Error() string { return "not an int: " + e.s }
 
 // sanity: both imports used
 var _ = imapclient.New
+
+// appendMessageAt は内部日付 (INTERNALDATE) を指定して append する。
+func appendMessageAt(t *testing.T, f *fakeIMAPServer, mailbox, raw string, at time.Time) {
+	t.Helper()
+	lit := strings.NewReader(raw)
+	if _, err := f.user.Append(mailbox, &literalReader{r: lit, size: int64(len(raw))}, &imap.AppendOptions{
+		Time: at,
+	}); err != nil {
+		t.Fatalf("append to %q: %v", mailbox, err)
+	}
+}
+
+func rawMail(id, subject string) string {
+	return "From: a@example.com\r\nTo: b@example.com\r\nMessage-ID: <" + id + "@example.com>\r\n" +
+		"Subject: " + subject + "\r\nDate: Mon, 01 Jan 2024 00:00:00 +0000\r\n\r\nbody\r\n"
+}
+
+// SEARCH SINCE を使わずに since 以降だけを取れること (Apache James 対策)。
+// 1 回目: INTERNALDATE で絞る。2 回目以降: カーソル (UIDNEXT) の続きだけ取る。
+func TestFetchSince_CursorIncremental(t *testing.T) {
+	f := newFakeServer(t)
+	now := time.Now()
+	appendMessageAt(t, f, "INBOX", rawMail("old", "old"), now.Add(-72*time.Hour))
+	appendMessageAt(t, f, "INBOX", rawMail("recent", "recent"), now.Add(-1*time.Hour))
+
+	cursor := phoxmail.NewUIDCursor()
+	dial := func() *phoxmail.IMAPClient {
+		t.Helper()
+		host, port := splitHostPort(t, f.addr)
+		c, err := phoxmail.DialIMAP(phoxmail.IMAPConnectConfig{
+			Host: host, Port: port, Username: testUsername, Password: testPassword, TLSMode: phoxmail.IMAPTLSNone,
+		})
+		if err != nil {
+			t.Fatalf("dial: %v", err)
+		}
+		return c.WithCursor(cursor)
+	}
+
+	// 1 回目 (カーソル無し): 24h 以内の 1 通だけ
+	c := dial()
+	msgs, err := c.FetchSince("INBOX", now.Add(-24*time.Hour))
+	if err != nil {
+		t.Fatalf("fetch 1: %v", err)
+	}
+	if len(msgs) != 1 || msgs[0].MessageID != "recent@example.com" {
+		t.Fatalf("fetch 1: want only recent, got %+v", msgs)
+	}
+	_ = c.Close()
+
+	// 2 回目 (新着なし): 0 通。古いメールを再び返さない
+	c = dial()
+	msgs, err = c.FetchSince("INBOX", now.Add(-24*time.Hour))
+	if err != nil {
+		t.Fatalf("fetch 2: %v", err)
+	}
+	if len(msgs) != 0 {
+		t.Fatalf("fetch 2: want 0, got %+v", msgs)
+	}
+	_ = c.Close()
+
+	// 3 回目 (新着 1 通): since より前の内部日付でも UID が新しければ取る
+	appendMessageAt(t, f, "INBOX", rawMail("new", "new"), now.Add(-100*time.Hour))
+	c = dial()
+	msgs, err = c.FetchSince("INBOX", now.Add(-24*time.Hour))
+	if err != nil {
+		t.Fatalf("fetch 3: %v", err)
+	}
+	if len(msgs) != 1 || msgs[0].MessageID != "new@example.com" {
+		t.Fatalf("fetch 3: want only new, got %+v", msgs)
+	}
+	_ = c.Close()
+
+	// since ゼロ値 = 全件 (バックフィル)
+	c = dial()
+	msgs, err = c.FetchSince("INBOX", time.Time{})
+	if err != nil {
+		t.Fatalf("fetch all: %v", err)
+	}
+	if len(msgs) != 3 {
+		t.Fatalf("fetch all: want 3, got %d", len(msgs))
+	}
+	_ = c.Close()
+}

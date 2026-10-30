@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/emersion/go-imap/v2"
@@ -65,7 +66,56 @@ type ParsedMessage struct {
 // IMAPClient は imapclient.Client を phox 用途にラップする。
 // Login + Select 済み mailbox で FetchSince を呼ぶ前提。
 type IMAPClient struct {
-	c *imapclient.Client
+	c        *imapclient.Client
+	username string
+	cursor   *UIDCursor // nil なら毎回 INTERNALDATE で絞る (状態なし)
+}
+
+// UIDCursor は (アカウント, フォルダ) ごとに「前回 SELECT 時の UIDNEXT」を
+// 覚える。2 回目以降の取込みは `UID SEARCH UID <前回のUIDNEXT>:*` だけで済み、
+// SEARCH SINCE を使わない。
+//
+// 背景: go-imap は SINCE の日付を quoted string で送る (RFC 3501 では合法) が、
+// Apache James はこれを "BAD UID failed. Illegal arguments." で蹴る。
+// SINCE に頼ると James では受信箱の取込みが一切動かないため、初回は
+// INTERNALDATE で、以降は UID の続きで絞る。
+//
+// worker ごとに 1 つ持ち、DialIMAP の後に WithCursor で client に渡す。
+// UIDVALIDITY が変わったら捨てて初回扱いに戻る。
+type UIDCursor struct {
+	mu   sync.Mutex
+	next map[string]uidCursorEntry
+}
+
+type uidCursorEntry struct {
+	validity uint32
+	next     imap.UID
+}
+
+// NewUIDCursor は空のカーソルを返す。
+func NewUIDCursor() *UIDCursor {
+	return &UIDCursor{next: map[string]uidCursorEntry{}}
+}
+
+func (c *UIDCursor) get(key string) (uidCursorEntry, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	e, ok := c.next[key]
+	return e, ok
+}
+
+func (c *UIDCursor) set(key string, e uidCursorEntry) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.next[key] = e
+}
+
+// WithCursor は取込み位置の記憶先を設定する (メソッドチェーン用に自身を返す)。
+func (ic *IMAPClient) WithCursor(cur *UIDCursor) *IMAPClient {
+	if ic != nil {
+		ic.cursor = cur
+	}
+	return ic
 }
 
 // DialIMAP は config に従って IMAP サーバーに接続 + LOGIN する。
@@ -115,7 +165,7 @@ func DialIMAP(cfg IMAPConnectConfig) (*IMAPClient, error) {
 		return nil, fmt.Errorf("imap: login: %w", err)
 	}
 
-	return &IMAPClient{c: c}, nil
+	return &IMAPClient{c: c, username: cfg.Username}, nil
 }
 
 // Close は LOGOUT してコネクションを閉じる。
@@ -149,20 +199,23 @@ func (ic *IMAPClient) fetchSince(mailbox string, since time.Time, withBody bool)
 		return nil, errors.New("imap: client not connected")
 	}
 
-	if _, err := ic.c.Select(mailbox, &imap.SelectOptions{ReadOnly: true}).Wait(); err != nil {
+	sel, err := ic.c.Select(mailbox, &imap.SelectOptions{ReadOnly: true}).Wait()
+	if err != nil {
 		return nil, fmt.Errorf("imap: select %q: %w", mailbox, err)
 	}
 
-	searchCriteria := &imap.SearchCriteria{}
-	if !since.IsZero() {
-		searchCriteria.Since = since
-	}
-	searchData, err := ic.c.UIDSearch(searchCriteria, nil).Wait()
+	uids, err := ic.selectUIDs(mailbox, sel, since)
 	if err != nil {
-		return nil, fmt.Errorf("imap: search: %w", err)
+		return nil, err
 	}
-	uids := searchData.AllUIDs()
+	// 取込みが成功した時だけカーソルを進める (失敗したら次回同じ範囲をやり直す)。
+	advance := func() {
+		if ic.cursor != nil {
+			ic.cursor.set(ic.cursorKey(mailbox), uidCursorEntry{validity: sel.UIDValidity, next: sel.UIDNext})
+		}
+	}
 	if len(uids) == 0 {
+		advance()
 		return nil, nil
 	}
 
@@ -231,7 +284,92 @@ func (ic *IMAPClient) fetchSince(mailbox string, since time.Time, withBody bool)
 		}
 		msgs = append(msgs, pm)
 	}
+	advance()
 	return msgs, nil
+}
+
+func (ic *IMAPClient) cursorKey(mailbox string) string {
+	return ic.username + "\x00" + mailbox
+}
+
+// selectUIDs は取込み対象の UID 一覧を決める。SEARCH SINCE は使わない
+// (UIDCursor のコメント参照)。
+//   - since ゼロ値            → 全件 (初回バックフィル)
+//   - カーソルあり (同じ UIDVALIDITY) → 前回の UIDNEXT 以降だけ
+//   - それ以外 (起動直後など)   → 全 UID の INTERNALDATE を見て since 以降に絞る
+func (ic *IMAPClient) selectUIDs(mailbox string, sel *imap.SelectData, since time.Time) ([]imap.UID, error) {
+	if sel.NumMessages == 0 {
+		return nil, nil
+	}
+	if since.IsZero() {
+		return ic.searchUIDs(&imap.SearchCriteria{})
+	}
+	if ic.cursor != nil {
+		if e, ok := ic.cursor.get(ic.cursorKey(mailbox)); ok && e.validity == sel.UIDValidity {
+			if sel.UIDNext <= e.next {
+				return nil, nil
+			}
+			set := imap.UIDSet{}
+			set.AddRange(e.next, 0) // "<next>:*"
+			uids, err := ic.searchUIDs(&imap.SearchCriteria{UID: []imap.UIDSet{set}})
+			if err != nil {
+				return nil, err
+			}
+			// "n:*" は n より大きいメッセージが無いと最後の 1 通を返すので念のため絞る
+			out := uids[:0]
+			for _, u := range uids {
+				if u >= e.next {
+					out = append(out, u)
+				}
+			}
+			return out, nil
+		}
+	}
+	return ic.uidsSince(since)
+}
+
+func (ic *IMAPClient) searchUIDs(criteria *imap.SearchCriteria) ([]imap.UID, error) {
+	data, err := ic.c.UIDSearch(criteria, nil).Wait()
+	if err != nil {
+		return nil, fmt.Errorf("imap: search: %w", err)
+	}
+	return data.AllUIDs(), nil
+}
+
+// uidsSince は全 UID の INTERNALDATE を取り、since の日 (00:00) 以降のものを返す。
+// 旧実装の SEARCH SINCE と同じ「日付単位」の絞り込みに揃える。
+func (ic *IMAPClient) uidsSince(since time.Time) ([]imap.UID, error) {
+	all, err := ic.searchUIDs(&imap.SearchCriteria{})
+	if err != nil {
+		return nil, err
+	}
+	if len(all) == 0 {
+		return nil, nil
+	}
+	set := imap.UIDSet{}
+	for _, u := range all {
+		set.AddNum(u)
+	}
+	y, m, d := since.Date()
+	dayStart := time.Date(y, m, d, 0, 0, 0, 0, since.Location())
+
+	cmd := ic.c.Fetch(set, &imap.FetchOptions{UID: true, InternalDate: true})
+	defer cmd.Close()
+	var out []imap.UID
+	for {
+		msg := cmd.Next()
+		if msg == nil {
+			break
+		}
+		buf, err := msg.Collect()
+		if err != nil {
+			return nil, fmt.Errorf("imap: collect internaldate: %w", err)
+		}
+		if buf.InternalDate.IsZero() || !buf.InternalDate.Before(dayStart) {
+			out = append(out, buf.UID)
+		}
+	}
+	return out, nil
 }
 
 // normalizeMessageID は `<abc@host>` 形式の angle brackets を剥がす。
