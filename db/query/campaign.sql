@@ -125,6 +125,12 @@ WHERE id = (
   WHERE cr.campaign_id = $1 AND cr.status = 'queued'
     AND (cr.next_step_at IS NULL OR cr.next_step_at <= now())
     AND cr.replied_at IS NULL AND cr.unsubscribed_at IS NULL AND cr.bounced_at IS NULL
+    -- 下書き時だけでなく送信直前にも抑止リスト（hard_bounce / unsubscribe / manual）を見る。
+    -- 2026-10-30: 旧キャンペーンのバウンスが後から判明しても v3 の送信対象に残っていた。
+    AND NOT EXISTS (
+      SELECT 1 FROM "Suppression" s JOIN "Campaign" c ON c.id = cr.campaign_id
+      WHERE s.company_id = c.company_id AND s.email = lower(cr.email)
+    )
   ORDER BY cr.attempts ASC, cr.created_at ASC
   LIMIT 1
   FOR UPDATE SKIP LOCKED
